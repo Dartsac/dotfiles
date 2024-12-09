@@ -1,0 +1,11 @@
+keybinding:
+  universal:
+    select: <c-space>
+  commits:    
+    checkoutCommit: <c-space>
+gui:
+  mouseEvents: false
+  language: "en"
+  theme:
+    defaultFgColor:
+      - white
