@@ -1,2 +1,51 @@
+# fish shell
 fish/.config/fish/fish_variables
+fish/.config/fish/fish_greeting_last_run
+
+#lazygit
 lazygit/Library/Application Support/lazygit/state.yml
+
+# Compiled Lua sources
+luac.out
+
+# luarocks build files
+*.src.rock
+*.zip
+*.tar.gz
+
+# Object files
+*.o
+*.os
+*.ko
+*.obj
+*.elf
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Libraries
+*.lib
+*.a
+*.la
+*.lo
+*.def
+*.exp
+
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+
+
+nvim/.config/nvim/plugin
+.DS_Store
