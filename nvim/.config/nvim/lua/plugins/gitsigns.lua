@@ -8,7 +8,6 @@ return {
     end
 
     local icons = require("config.icons")
-    print(icons.kind.Function)
 
     gitsigns.setup({
       signs = {
