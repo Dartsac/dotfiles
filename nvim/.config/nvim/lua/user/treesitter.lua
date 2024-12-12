@@ -8,6 +8,7 @@ configs.setup({
 		"bash",
 		"c",
 		"css",
+    "scss",
 		"fish",
 		"html",
 		"java",
