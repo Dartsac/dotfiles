@@ -49,3 +49,7 @@ luac.out
 
 nvim/.config/nvim/plugin
 .DS_Store
+nvim/.config/nvim/doc
+nvim/.config/nvim/colors
+nvim/.config/nvim/autoload
+nvim/.config/nvim/lazy-lock.json
