@@ -1,26 +1,66 @@
-vim.cmd([[
-  augroup _general_settings
-    autocmd!
-    autocmd FileType qf,help,man,lspinfo nnoremap <silent> <buffer> q :close<CR> 
-    autocmd TextYankPost * silent!lua require('vim.highlight').on_yank({higroup = 'Visual', timeout = 200}) 
-    autocmd BufWinEnter * :set formatoptions-=cro
-    autocmd FileType qf set nobuflisted
-  augroup end
+-- General settings
+local general_settings = vim.api.nvim_create_augroup("_general_settings", { clear = true })
+vim.api.nvim_create_autocmd("FileType", {
+  group = general_settings,
+  pattern = { "qf", "help", "man", "lspinfo" },
+  command = "nnoremap <silent> <buffer> q :close<CR>",
+  desc = "Close quickfix, help, man, or lspinfo buffers with 'q'",
+})
+vim.api.nvim_create_autocmd('TextYankPost', {
+  group = general_settings,
+  desc = 'Highlight when yanking text',
+  callback = function()
+    vim.highlight.on_yank( {higroup='Visual', timeout=250} )
+  end
+})
+vim.api.nvim_create_autocmd("BufWinEnter", {
+  group = general_settings,
+  pattern = "*",
+  command = "set formatoptions-=cro",
+  desc = "Remove 'cro' from formatoptions",
+})
+vim.api.nvim_create_autocmd("FileType", {
+  group = general_settings,
+  pattern = "qf",
+  command = "set nobuflisted",
+  desc = "Do not list quickfix buffers",
+})
 
-  augroup _git
-    autocmd!
-    autocmd FileType gitcommit setlocal wrap
-    autocmd FileType gitcommit setlocal spell
-  augroup end
+-- Git settings
+local git_settings = vim.api.nvim_create_augroup("_git", { clear = true })
+vim.api.nvim_create_autocmd("FileType", {
+  group = git_settings,
+  pattern = "gitcommit",
+  command = "setlocal wrap",
+  desc = "Enable wrap for gitcommit",
+})
+vim.api.nvim_create_autocmd("FileType", {
+  group = git_settings,
+  pattern = "gitcommit",
+  command = "setlocal spell",
+  desc = "Enable spell checking for gitcommit",
+})
 
-  augroup _markdown
-    autocmd!
-    autocmd FileType markdown setlocal wrap
-    autocmd FileType markdown setlocal spell
-  augroup end
+-- Markdown settings
+local markdown_settings = vim.api.nvim_create_augroup("_markdown", { clear = true })
+vim.api.nvim_create_autocmd("FileType", {
+  group = markdown_settings,
+  pattern = "markdown",
+  command = "setlocal wrap",
+  desc = "Enable wrap for markdown",
+})
+vim.api.nvim_create_autocmd("FileType", {
+  group = markdown_settings,
+  pattern = "markdown",
+  command = "setlocal spell",
+  desc = "Enable spell checking for markdown",
+})
 
-  augroup _auto_resize
-    autocmd!
-    autocmd VimResized * tabdo wincmd = 
-  augroup end
-]])
+-- Auto resize windows
+local auto_resize = vim.api.nvim_create_augroup("_auto_resize", { clear = true })
+vim.api.nvim_create_autocmd("VimResized", {
+  group = auto_resize,
+  pattern = "*",
+  command = "tabdo wincmd =",
+  desc = "Resize all windows equally on VimResized",
+})
