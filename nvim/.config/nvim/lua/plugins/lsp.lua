@@ -47,18 +47,15 @@ return {
 			require("lsp").setup()
 		end,
 		dependencies = {
-			{ "hrsh7th/nvim-cmp" }, -- For LSP capabilities
 			{ "hrsh7th/cmp-nvim-lsp" }, -- For LSP capabilities
-			{ "hrsh7th/cmp-buffer" }, -- buffer completions
-			{ "hrsh7th/cmp-path" }, -- path completions
-			{ "saadparwaiz1/cmp_luasnip" }, -- snippet completions
-			{ "hrsh7th/cmp-nvim-lua" },
+			{ "nvimtools/none-ls.nvim" },
 			{ "jose-elias-alvarez/typescript.nvim" },
 		},
 	},
 
 	{
 		"nvimtools/none-ls.nvim",
+		enabled = true,
 		event = "BufReadPre",
 		config = function()
 			-- We'll handle this in lua/lsp/null-ls.lua
