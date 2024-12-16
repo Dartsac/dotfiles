@@ -10,10 +10,14 @@ return {
 						enable_close = true, -- Auto close tags
 						enable_rename = true, -- Auto rename pairs of tags
 						enable_close_on_slash = false, -- Auto close on trailing </
-						per_filetype = {
-							["html"] = {
-								enable_close = false,
+						filetypes = {
+							html = {
+								enable_close = false, -- Disable auto-closing for HTML
 							},
+						},
+						aliases = {
+							-- Add alias for any custom filetypes to use HTML rules
+							customlang = "html",
 						},
 					})
 				end,
