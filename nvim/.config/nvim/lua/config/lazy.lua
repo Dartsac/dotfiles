@@ -26,6 +26,7 @@ require("config.options")
 require("lazy").setup({
 	spec = {
 		{ import = "plugins" },
+		{ "google/vim-searchindex" },
 	},
 	--  { "echasnovski/mini.icons" },
 	--  { "echasnovski/mini.indentscope" },
