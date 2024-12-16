@@ -48,8 +48,8 @@ return {
 		end,
 		dependencies = {
 			{ "hrsh7th/cmp-nvim-lsp" }, -- For LSP capabilities
-			{ "nvimtools/none-ls.nvim" },
-			{ "jose-elias-alvarez/typescript.nvim" },
+			-- { "nvimtools/none-ls.nvim" },
+			-- { "jose-elias-alvarez/typescript.nvim" },
 		},
 	},
 
