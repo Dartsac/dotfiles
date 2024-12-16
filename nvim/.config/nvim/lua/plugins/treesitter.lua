@@ -33,6 +33,7 @@ return {
 				enable = true, -- false will disable the whole extension
 				disable = { "css", "scss" }, -- list of language that will be disabled
 			},
+			auto_install = true,
 			autopairs = {
 				enable = true,
 			},
