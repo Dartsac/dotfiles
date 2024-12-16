@@ -1,6 +1,9 @@
 return {
 	{
 		"nvim-lualine/lualine.nvim",
+		dependencies = {
+			"echasnovski/mini.nvim", -- Ensure mini.icons is loaded first
+		},
 		config = function()
 			local status_ok, lualine = pcall(require, "lualine")
 			if not status_ok then

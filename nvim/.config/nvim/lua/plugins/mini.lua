@@ -2,6 +2,18 @@ return {
 	"echasnovski/mini.nvim",
 	version = "*",
 	config = function()
+		local icons = require("mini.icons")
+		local icon, hl = icons.get("file", "file.lua")
+
+		icons.setup({
+			style = "glyph", -- Use glyph icons
+			file = {
+				["init.lua"] = { glyph = icon, hl = hl },
+			},
+		})
+		icons.mock_nvim_web_devicons()
+
+		-- Setup mini.indentscope
 		local status_ok_mini, indentscope = pcall(require, "mini.indentscope")
 		if not status_ok_mini then
 			return
@@ -50,18 +62,5 @@ return {
 			},
 			symbol = "▏",
 		})
-
-		local icons = require("mini.icons")
-		local icon, hl = icons.get("file", "file.lua")
-
-		icons.setup({
-			style = "glyph", -- Use glyph icons
-			file = {
-				-- Explicitly set the icon for 'init.lua'
-				-- I like having init.lua with the same icon and hl as any other .lua file
-				["init.lua"] = { glyph = icon, hl = hl }, -- Match the Lua file icon
-			},
-		})
-		icons.mock_nvim_web_devicons()
 	end,
 }
