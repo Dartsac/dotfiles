@@ -1,12 +1,18 @@
 return {
 	"hrsh7th/nvim-cmp",
-	event = "InsertEnter",
+	event = { "InsertEnter", "CmdlineEnter" },
 	dependencies = {
-		{ "hrsh7th/cmp-nvim-lsp", event = "InsertEnter" },
-		{ "hrsh7th/cmp-path", event = "InsertEnter" },
-		{ "hrsh7th/cmp-buffer", event = "InsertEnter" },
-		{ "L3MON4D3/LuaSnip", event = "InsertEnter", dependencies = "rafamadriz/friendly-snippets" },
-		{ "saadparwaiz1/cmp_luasnip", event = "InsertEnter" },
+		{ "hrsh7th/cmp-nvim-lsp" },
+		{ "hrsh7th/cmp-path", event = "CmdlineEnter" },
+		{ "hrsh7th/cmp-buffer" },
+		{
+			"L3MON4D3/LuaSnip",
+			dependencies = { "rafamadriz/friendly-snippets" },
+			config = function()
+				require("luasnip/loaders/from_vscode").lazy_load()
+			end,
+		},
+		{ "saadparwaiz1/cmp_luasnip", lazy = true },
 	},
 	config = function()
 		local cmp_status_ok, cmp = pcall(require, "cmp")
@@ -41,8 +47,6 @@ return {
 				t({ "", "    end,", "  },", "}" }),
 			}),
 		})
-
-		require("luasnip/loaders/from_vscode").lazy_load()
 
 		local check_backspace = function()
 			local col = vim.fn.col(".") - 1
@@ -123,12 +127,12 @@ return {
 			},
 		})
 
-		--sql specific dadbod completion
-		-- cmp.setup.filetype({ "sql" }, {
-		-- 	sources = {
-		-- 		{ name = "vim-dadbod-completion" },
-		-- 		{ name = "buffer" },
-		-- 	},
-		-- })
+		--[[ sql specific dadbod completion ]]
+		cmp.setup.filetype({ "sql" }, {
+			sources = {
+				{ name = "vim-dadbod-completion" },
+				{ name = "buffer" },
+			},
+		})
 	end,
 }
