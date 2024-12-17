@@ -50,7 +50,6 @@ return {
 		-- Adding mappings using the new `wk.add()` format
 		wk.add({
 			-- General mappings
-			{ "<leader>F", "<cmd>Telescope live_grep theme=ivy<cr>", desc = "Find Text", mode = "n" },
 			{
 				"<leader>b",
 				"<cmd>lua require('telescope.builtin').buffers(require('telescope.themes').get_dropdown{previewer = false})<cr>",
@@ -59,13 +58,7 @@ return {
 			},
 			{ "<leader>c", "<cmd>Bdelete!<CR>", desc = "Close Buffer", mode = "n" },
 			{ "<leader>e", "<cmd>NvimTreeToggle<cr>", desc = "Explorer", mode = "n" },
-			{
-				"<leader>f",
-				"<cmd>lua require('telescope.builtin').find_files(require('telescope.themes').get_dropdown{previewer = false})<cr>",
-				desc = "Find files",
-				mode = "n",
-			},
-			{ "<leader>h", "<cmd>nohlsearch<CR>", desc = "No Highlight", mode = "n" },
+			{ "<leader>n", "<cmd>nohlsearch<CR>", desc = "No Highlight", mode = "n" },
 			{ "<leader>q", "<cmd>q!<CR>", desc = "Quit", mode = "n" },
 			{ "<leader>w", "<cmd>w!<CR>", desc = "Save", mode = "n" },
 
