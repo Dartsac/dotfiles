@@ -23,10 +23,23 @@ return {
 
 		local s = luasnip.snippet
 		local i = luasnip.insert_node
+		local t = luasnip.text_node
 		local fmt = require("luasnip.extras.fmt").fmt
 
+		-- console.log in react
 		luasnip.add_snippets("typescriptreact", {
 			s("work", fmt("console.log({})", { i(1) })),
+		})
+		-- Lazy.nvim snippet
+		luasnip.add_snippets("lua", {
+			s("lazy", {
+				t({ "return {", "  {", '    "' }),
+				i(1, ""), -- Insert node 1: Plugin name
+				t({ '",', "    config = function()" }), -- No trailing spaces here
+				t({ "", "      " }), -- Properly indented space for function body
+				i(2, ""), -- Insert node 2: Inside the function body
+				t({ "", "    end,", "  },", "}" }),
+			}),
 		})
 
 		require("luasnip/loaders/from_vscode").lazy_load()
