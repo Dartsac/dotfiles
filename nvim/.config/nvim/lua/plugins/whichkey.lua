@@ -52,12 +52,6 @@ return {
 			-- General mappings
 			{ "<leader>F", "<cmd>Telescope live_grep theme=ivy<cr>", desc = "Find Text", mode = "n" },
 			{
-				"<leader>P",
-				"<cmd>lua require('telescope').extensions.projects.projects()<cr>",
-				desc = "Projects",
-				mode = "n",
-			},
-			{
 				"<leader>b",
 				"<cmd>lua require('telescope.builtin').buffers(require('telescope.themes').get_dropdown{previewer = false})<cr>",
 				desc = "Buffers",
@@ -74,6 +68,9 @@ return {
 			{ "<leader>h", "<cmd>nohlsearch<CR>", desc = "No Highlight", mode = "n" },
 			{ "<leader>q", "<cmd>q!<CR>", desc = "Quit", mode = "n" },
 			{ "<leader>w", "<cmd>w!<CR>", desc = "Save", mode = "n" },
+
+			--Lazy
+			{ "<leader>L", "<cmd>Lazy<cr>", desc = "Lazy", mode = "n" },
 
 			-- LSP Group
 			{ "<leader>l", group = "LSP" },
@@ -97,14 +94,6 @@ return {
 			{ "<leader>ls", "<cmd>Telescope lsp_document_symbols<cr>", desc = "Document Symbols", mode = "n" },
 			{ "<leader>lw", "<cmd>Telescope diagnostics<cr>", desc = "Workspace Diagnostics", mode = "n" },
 
-			-- Packer Group
-			{ "<leader>p", group = "Packer" },
-			{ "<leader>pS", "<cmd>PackerStatus<cr>", desc = "Status", mode = "n" },
-			{ "<leader>pc", "<cmd>PackerCompile<cr>", desc = "Compile", mode = "n" },
-			{ "<leader>pi", "<cmd>PackerInstall<cr>", desc = "Install", mode = "n" },
-			{ "<leader>ps", "<cmd>PackerSync<cr>", desc = "Sync", mode = "n" },
-			{ "<leader>pu", "<cmd>PackerUpdate<cr>", desc = "Update", mode = "n" },
-
 			-- Search Group
 			{ "<leader>s", group = "Search" },
 			{ "<leader>sC", "<cmd>Telescope commands<cr>", desc = "Commands", mode = "n" },
@@ -115,16 +104,6 @@ return {
 			{ "<leader>sh", "<cmd>Telescope help_tags<cr>", desc = "Find Help", mode = "n" },
 			{ "<leader>sk", "<cmd>Telescope keymaps<cr>", desc = "Keymaps", mode = "n" },
 			{ "<leader>sr", "<cmd>Telescope oldfiles<cr>", desc = "Open Recent File", mode = "n" },
-
-			-- Terminal Group
-			{ "<leader>t", group = "Terminal" },
-			{ "<leader>tf", "<cmd>ToggleTerm direction=float<cr>", desc = "Float", mode = "n" },
-			{ "<leader>th", "<cmd>ToggleTerm size=10 direction=horizontal<cr>", desc = "Horizontal", mode = "n" },
-			{ "<leader>tn", "<cmd>lua _NODE_TOGGLE()<cr>", desc = "Node", mode = "n" },
-			{ "<leader>tp", "<cmd>lua _PYTHON_TOGGLE()<cr>", desc = "Python", mode = "n" },
-			{ "<leader>tt", "<cmd>lua _HTOP_TOGGLE()<cr>", desc = "Htop", mode = "n" },
-			{ "<leader>tu", "<cmd>lua _NCDU_TOGGLE()<cr>", desc = "NCDU", mode = "n" },
-			{ "<leader>tv", "<cmd>ToggleTerm size=80 direction=vertical<cr>", desc = "Vertical", mode = "n" },
 
 			-- Git signs
 			{ "<leader>g", group = "Git" },
