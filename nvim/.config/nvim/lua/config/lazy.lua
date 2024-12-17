@@ -26,24 +26,6 @@ require("lazy").setup({
 	spec = {
 		{ import = "plugins" },
 		{ "google/vim-searchindex" },
+		{ "christoomey/vim-tmux-navigator" },
 	},
-	--  --React ES7+ React/Redux/React-Native snippet
-	--  { "dsznajder/vscode-es7-javascript-react-snippets", build = "yarn install --frozen-lockfile && yarn compile" },
-	--
-	--  -- Emmet
-	--  { "mattn/emmet-vim" },
-	--
-	--  -- Sticky header
-	--  { "nvim-treesitter/nvim-treesitter-context" },
-	--
-	--  -- dadbod
-	--  { "tpope/vim-dadbod",
-	--  dependencies = {
-	--   "kristijanhusak/vim-dadbod-ui",
-	--   "kristijanhusak/vim-dadbod-completion",
-	--  },
-	-- },
-	--
-	-- { "smjonas/inc-rename.nvim" },
-	-- { "christoomey/vim-tmux-navigator" },
 })
