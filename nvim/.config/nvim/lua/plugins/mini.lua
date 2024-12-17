@@ -3,14 +3,14 @@ return {
 	version = "*",
 	config = function()
 		local icons = require("mini.icons")
-		local icon, hl = icons.get("file", "file.lua")
 
 		icons.setup({
-			style = "glyph", -- Use glyph icons
-			file = {
-				["init.lua"] = { glyph = icon, hl = hl },
+			style = "glyph",
+			extension = {
+				puml = { glyph = "", hl = "MiniIconsBlue", name = "PlantUML" },
 			},
 		})
+
 		icons.mock_nvim_web_devicons()
 
 		-- Setup mini.indentscope
