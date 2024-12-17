@@ -12,6 +12,22 @@ return {
 				require("luasnip/loaders/from_vscode").lazy_load()
 			end,
 		},
+		{
+			"mattn/emmet-vim",
+			ft = { "html", "css", "javascriptreact", "typescriptreact", "vue", "svelte", "xml" }, -- Enable for specific filetypes
+			config = function()
+				vim.g.user_emmet_leader_key = "<C-y>" -- Set the emmet trigger key
+			end,
+		},
+		{
+			"dsznajder/vscode-es7-javascript-react-snippets",
+			build = "npm install --legacy-peer-deps", -- Install dependencies
+			config = function()
+				require("luasnip.loaders.from_vscode").lazy_load({
+					paths = { vim.fn.stdpath("data") .. "/lazy/vscode-es7-javascript-react-snippets" },
+				})
+			end,
+		},
 		{ "saadparwaiz1/cmp_luasnip", lazy = true },
 	},
 	config = function()
@@ -127,7 +143,7 @@ return {
 			},
 		})
 
-		--[[ sql specific dadbod completion ]]
+		-- sql specific dadbod completion
 		cmp.setup.filetype({ "sql" }, {
 			sources = {
 				{ name = "vim-dadbod-completion" },
