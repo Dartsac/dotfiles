@@ -97,3 +97,15 @@ vim.api.nvim_create_autocmd("ModeChanged", {
 		require("lualine").refresh()
 	end,
 })
+
+-- recognize plantuml files
+-- Filetype detection for PlantUML files
+vim.filetype.add({
+	extension = {
+		puml = "plantuml",
+		plantuml = "plantuml",
+	},
+	filename = {
+		["*.puml"] = "plantuml",
+	},
+})
