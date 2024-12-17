@@ -1,16 +1,18 @@
 return {
 	{
 		"windwp/nvim-autopairs",
-		event = "InsertEnter",
+		event = "InsertCharPre",
 		dependencies = {
 			{
 				"windwp/nvim-ts-autotag",
+				lazy = true,
 				config = function()
 					require("nvim-ts-autotag").setup()
 				end,
 			},
 			{
 				"axelvc/template-string.nvim",
+				lazy = true,
 				config = function()
 					require("template-string").setup({
 						filetypes = {
