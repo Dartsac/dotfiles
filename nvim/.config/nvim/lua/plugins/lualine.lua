@@ -2,7 +2,7 @@ return {
 	{
 		"nvim-lualine/lualine.nvim",
 		dependencies = {
-			"echasnovski/mini.nvim", -- Ensure mini.icons is loaded first
+			"echasnovski/mini.nvim",
 		},
 		config = function()
 			local status_ok, lualine = pcall(require, "lualine")
@@ -13,36 +13,6 @@ return {
 			local hide_in_width = function()
 				return vim.fn.winwidth(0) > 80
 			end
-
-			local diff = {
-				"diff",
-				colored = false,
-				symbols = { added = " ", modified = " ", removed = " " }, -- changes diff symbols
-				cond = hide_in_width,
-			}
-
-			local mode = {
-				"mode",
-				fmt = function(str)
-					return "-- " .. str .. " --"
-				end,
-			}
-
-			local filetype = {
-				"filetype",
-				colored = false,
-			}
-
-			local branch = {
-				"branch",
-				icons_enabled = true,
-				icon = "",
-			}
-
-			local location = {
-				"location",
-				padding = 0,
-			}
 
 			-- cool function for progress
 			local progress = function()
@@ -57,29 +27,78 @@ return {
 			lualine.setup({
 				options = {
 					icons_enabled = true,
-					theme = "auto",
+					theme = "auto", -- Allows mode-specific background color
 					section_separators = { left = "", right = "" },
 					component_separators = { left = "", right = "" },
 					disabled_filetypes = { "dashboard", "NvimTree", "Outline" },
 					always_divide_middle = true,
 				},
 				sections = {
-					lualine_a = { branch },
-					lualine_b = { mode },
+					lualine_a = {
+						{
+							"branch",
+							color = function()
+								return {
+									fg = vim.fn.mode() == "n" and "#F8F8F2" or nil, -- White in normal mode
+									gui = "bold", -- Always bold
+								}
+							end,
+							icons_enabled = true,
+							icon = "",
+						},
+					},
+					lualine_b = {
+						{
+							"mode",
+							fmt = function(str)
+								return "-- " .. str .. " --"
+							end,
+							color = function()
+								return { fg = vim.fn.mode() == "n" and "#F8F8F2" or nil } -- White in normal mode, default otherwise
+							end,
+						},
+					},
 					lualine_c = {},
-					-- lualine_x = { "encoding", "fileformat", "filetype" },
 					lualine_x = {
 						{
 							"diagnostics",
 							sources = { "nvim_diagnostic" },
 							symbols = { error = " ", warn = " ", info = " ", hint = " " },
 						},
-						diff,
-						"encoding",
-						filetype,
+						{
+							"diff",
+							colored = false,
+							symbols = { added = " ", modified = " ", removed = " " },
+							cond = hide_in_width,
+							color = { fg = "#F8F8F2" },
+						},
+						{
+							"encoding",
+							color = { fg = "#F8F8F2" },
+						},
+						{
+							"filetype",
+							colored = true,
+							color = { fg = "#F8F8F2" },
+						},
 					},
-					lualine_y = { location },
-					lualine_z = { progress },
+					lualine_y = {
+						{
+							"location",
+							padding = 0,
+							color = function()
+								return { fg = vim.fn.mode() == "n" and "#F8F8F2" or nil }
+							end,
+						},
+					},
+					lualine_z = {
+						{
+							progress,
+							color = function()
+								return { fg = vim.fn.mode() == "n" and "#F8F8F2" or nil } -- White in normal mode, default otherwise
+							end,
+						},
+					},
 				},
 				inactive_sections = {
 					lualine_a = {},
