@@ -89,3 +89,11 @@ vim.api.nvim_create_autocmd("BufEnter", {
 		end
 	end,
 })
+
+-- Force-refresh lualine when mode changes
+vim.api.nvim_create_autocmd("ModeChanged", {
+	pattern = "*",
+	callback = function()
+		require("lualine").refresh()
+	end,
+})
