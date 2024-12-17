@@ -56,7 +56,6 @@ return {
 				desc = "Buffers",
 				mode = "n",
 			},
-			{ "<leader>c", "<cmd>Bdelete!<CR>", desc = "Close Buffer", mode = "n" },
 			{ "<leader>e", "<cmd>NvimTreeToggle<cr>", desc = "Explorer", mode = "n" },
 			{ "<leader>n", "<cmd>nohlsearch<CR>", desc = "No Highlight", mode = "n" },
 			{ "<leader>q", "<cmd>q!<CR>", desc = "Quit", mode = "n" },
@@ -67,7 +66,7 @@ return {
 
 			-- LSP Group
 			{ "<leader>l", group = "LSP" },
-			{ "<leader>lI", "<cmd>LspInstallInfo<cr>", desc = "Installer Info", mode = "n" },
+			-- { "<leader>lM", "<cmd>Mason<cr>", desc = "Mason", mode = "n" },
 			{
 				"<leader>lS",
 				"<cmd>Telescope lsp_dynamic_workspace_symbols<cr>",
