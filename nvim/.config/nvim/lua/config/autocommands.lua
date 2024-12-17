@@ -64,3 +64,28 @@ vim.api.nvim_create_autocmd("VimResized", {
 	command = "tabdo wincmd =",
 	desc = "Resize all windows equally on VimResized",
 })
+
+-- Disable mini.indentscope for excluded filetypes and buftypes
+vim.api.nvim_create_autocmd("FileType", {
+	pattern = {
+		"help",
+		"startify",
+		"dashboard",
+		"neogitstatus",
+		"NvimTree",
+		"Trouble",
+		"dbout",
+	},
+	callback = function()
+		vim.b.miniindentscope_disable = true
+	end,
+})
+
+vim.api.nvim_create_autocmd("BufEnter", {
+	callback = function()
+		local excluded_buftypes = { "terminal", "nofile" }
+		if vim.tbl_contains(excluded_buftypes, vim.bo.buftype) then
+			vim.b.miniindentscope_disable = true
+		end
+	end,
+})
