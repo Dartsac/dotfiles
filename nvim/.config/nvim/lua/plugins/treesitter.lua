@@ -1,5 +1,6 @@
 return {
 	"nvim-treesitter/nvim-treesitter",
+	dependencies = "nvim-treesitter/nvim-treesitter-context",
 	config = function()
 		local status_ok, configs = pcall(require, "nvim-treesitter.configs")
 		if not status_ok then
