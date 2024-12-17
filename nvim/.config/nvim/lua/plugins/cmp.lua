@@ -21,6 +21,7 @@ return {
 		},
 		{
 			"dsznajder/vscode-es7-javascript-react-snippets",
+			enabled = false,
 			build = "npm install --legacy-peer-deps", -- Install dependencies
 			config = function()
 				require("luasnip.loaders.from_vscode").lazy_load({
