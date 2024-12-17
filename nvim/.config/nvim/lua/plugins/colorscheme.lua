@@ -37,6 +37,8 @@ return {
 		Group.new("Information", colors.thisBlue)
 		Group.new("Hint", colors.thisCyan)
 
+		-- sets the background to clear
+		Group.new("Normal", colors.none, colors.none, styles.NONE)
 		Group.new("CursorLine", colors.none, colors.thisBgDark, styles.NONE, colors.thisSelection)
 		Group.new("CursorLineNr", colors.thisYellow, colors.thisBgDarker, styles.NONE, colors.thisSelection)
 
