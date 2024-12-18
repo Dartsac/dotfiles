@@ -5,14 +5,14 @@ return {
 		dependencies = {
 			{
 				"windwp/nvim-ts-autotag",
-				lazy = true,
+				event = "InsertCharPre",
 				config = function()
 					require("nvim-ts-autotag").setup()
 				end,
 			},
 			{
 				"axelvc/template-string.nvim",
-				lazy = true,
+				event = "InsertCharPre",
 				config = function()
 					require("template-string").setup({
 						filetypes = {
