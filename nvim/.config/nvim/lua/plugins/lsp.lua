@@ -41,7 +41,7 @@ return {
 
 	{
 		"neovim/nvim-lspconfig",
-		event = "BufReadPre",
+		event = { "BufReadPost", "BufWritePost", "BufNewFile" },
 		config = function()
 			-- We'll do the main setup in lua/lsp/init.lua
 			require("lsp").setup()
@@ -51,6 +51,7 @@ return {
 			{
 				"folke/lazydev.nvim",
 				ft = "lua", -- only load on lua files
+				cmd = "LadyDev",
 				opts = {
 					library = {
 						-- See the configuration section for more details
