@@ -2,21 +2,27 @@ return {
 	{
 		"folke/which-key.nvim",
 		config = function()
-			local status_ok, wk = pcall(require, "which-key")
-			if not status_ok then
-				return
+			local wk = require("which-key")
+
+			local function harpoon_desc(i)
+				local ok, harpoon = pcall(require, "harpoon")
+				if not ok then
+					return "Harpoon to File " .. i
+				end
+				local list = harpoon:list()
+				local items = list and list.items
+				if items and items[i] then
+					return items[i].value
+				end
+				return nil --[[ .. i ]]
 			end
 
-			-- Configure which-key with a filter function to hide Harpoon file mappings
 			wk.setup({
 				preset = "helix",
 				plugins = {
 					marks = true,
 					registers = true,
-					spelling = {
-						enabled = true,
-						suggestions = 20,
-					},
+					spelling = { enabled = true, suggestions = 20 },
 					presets = {
 						operators = false,
 						motions = false,
@@ -30,32 +36,33 @@ return {
 				win = {
 					border = "rounded",
 					no_overlap = false,
-					padding = { 1, 2 }, -- extra window padding [top/bottom, right/left]
+					padding = { 1, 2 },
 					title = false,
 					title_pos = "center",
 					zindex = 1000,
 				},
-				icons = {
-					mappings = true,
-					colors = true,
-				},
+				icons = { mappings = true, colors = true },
 				show_help = false,
 				show_keys = false,
-				disable = {
-					buftypes = {},
-					filetypes = { "TelescopePrompt" },
-				},
+				disable = { buftypes = {}, filetypes = { "TelescopePrompt" } },
 
-				-- Filter out Harpoon file mappings from which-key display
 				filter = function(mapping)
-					if mapping.desc and mapping.desc:match("Harpoon to File") then
-						return false
+					local keys = mapping.keys or ""
+					local num = keys:match("^<leader>(%d)$")
+					if num then
+						local ok, harpoon = pcall(require, "harpoon")
+						if not ok then
+							return true
+						end
+						local items = harpoon:list().items
+						if not (items and items[tonumber(num)]) then
+							return false
+						end
 					end
 					return true
 				end,
 			})
 
-			-- Add your other mappings
 			wk.add({
 				-- General mappings
 				{
@@ -134,6 +141,25 @@ return {
 				{ "<leader>gu", "<cmd>lua require 'gitsigns'.undo_stage_hunk()<cr>", desc = "Undo Stage Hunk" },
 				{ "<leader>gd", "<cmd>Gitsigns diffthis HEAD<cr>", desc = "Git Diff" },
 			})
+
+			-- Define harpoon numeric keys only now that Harpoon is set up
+			for i = 1, 5 do
+				wk.add({
+					{
+						"<leader>" .. i,
+						function()
+							local ok, harpoon = pcall(require, "harpoon")
+							if ok then
+								harpoon:list():select(i)
+							end
+						end,
+						desc = function()
+							return harpoon_desc(i)
+						end,
+						mode = "n",
+					},
+				})
+			end
 		end,
 	},
 }
