@@ -29,7 +29,6 @@ return {
 				"jsonls",
 				"pyright",
 				"lua_ls",
-				"ts_ls",
 				"jdtls",
 			}
 			require("mason-lspconfig").setup({
@@ -77,7 +76,8 @@ return {
 	},
 
 	{
-		"jose-elias-alvarez/typescript.nvim",
-		lazy = true,
+		"pmizio/typescript-tools.nvim",
+		dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig" },
+		opts = {},
 	},
 }
