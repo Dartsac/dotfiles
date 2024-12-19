@@ -66,7 +66,7 @@ return {
 
 			-- LSP Group
 			{ "<leader>l", group = "LSP" },
-			-- { "<leader>lM", "<cmd>Mason<cr>", desc = "Mason", mode = "n" },
+			{ "<leader>M", "<cmd>Mason<cr>", desc = "Mason", mode = "n" },
 			{
 				"<leader>lS",
 				"<cmd>Telescope lsp_dynamic_workspace_symbols<cr>",
