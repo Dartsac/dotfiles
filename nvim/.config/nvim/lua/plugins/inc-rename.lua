@@ -9,7 +9,7 @@ return {
 
 			rename.setup()
 
-			vim.keymap.set("n", "<leader>rn", function()
+			vim.keymap.set("n", "<leader>r", function()
 				return ":IncRename " .. vim.fn.expand("<cword>")
 			end, { expr = true, desc = "Incremental rename", noremap = true })
 		end,
