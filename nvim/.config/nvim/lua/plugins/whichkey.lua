@@ -14,7 +14,7 @@ return {
 				if items and items[i] then
 					return items[i].value
 				end
-				return nil --[[ .. i ]]
+				return nil
 			end
 
 			wk.setup({
@@ -45,21 +45,8 @@ return {
 				show_help = false,
 				show_keys = false,
 				disable = { buftypes = {}, filetypes = { "TelescopePrompt" } },
-
 				filter = function(mapping)
-					local keys = mapping.keys or ""
-					local num = keys:match("^<leader>(%d)$")
-					if num then
-						local ok, harpoon = pcall(require, "harpoon")
-						if not ok then
-							return true
-						end
-						local items = harpoon:list().items
-						if not (items and items[tonumber(num)]) then
-							return false
-						end
-					end
-					return true
+					return mapping.desc and mapping.desc ~= ""
 				end,
 			})
 
@@ -157,6 +144,7 @@ return {
 							return harpoon_desc(i)
 						end,
 						mode = "n",
+						icon = { icon = "󱡀", hl = "WhichKeyIconBlue" },
 					},
 				})
 			end
