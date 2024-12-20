@@ -4,7 +4,7 @@ return {
 		branch = "harpoon2",
 		config = function(_, opts)
 			local harpoon = require("harpoon")
-			harpoon:setup(opts) -- Explicitly call setup with your opts
+			harpoon:setup(opts)
 		end,
 		opts = {
 			menu = { width = vim.api.nvim_win_get_width(0) - 4 },
