@@ -16,6 +16,7 @@ local servers = {
 	"pyright",
 	"lua_ls",
 	"jdtls",
+	"marksman",
 }
 
 for _, server in pairs(servers) do
