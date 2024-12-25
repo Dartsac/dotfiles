@@ -79,7 +79,7 @@ local function enable_formatting_on_save(client, bufnr)
 	vim.api.nvim_create_autocmd("BufWritePre", {
 		buffer = bufnr,
 		callback = function()
-			vim.lsp.buf.format({ bufnr = bufnr, id = client.id })
+			vim.lsp.buf.format()
 		end,
 	})
 end
@@ -109,6 +109,17 @@ vim.api.nvim_create_autocmd("BufEnter", {
 				set_typescript_keymaps(bufnr)
 				return
 			end
+		end
+	end,
+})
+
+-- Autocommand for LSP attachment to ensure keymaps are applied dynamically
+vim.api.nvim_create_autocmd("LspAttach", {
+	callback = function(args)
+		local bufnr = args.buf
+		local client = vim.lsp.get_client_by_id(args.data.client_id)
+		if client and client.name == "typescript-tools" then
+			set_typescript_keymaps(bufnr)
 		end
 	end,
 })
