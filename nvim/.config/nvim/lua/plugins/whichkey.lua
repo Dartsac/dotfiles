@@ -4,19 +4,6 @@ return {
 		config = function()
 			local wk = require("which-key")
 
-			local function harpoon_desc(i)
-				local ok, harpoon = pcall(require, "harpoon")
-				if not ok then
-					return "Harpoon to File " .. i
-				end
-				local list = harpoon:list()
-				local items = list and list.items
-				if items and items[i] then
-					return items[i].value
-				end
-				return nil
-			end
-
 			wk.setup({
 				preset = "helix",
 				plugins = {
@@ -66,7 +53,7 @@ return {
 								function()
 									harpoon:list():select(i)
 								end,
-								desc = harpoon_desc(i),
+								desc = marks[i].value,
 								icon = { icon = "󱡀", hl = "WhichKeyIconBlue" },
 							}
 							if i > 1 then
@@ -154,26 +141,6 @@ return {
 				{ "<leader>gu", "<cmd>lua require 'gitsigns'.undo_stage_hunk()<cr>", desc = "Undo Stage Hunk" },
 				{ "<leader>gd", "<cmd>Gitsigns diffthis HEAD<cr>", desc = "Git Diff" },
 			})
-
-			-- Define harpoon numeric keys only now that Harpoon is set up
-			-- for i = 1, 5 do
-			-- 	wk.add({
-			-- 		{
-			-- 			"<leader>" .. i,
-			-- 			function()
-			-- 				local ok, harpoon = pcall(require, "harpoon")
-			-- 				if ok then
-			-- 					harpoon:list():select(i)
-			-- 				end
-			-- 			end,
-			-- 			desc = function()
-			-- 				return harpoon_desc(i)
-			-- 			end,
-			-- 			mode = "n",
-			-- 			icon = { icon = "󱡀", hl = "WhichKeyIconBlue" },
-			-- 		},
-			-- 	})
-			-- end
 		end,
 	},
 }
