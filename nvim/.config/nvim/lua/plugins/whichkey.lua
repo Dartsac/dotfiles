@@ -51,6 +51,32 @@ return {
 			})
 
 			wk.add({
+				-- Dynamically add harpooned files using the expand function
+				{
+					"<leader>",
+					group = "Harpoon",
+					expand = function()
+						local harpoon = require("harpoon")
+						local marks = harpoon:list().items
+						local ret = {}
+
+						for i, _ in ipairs(marks) do
+							ret[i] = {
+								tostring(i),
+								function()
+									harpoon:list():select(i)
+								end,
+								desc = harpoon_desc(i),
+								icon = { icon = "󱡀", hl = "WhichKeyIconBlue" },
+							}
+							if i > 1 then
+								ret[i]["hidden"] = true
+							end
+						end
+
+						return ret
+					end,
+				},
 				-- General mappings
 				{
 					"<leader>b",
@@ -130,24 +156,24 @@ return {
 			})
 
 			-- Define harpoon numeric keys only now that Harpoon is set up
-			for i = 1, 5 do
-				wk.add({
-					{
-						"<leader>" .. i,
-						function()
-							local ok, harpoon = pcall(require, "harpoon")
-							if ok then
-								harpoon:list():select(i)
-							end
-						end,
-						desc = function()
-							return harpoon_desc(i)
-						end,
-						mode = "n",
-						icon = { icon = "󱡀", hl = "WhichKeyIconBlue" },
-					},
-				})
-			end
+			-- for i = 1, 5 do
+			-- 	wk.add({
+			-- 		{
+			-- 			"<leader>" .. i,
+			-- 			function()
+			-- 				local ok, harpoon = pcall(require, "harpoon")
+			-- 				if ok then
+			-- 					harpoon:list():select(i)
+			-- 				end
+			-- 			end,
+			-- 			desc = function()
+			-- 				return harpoon_desc(i)
+			-- 			end,
+			-- 			mode = "n",
+			-- 			icon = { icon = "󱡀", hl = "WhichKeyIconBlue" },
+			-- 		},
+			-- 	})
+			-- end
 		end,
 	},
 }
