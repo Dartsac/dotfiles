@@ -85,8 +85,9 @@ local function enable_formatting_on_save(bufnr)
 end
 
 function M.on_attach(client, bufnr)
-	if client.name == "lua_ls" or client.name == "cssls" then
+	if client.name == "lua_ls" or client.name == "cssls" or client.name == "typescript-tools" then
 		client.server_capabilities.documentFormattingProvider = false
+		client.server_capabilities.documentRangeFormattingProvider = false
 	end
 
 	lsp_keymaps(client, bufnr)
