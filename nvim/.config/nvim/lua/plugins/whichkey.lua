@@ -128,7 +128,15 @@ return {
 					"<leader>gr",
 					"<cmd>lua require 'gitsigns'.reset_hunk()<cr>",
 					desc = "Reset Hunk",
-					mode = { "n", "v" },
+					mode = { "n" },
+				},
+				{
+					"<leader>gr",
+					function()
+						require("gitsigns").reset_hunk({ vim.fn.line("."), vim.fn.line("v") })
+					end,
+					desc = "Reset Selected Hunk",
+					mode = { "v" },
 				},
 				{ "<leader>gl", "<cmd>lua require 'gitsigns'.blame_line()<cr>", desc = "Blame" },
 				{ "<leader>gR", "<cmd>lua require 'gitsigns'.reset_buffer()<cr>", desc = "Reset Buffer" },
@@ -136,7 +144,15 @@ return {
 					"<leader>gs",
 					"<cmd>lua require 'gitsigns'.stage_hunk()<cr>",
 					desc = "Stage Hunk",
-					mode = { "n", "v" },
+					mode = { "n" },
+				},
+				{
+					"<leader>gs",
+					function()
+						require("gitsigns").stage_hunk({ vim.fn.line("."), vim.fn.line("v") })
+					end,
+					desc = "Stage Selected Hunk",
+					mode = { "v" },
 				},
 				{ "<leader>gu", "<cmd>lua require 'gitsigns'.undo_stage_hunk()<cr>", desc = "Undo Stage Hunk" },
 				{ "<leader>gd", "<cmd>Gitsigns diffthis HEAD<cr>", desc = "Git Diff" },
