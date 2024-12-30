@@ -75,7 +75,7 @@ local function lsp_keymaps(client, bufnr)
 	end
 end
 
-local function enable_formatting_on_save(client, bufnr)
+local function enable_formatting_on_save(bufnr)
 	vim.api.nvim_create_autocmd("BufWritePre", {
 		buffer = bufnr,
 		callback = function()
@@ -95,7 +95,7 @@ function M.on_attach(client, bufnr)
 		set_typescript_keymaps(bufnr)
 	end
 
-	enable_formatting_on_save(client, bufnr)
+	enable_formatting_on_save(bufnr)
 end
 
 -- Autocommand to dynamically set TypeScript-specific keymaps
