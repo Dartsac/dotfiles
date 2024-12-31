@@ -1,6 +1,7 @@
 return {
 	{
 		"RRethy/vim-illuminate",
+		event = "BufReadPre",
 		config = function()
 			local status_ok, illuminate = pcall(require, "illuminate")
 			if status_ok then
