@@ -10,48 +10,48 @@ set -Ux COLORTERM truecolor
 set last_run_file ~/dotfiles/fish/.config/fish/fish_greeting_last_run
 
 function fish_greeting
-  # Check if the file containing the last run date exists
-  if test -e $last_run_file
-    # Read the last run date from the file
-    set -g last_run (cat $last_run_file)
-  else
-    # Set the last run date to today's date if the file doesn't exist
-    set -g last_run (date +%Y-%m-%d)
-  end
-  # Check if the current date is the same as the last time the function was run
-  if test (date +%Y-%m-%d) != $last_run
-    echo "                       .,,uod8b8bou,,."
-    echo "              ..,uod8bbbbbbbbbbbbbbbbrpft?l!i:."
-    echo "         ,=m8bbbbbbbbbbbbbbbrpft?!||||||||||||||"
-    echo "         !...:!tvbbbrpft||||||||||!!^^\"\"'   ||||"
-    echo "         !.......:!?|||||!!^^\"\"'            ||||"
-    echo "         !.........||||                     ||||"
-    echo "         !.........||||  ##                 ||||"
-    echo "         !.........||||                     ||||"
-    echo "         !.........||||    hello, isaac     ||||"
-    echo "         !.........||||                     ||||"
-    echo "         !.........||||                     ||||"
-    echo "         `.........||||                    ,||||"
-    echo "          .;.......||||               _.-!!|||||"
-    echo "   .,uodwbbbbb.....||||       _.-!!|||||||||!:'"
-    echo "!ybbbbbbbbbbbbbbb..!|||:..-!!|||||||!iof68bbbbbb...."
-    echo "!..ybbbbbbbbbbbbbbb!!||||||||!iof68bbbbbbrpft?!::   `."
-    echo "!....ybbbbbbbbbbbbbbbaaitf68bbbbbbrpft?!:::::::::     `."
-    echo "!......ybbbbbbbbbbbbbbbbbbrpft?!::::::;:!^\"`;:::       `."
-    echo "!........ybbbbbbbbbbrpft?!::::::::::^''...::::::;         ibbbo."
-    echo "`..........ybrpft?!::::::::::::::::::::::::;iof68bo.      wbbbbbo."
-    echo "  `..........:::::::::::::::::::::::;iof688888888888b.     `ybbbp^'"
-    echo "    `........::::::::::::::::;iof688888888888888888888b.     `"
-    echo "      `......:::::::::;iof688888888888888888888888888b."
-    echo "        `....:::;iof688888888888888888888888888888899ft!"
-    # echo "          `..::!8888888888888888888888888888888899ft|!^\""
-    # echo "            `' !!988888888888888888888888899ft|!^\""
-    # echo "                `!!8888888888888888899ft|!^\""
-    # echo "                  `!988888888899ft|!^\""
-    # echo "                    `!9899ft|!^\""
-    # Update the last run date to the current date
-    echo (date +%Y-%m-%d) > $last_run_file
-  end
+    # Check if the file containing the last run date exists
+    if test -e $last_run_file
+        # Read the last run date from the file
+        set -g last_run (cat $last_run_file)
+    else
+        # Set the last run date to today's date if the file doesn't exist
+        set -g last_run (date +%Y-%m-%d)
+    end
+    # Check if the current date is the same as the last time the function was run
+    if test (date +%Y-%m-%d) != $last_run
+        echo "                       .,,uod8b8bou,,."
+        echo "              ..,uod8bbbbbbbbbbbbbbbbrpft?l!i:."
+        echo "         ,=m8bbbbbbbbbbbbbbbrpft?!||||||||||||||"
+        echo "         !...:!tvbbbrpft||||||||||!!^^\"\"'   ||||"
+        echo "         !.......:!?|||||!!^^\"\"'            ||||"
+        echo "         !.........||||                     ||||"
+        echo "         !.........||||  ##                 ||||"
+        echo "         !.........||||                     ||||"
+        echo "         !.........||||    hello, isaac     ||||"
+        echo "         !.........||||                     ||||"
+        echo "         !.........||||                     ||||"
+        echo "         `.........||||                    ,||||"
+        echo "          .;.......||||               _.-!!|||||"
+        echo "   .,uodwbbbbb.....||||       _.-!!|||||||||!:'"
+        echo "!ybbbbbbbbbbbbbbb..!|||:..-!!|||||||!iof68bbbbbb...."
+        echo "!..ybbbbbbbbbbbbbbb!!||||||||!iof68bbbbbbrpft?!::   `."
+        echo "!....ybbbbbbbbbbbbbbbaaitf68bbbbbbrpft?!:::::::::     `."
+        echo "!......ybbbbbbbbbbbbbbbbbbrpft?!::::::;:!^\"`;:::       `."
+        echo "!........ybbbbbbbbbbrpft?!::::::::::^''...::::::;         ibbbo."
+        echo "`..........ybrpft?!::::::::::::::::::::::::;iof68bo.      wbbbbbo."
+        echo "  `..........:::::::::::::::::::::::;iof688888888888b.     `ybbbp^'"
+        echo "    `........::::::::::::::::;iof688888888888888888888b.     `"
+        echo "      `......:::::::::;iof688888888888888888888888888b."
+        echo "        `....:::;iof688888888888888888888888888888899ft!"
+        # echo "          `..::!8888888888888888888888888888888899ft|!^\""
+        # echo "            `' !!988888888888888888888888899ft|!^\""
+        # echo "                `!!8888888888888888899ft|!^\""
+        # echo "                  `!988888888899ft|!^\""
+        # echo "                    `!9899ft|!^\""
+        # Update the last run date to the current date
+        echo (date +%Y-%m-%d) >$last_run_file
+    end
 end
 
 # theme
@@ -73,7 +73,7 @@ function dev
         # Run your exact tmux command
         set selected_name (basename (pwd))
         tmux new-session -s $selected_name -c (pwd) -n $selected_name -A\; \
-            send-keys 'v' C-m \; \
+            send-keys v C-m \; \
             split-window -v -p 20 \;
     end
 end
@@ -89,7 +89,7 @@ alias d "tmux detach"
 alias la "ls -A"
 alias ll "ls -l"
 alias lla "ll -A"
-alias lg "lazygit"
+alias lg lazygit
 alias g git
 alias v "vim ."
 
@@ -117,26 +117,26 @@ set -gx PATH $GOPATH/bin $PATH
 
 # NVM
 function __check_rvm --on-variable PWD --description 'Do nvm stuff'
-  status --is-command-substitution; and return
+    status --is-command-substitution; and return
 
-  if test -f .nvmrc; and test -r .nvmrc;
-    nvm use
-  else
-  end
+    if test -f .nvmrc; and test -r .nvmrc
+        nvm use
+    else
+    end
 end
 
 switch (uname)
-  case Darwin
-    source (dirname (status --current-filename))/config-osx.fish
-  case Linux
-    source (dirname (status --current-filename))/config-linux.fish
-  case '*'
-    source (dirname (status --current-filename))/config-windows.fish
+    case Darwin
+        source (dirname (status --current-filename))/config-osx.fish
+    case Linux
+        source (dirname (status --current-filename))/config-linux.fish
+    case '*'
+        source (dirname (status --current-filename))/config-windows.fish
 end
 
 set LOCAL_CONFIG (dirname (status --current-filename))/config-local.fish
 if test -f $LOCAL_CONFIG
-  source $LOCAL_CONFIG
+    source $LOCAL_CONFIG
 end
 eval "$(perl -I$HOME/perl5/lib/perl5 -Mlocal::lib=$HOME/perl5)"
 
