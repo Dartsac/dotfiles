@@ -21,7 +21,8 @@ return {
 
 	{
 		"williamboman/mason-lspconfig.nvim",
-		after = "mason.nvim",
+		dependencies = "williamboman/mason.nvim",
+		event = { "BufReadPre", "BufNewFile" },
 		config = function()
 			local servers = {
 				"cssls",
@@ -40,7 +41,7 @@ return {
 
 	{
 		"neovim/nvim-lspconfig",
-		event = { "BufReadPost", "BufWritePost", "BufNewFile" },
+		event = { "BufReadPre", "BufNewFile" },
 		config = function()
 			-- We'll do the main setup in lua/lsp/init.lua
 			require("lsp").setup()
@@ -77,6 +78,7 @@ return {
 
 	{
 		"pmizio/typescript-tools.nvim",
+		ft = { "typescript", "typescriptreact", "javascript", "javascriptreact" },
 		dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig" },
 		opts = {},
 	},
