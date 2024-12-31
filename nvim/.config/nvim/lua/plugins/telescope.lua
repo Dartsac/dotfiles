@@ -1,6 +1,26 @@
+-- lua/plugins/telescope.lua
 return {
 	"nvim-telescope/telescope.nvim",
 	tag = "0.1.8", -- or, branch = '0.1.x',
+	cmd = "Telescope",
+	keys = {
+		{
+			"<C-f>",
+			function()
+				local cwd = vim.fn.getcwd()
+				require("telescope.builtin").find_files({ cwd = cwd })
+			end,
+			desc = "Find Files in CWD",
+		},
+		{
+			"<Esc>O5F",
+			function()
+				local cwd = vim.fn.getcwd()
+				require("telescope.builtin").live_grep({ cwd = cwd })
+			end,
+			desc = "Live Grep in CWD",
+		},
+	},
 	dependencies = { "nvim-lua/plenary.nvim", lazy = true },
 	config = function()
 		local status_ok, telescope = pcall(require, "telescope")

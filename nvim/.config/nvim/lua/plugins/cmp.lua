@@ -1,3 +1,4 @@
+-- lua/plugins/cmp.lua
 return {
 	"hrsh7th/nvim-cmp",
 	event = { "InsertEnter", "CmdlineEnter" },

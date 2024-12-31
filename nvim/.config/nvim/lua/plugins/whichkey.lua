@@ -1,3 +1,4 @@
+-- lua/plugins/whichkey.lua
 return {
 	{
 		"folke/which-key.nvim",
@@ -43,7 +44,11 @@ return {
 					"<leader>",
 					group = "Harpoon",
 					expand = function()
-						local harpoon = require("harpoon")
+						local ok, harpoon = pcall(require, "harpoon")
+						if not ok then
+							return {}
+						end
+
 						local marks = harpoon:list().items
 						local ret = {}
 
@@ -75,6 +80,7 @@ return {
 				{ "<leader>n", "<cmd>nohlsearch<CR>", desc = "No Highlight", mode = "n" },
 				{ "<leader>q", "<cmd>q!<CR>", desc = "Quit", mode = "n" },
 				{ "<leader>w", "<cmd>w!<CR>", desc = "Save", mode = "n" },
+				{ "<leader>m", "<cmd>messages<CR>", desc = "Messages", mode = { "n", "v" } },
 
 				-- Lazy
 				{ "<leader>L", "<cmd>Lazy<cr>", desc = "Lazy", mode = "n" },

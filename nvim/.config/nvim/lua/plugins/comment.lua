@@ -2,6 +2,7 @@ return {
 	{
 		"numToStr/Comment.nvim",
 		dependencies = { "JoosepAlviste/nvim-ts-context-commentstring" },
+		event = "BufReadPost",
 		config = function()
 			-- Ensure ts_context_commentstring is set up first
 			require("ts_context_commentstring").setup({
