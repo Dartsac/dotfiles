@@ -7,7 +7,7 @@ set -Ux TERM xterm-256color
 set -Ux COLORTERM truecolor
 
 # Set a variable to store the path to the file containing the last run date
-set last_run_file ~/dotfiles/fish/.config/fish/fish_greeting_last_run
+set last_run_file ~/.config/fish/fish_greeting_last_run
 
 function fish_greeting
     # Check if the file containing the last run date exists
