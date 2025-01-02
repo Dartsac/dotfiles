@@ -1,8 +1,8 @@
 -- lua/plugins/colorscheme.lua
 return {
 	"tjdevries/colorbuddy.nvim", -- Add the dependency for colorbuddy
-	-- lazy = false,
-	event = "VimEnter",
+	lazy = false,
+	-- event = "VimEnter",
 	priority = 1000,
 	config = function()
 		local cb = require("colorbuddy.init")
