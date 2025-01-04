@@ -52,7 +52,7 @@ return {
 						{
 							"mode",
 							fmt = function(str)
-								return "-- " .. str .. " --"
+								return str:sub(1, 1)
 							end,
 							color = function()
 								return { fg = vim.fn.mode() == "n" and "#F8F8F2" or nil } -- White in normal mode, default otherwise
@@ -70,7 +70,7 @@ return {
 							-- 2: Absolute path
 							-- 3: Absolute path, with tilde as the home directory
 							-- 4: Filename and parent dir, with tilde as the home directory
-							shorting_target = 40, -- Shortens path to leave 40 spaces in the window
+							shorting_target = 0, -- Shortens path to leave 40 spaces in the window
 							-- for other components. (terrible name, any suggestions?)
 							symbols = {
 								modified = "[+]", -- Text to show when the file is modified.
@@ -96,6 +96,7 @@ return {
 						},
 						{
 							"encoding",
+							cond = hide_in_width,
 							color = { fg = "#F8F8F2" },
 						},
 						{
@@ -116,6 +117,7 @@ return {
 					lualine_z = {
 						{
 							progress,
+							cond = hide_in_width,
 							color = function()
 								return { fg = vim.fn.mode() == "n" and "#F8F8F2" or nil } -- White in normal mode, default otherwise
 							end,

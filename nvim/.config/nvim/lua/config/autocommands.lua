@@ -91,12 +91,12 @@ vim.api.nvim_create_autocmd("BufEnter", {
 })
 
 -- Force-refresh lualine when mode changes
-vim.api.nvim_create_autocmd("ModeChanged", {
-	pattern = "*",
-	callback = function()
-		require("lualine").refresh()
-	end,
-})
+-- vim.api.nvim_create_autocmd("ModeChanged", {
+-- 	pattern = "*",
+-- 	callback = function()
+-- 		require("lualine").refresh()
+-- 	end,
+-- })
 
 -- recognize plantuml files
 -- Filetype detection for PlantUML files
