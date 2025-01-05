@@ -12,14 +12,9 @@ return {
 			end,
 			desc = "Find Files in CWD",
 		},
-		{
-			"<Esc>O5F",
-			function()
-				local cwd = vim.fn.getcwd()
-				require("telescope.builtin").live_grep({ cwd = cwd })
-			end,
-			desc = "Live Grep in CWD",
-		},
+		{ "<leader>fh", require("telescope.builtin").help_tags },
+		{ "<Esc>O5F", require("config.telescope.multigrep") },
+		{ "<leader>mf", require("config.telescope.multigrep_filesonly") },
 	},
 	dependencies = { "nvim-lua/plenary.nvim", lazy = true },
 	config = function()
@@ -29,7 +24,6 @@ return {
 		end
 
 		local actions = require("telescope.actions")
-		local cwd = vim.fn.getcwd()
 
 		telescope.setup({
 			defaults = {
@@ -67,28 +61,5 @@ return {
 				-- please take a look at the readme of the extension you want to configure
 			},
 		})
-
-		vim.api.nvim_set_keymap(
-			"n",
-			"<C-f>",
-			":Telescope find_files cwd=" .. cwd .. "<CR>",
-			{ noremap = true, silent = true }
-		)
-		-- Map Ctrl+Shift+F to Telescope live_grep in iTerm2
-		-- To make this work in iTerm2, create a custom keybinding for Ctrl+Shift+F
-		-- and send the escape sequence "O5F":
-		-- 1. Open iTerm2 Preferences (Cmd+,)
-		-- 2. Go to the "Keys" tab
-		-- 3. Click the "+" button under "Key Mappings" to create a new keybinding
-		-- 4. In the "Keyboard Shortcut" field, press Ctrl+Shift+F
-		-- 5. In the "Action" dropdown menu, select "Send Escape Sequence"
-		-- 6. In the "Esc+" field, enter the escape sequence "O5F" (capital letter O, number 5, and capital letter F)
-		-- 7. Click "OK" to save the new keybinding
-		vim.api.nvim_set_keymap(
-			"n",
-			"<Esc>O5F",
-			":Telescope live_grep cwd=" .. cwd .. "<CR>",
-			{ noremap = true, silent = true }
-		)
 	end,
 }
