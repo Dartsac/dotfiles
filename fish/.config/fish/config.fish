@@ -93,8 +93,6 @@ alias lg lazygit
 alias g git
 alias v "vim ."
 
-alias dot='/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
-
 command -qv nvim && alias vim nvim
 
 bind \cf "tmux-sessionizer.sh"
