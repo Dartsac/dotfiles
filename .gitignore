@@ -53,3 +53,4 @@ nvim/.config/nvim/doc
 nvim/.config/nvim/colors
 nvim/.config/nvim/autoload
 nvim/.config/nvim/lazy-lock.json
+ghostty/.config/ghostty/themes/Dracula-Buffy
