@@ -1,11 +1,3 @@
-set fish_greeting ""
-
-# set termguicolors
-# Enable 256 colors
-set -Ux TERM xterm-256color
-# # Enable true color
-set -Ux COLORTERM truecolor
-
 # Set a variable to store the path to the file containing the last run date
 set last_run_file ~/.config/fish/fish_greeting_last_run
 
