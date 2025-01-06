@@ -1,0 +1,13 @@
+theme = Dracula-Buffy
+font-family = Hack Nerd Font Mono
+
+background-blur-radius = 35
+background-opacity = 0.8
+
+window-decoration = true
+
+shell-integration-features = no-cursor
+cursor-style = block
+cursor-style-blink = true
+
+keybind = ctrl+shift+f=esc:O5F
