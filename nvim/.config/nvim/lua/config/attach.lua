@@ -1,3 +1,4 @@
+-- lua/config/attach.lua
 local ok, harpoon = pcall(require, "harpoon")
 if ok then
 	local marks = harpoon:list().items
