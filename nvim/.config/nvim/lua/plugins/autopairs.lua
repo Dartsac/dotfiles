@@ -1,18 +1,19 @@
+-- lua/plugins/autopairs.lua
 return {
 	{
 		"windwp/nvim-autopairs",
-		event = "InsertCharPre",
+		event = "InsertEnter",
 		dependencies = {
 			{
 				"windwp/nvim-ts-autotag",
-				event = "InsertCharPre",
+				event = "InsertEnter",
 				config = function()
 					require("nvim-ts-autotag").setup()
 				end,
 			},
 			{
 				"axelvc/template-string.nvim",
-				event = "InsertCharPre",
+				event = "InsertEnter",
 				config = function()
 					require("template-string").setup({
 						filetypes = {

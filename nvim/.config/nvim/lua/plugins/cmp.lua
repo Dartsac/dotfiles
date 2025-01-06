@@ -132,7 +132,7 @@ return {
 			},
 			confirm_opts = {
 				behavior = cmp.ConfirmBehavior.Replace,
-				select = false,
+				select = true,
 			},
 			window = {
 				documentation = {
