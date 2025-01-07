@@ -10,7 +10,7 @@ return {
 					delay = 200,
 					filetypes_denylist = { "NvimTree", "harpoon", "TelescopePrompt", "TelescopeResults" },
 					filetypes_allowlist = {},
-					modes_denylist = {},
+					modes_denylist = { "v", "V", "nov", "noV", "CTRL-V", "noCTRL-V" },
 					modes_allowlist = {},
 					providers_regex_syntax_denylist = {},
 					providers_regex_syntax_allowlist = {},
