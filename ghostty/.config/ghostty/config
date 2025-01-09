@@ -1,4 +1,11 @@
+# theme = Dracula-Pro
+# theme = Dracula-Alucard
+# theme = Dracula-Blade
 theme = Dracula-Buffy
+# theme = Dracula-Lincoln
+# theme = Dracula-Morbius
+# theme = Dracula-Van-Helsing
+
 font-family = Hack Nerd Font Mono
 
 background-blur-radius = 35
