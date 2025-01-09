@@ -2,17 +2,46 @@
 return {
 	"tjdevries/colorbuddy.nvim", -- Add the dependency for colorbuddy
 	lazy = false,
-	-- event = "VimEnter",
 	priority = 1000,
 	config = function()
 		local cb = require("colorbuddy.init")
-		local colorscheme = "dracula_pro_buffy"
-		local status_ok, err = pcall(function()
-			vim.cmd("colorscheme " .. colorscheme)
-		end)
-		if not status_ok then
-			vim.notify("Failed to load colorscheme: " .. colorscheme .. "\n" .. err, vim.log.levels.ERROR)
-			return
+
+		local ghostty_config_path = vim.fn.expand("~/.config/ghostty/config")
+
+		local function get_active_ghostty_theme(path)
+			local lines = vim.fn.readfile(path)
+			for _, line in ipairs(lines) do
+				local theme = line:match("^theme%s*=%s*(.+)$")
+				if theme then
+					return theme
+				end
+			end
+			return nil
+		end
+
+		local function get_vim_colorscheme(ghostty_theme)
+			local theme_map = {
+				["Dracula-Pro"] = "dracula_pro",
+				["Dracula-Alucard"] = "dracula_pro_alucard",
+				["Dracula-Blade"] = "dracula_pro_blade",
+				["Dracula-Buffy"] = "dracula_pro_buffy",
+				["Dracula-Lincoln"] = "dracula_pro_lincoln",
+				["Dracula-Morbius"] = "dracula_pro_morbius",
+				["Dracula-Van-Helsing"] = "dracula_pro_van_helsing",
+			}
+			return theme_map[ghostty_theme] or nil
+		end
+
+		local ghostty_theme = get_active_ghostty_theme(ghostty_config_path)
+		if ghostty_theme then
+			local vim_colorscheme = get_vim_colorscheme(ghostty_theme)
+			if vim_colorscheme then
+				vim.cmd("colorscheme " .. vim_colorscheme)
+			else
+				print("No matching Vim color scheme for Ghostty theme:", ghostty_theme)
+			end
+		else
+			print("No active Ghostty theme found.")
 		end
 
 		local Color = cb.Color
@@ -21,22 +50,39 @@ return {
 		local groups = cb.groups
 		local styles = cb.styles
 
+		local dracula_colors = vim.g["dracula_pro#palette"]
 		-- Define colors
-		Color.new("thisBg", "#2A212C")
-		Color.new("thisBgDark", "#1C161D")
-		Color.new("thisBgDarker", "#0B0B0F")
-		Color.new("thisSelection", "#544158")
-		Color.new("thisCyan", "#80FFEA")
-		Color.new("thisBlue", "#7970A9")
-		Color.new("thisRed", "#FF9580")
-		Color.new("thisYellow", "#FFFF80")
-		Color.new("thisLightYellow", "#f4d88c")
-		Color.new("thisDraculaWarnLine", "#ffca80")
+		Color.new("thisFg", dracula_colors.fg[1])
+
+		Color.new("thisBgLighter", dracula_colors.bglighter[1])
+		Color.new("thisBgLight", dracula_colors.bglight[1])
+		Color.new("thisBg", dracula_colors.bg[1])
+		Color.new("thisBgDark", dracula_colors.bgdark[1])
+		Color.new("thisBgDarker", dracula_colors.bgdarker[1])
+
+		Color.new("thisComment", dracula_colors.comment[1])
+		Color.new("thisSelection", dracula_colors.selection[1])
+		Color.new("thisSubtle", dracula_colors.subtle[1])
+
+		Color.new("thisCyan", dracula_colors.cyan[1])
+		Color.new("thisGreen", dracula_colors.green[1])
+		Color.new("thisOrange", dracula_colors.orange[1])
+		Color.new("thisPink", dracula_colors.pink[1])
+		Color.new("thisPurple", dracula_colors.purple[1])
+		Color.new("thisRed", dracula_colors.red[1])
+		Color.new("thisYellow", dracula_colors.yellow[1])
+
+		Color.new("thisLightCyan", vim.g["dracula_pro#palette"].color_14)
+		Color.new("thisLightGreen", vim.g["dracula_pro#palette"].color_10)
+		Color.new("thisLightPink", vim.g["dracula_pro#palette"].color_13)
+		Color.new("thisLightPurple", vim.g["dracula_pro#palette"].color_12)
+		Color.new("thisLightRed", vim.g["dracula_pro#palette"].color_9)
+		Color.new("thisLightYellow", vim.g["dracula_pro#palette"].color_11)
 
 		-- Define groups
 		Group.new("Error", colors.thisRed)
-		Group.new("Warning", colors.thisDraculaWarnLine)
-		Group.new("Information", colors.thisBlue)
+		Group.new("Warning", colors.thisOrange)
+		Group.new("Information", colors.thisPurple)
 		Group.new("Hint", colors.thisCyan)
 
 		-- sets the background to clear
@@ -47,9 +93,9 @@ return {
 		Group.new("ErrorMsg", colors.thisBgDarker, colors.thisRed, styles.bold)
 		Group.new("WarningMsg", colors.thisBgDarker, colors.thisLightYellow, styles.bold)
 
-		Group.new("IlluminatedWordText", colors.none, colors.thisSelection, styles.bold)
-		Group.new("IlluminatedWordRead", colors.none, colors.thisSelection, styles.bold)
-		Group.new("IlluminatedWordWrite", colors.none, colors.thisSelection, styles.bold)
+		Group.new("IlluminatedWordText", colors.none, colors.thisSelection, styles.bold + styles.italic)
+		Group.new("IlluminatedWordRead", colors.none, colors.thisSelection, styles.bold + styles.italic)
+		Group.new("IlluminatedWordWrite", colors.none, colors.thisSelection, styles.bold + styles.italic)
 
 		local cError = groups.Error.fg
 		local cInfo = groups.Information.fg
@@ -69,7 +115,7 @@ return {
 		)
 
 		-- Highlight group for Visual mode
-		vim.cmd("highlight Visual guibg=#454158 guifg=NONE gui=reverse,bold")
+		Group.new("Visual", colors.none, colors.thisSelection, styles.reverse + styles.bold)
 
 		-- Autocommand group for visual mode and cursor highlights
 		vim.api.nvim_create_augroup("_visual_mode_highlight", { clear = true })
@@ -77,7 +123,8 @@ return {
 			group = "_visual_mode_highlight",
 			pattern = { "*" },
 			callback = function()
-				vim.cmd("highlight Visual guibg=#454158 guifg=NONE gui=reverse,bold")
+				-- Re-apply the Visual group in case it's overwritten
+				Group.new("Visual", colors.none, colors.thisSelection, styles.reverse + styles.bold)
 			end,
 		})
 	end,
