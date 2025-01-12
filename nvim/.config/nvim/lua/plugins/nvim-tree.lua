@@ -58,33 +58,43 @@ return {
 			end, opts("Open File or Folder"))
 
 			-- Open file in a tmux vertical split
-			vim.keymap.set("n", "v", function()
+			vim.keymap.set("n", "V", function()
 				local node = api.tree.get_node_under_cursor()
 				if not node or not node.absolute_path then
 					return
 				end
 
 				local filepath = node.absolute_path
-				local cmd =
-					string.format("tmux split-window -h 'NVIM_NO_HARPOON=1 nvim %s'", vim.fn.fnameescape(filepath))
+				local cwd = vim.fn.getcwd()
+
+				local cmd = string.format(
+					"tmux split-window -h -c %s 'NVIM_NO_HARPOON=1 nvim %s; exec $SHELL'",
+					vim.fn.fnameescape(cwd),
+					vim.fn.fnameescape(filepath)
+				)
 				os.execute(cmd)
 
-				api.tree.close() -- Close nvim-tree after splitting
+				api.tree.close()
 			end, opts("Vertical Split in tmux"))
 
 			-- Open file in a tmux horizontal split
-			vim.keymap.set("n", "h", function()
+			vim.keymap.set("n", "H", function()
 				local node = api.tree.get_node_under_cursor()
 				if not node or not node.absolute_path then
 					return
 				end
 
 				local filepath = node.absolute_path
-				local cmd =
-					string.format("tmux split-window -v 'NVIM_NO_HARPOON=1 nvim %s'", vim.fn.fnameescape(filepath))
+				local cwd = vim.fn.getcwd()
+
+				local cmd = string.format(
+					"tmux split-window -v -c %s 'NVIM_NO_HARPOON=1 nvim %s; exec $SHELL'",
+					vim.fn.fnameescape(cwd),
+					vim.fn.fnameescape(filepath)
+				)
 				os.execute(cmd)
 
-				api.tree.close() -- Close nvim-tree after splitting
+				api.tree.close()
 			end, opts("Horizontal Split in tmux"))
 		end
 
