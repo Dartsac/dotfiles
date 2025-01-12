@@ -20,6 +20,15 @@ return {
 				return { desc = "nvim-tree: " .. desc, buffer = bufnr, noremap = true, silent = true, nowait = true }
 			end
 
+			-- Bind `r` to raname a file
+			vim.keymap.set("n", "r", function()
+				api.fs.rename()
+			end, opts("Rename File/Folder"))
+
+			vim.keymap.set("n", "R", function()
+				api.fs.rename_full()
+			end, opts("Rename File/Folder"))
+
 			-- Bind `d` to delete a file or folder
 			vim.keymap.set("n", "d", function()
 				local node = api.tree.get_node_under_cursor()
@@ -33,23 +42,6 @@ return {
 			vim.keymap.set("n", "a", function()
 				api.fs.create()
 			end, opts("Add File/Folder"))
-
-			-- Bind `r` to rename or move a file or folder
-			vim.keymap.set("n", "r", function()
-				local node = api.tree.get_node_under_cursor()
-				if not node or not node.absolute_path then
-					vim.notify("No file or folder selected", vim.log.levels.WARN)
-					return
-				end
-
-				local cwd = vim.fn.getcwd() -- Get the current working directory
-				local relative_path = node.absolute_path:sub(#cwd + 2) -- Strip the CWD part, plus the trailing slash
-
-				local new_path = vim.fn.input("Rename to: ", relative_path, "file")
-				if new_path and #new_path > 0 and new_path ~= relative_path then
-					api.fs.rename_sub(node, new_path)
-				end
-			end, opts("Rename/Move File or Folder"))
 
 			-- Open file or folder
 			vim.keymap.set("n", "<CR>", function()
