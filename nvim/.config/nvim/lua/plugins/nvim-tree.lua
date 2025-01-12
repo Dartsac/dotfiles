@@ -73,7 +73,8 @@ return {
 				end
 
 				local filepath = node.absolute_path
-				local cmd = string.format("tmux split-window -h 'nvim %s'", vim.fn.fnameescape(filepath))
+				local cmd =
+					string.format("tmux split-window -h 'NVIM_NO_HARPOON=1 nvim %s'", vim.fn.fnameescape(filepath))
 				os.execute(cmd)
 
 				api.tree.close() -- Close nvim-tree after splitting
@@ -87,7 +88,8 @@ return {
 				end
 
 				local filepath = node.absolute_path
-				local cmd = string.format("tmux split-window -v 'nvim %s'", vim.fn.fnameescape(filepath))
+				local cmd =
+					string.format("tmux split-window -v 'NVIM_NO_HARPOON=1 nvim %s'", vim.fn.fnameescape(filepath))
 				os.execute(cmd)
 
 				api.tree.close() -- Close nvim-tree after splitting
