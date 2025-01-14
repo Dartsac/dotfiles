@@ -79,6 +79,9 @@ return {
 		Color.new("thisLightRed", vim.g["dracula_pro#palette"].color_9)
 		Color.new("thisLightYellow", vim.g["dracula_pro#palette"].color_11)
 
+		Color.new("thisHighlight", "#554158")
+		Color.new("thisHighlightDefinition", "#569473")
+
 		-- Define groups
 		Group.new("Error", colors.thisRed)
 		Group.new("Warning", colors.thisOrange)
@@ -93,9 +96,9 @@ return {
 		Group.new("ErrorMsg", colors.thisBgDarker, colors.thisRed, styles.bold)
 		Group.new("WarningMsg", colors.thisBgDarker, colors.thisLightYellow, styles.bold)
 
-		Group.new("IlluminatedWordText", colors.none, colors.thisSelection, styles.bold + styles.italic)
-		Group.new("IlluminatedWordRead", colors.none, colors.thisSelection, styles.bold + styles.italic)
-		Group.new("IlluminatedWordWrite", colors.none, colors.thisSelection, styles.bold + styles.italic)
+		Group.new("IlluminatedWordText", colors.none, colors.thisHighlight, styles.bold + styles.italic)
+		Group.new("IlluminatedWordRead", colors.none, colors.thisHighlight, styles.bold + styles.italic)
+		Group.new("IlluminatedWordWrite", colors.none, colors.thisHighlightDefinition, styles.bold + styles.italic)
 
 		local cError = groups.Error.fg
 		local cInfo = groups.Information.fg
