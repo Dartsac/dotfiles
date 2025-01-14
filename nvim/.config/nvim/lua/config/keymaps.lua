@@ -6,8 +6,8 @@ keymap("n", "<S-l>", ":bnext<CR>", opts)
 keymap("n", "<S-h>", ":bprevious<CR>", opts)
 keymap("n", "<C-d>", "<C-d>zz", opts)
 keymap("n", "<C-u>", "<C-u>zz", opts)
-keymap("n", "n", "nzzzv", opts)
-keymap("n", "N", "Nzzzv", opts)
+keymap("n", "n", "n<Plug>SearchIndexzzzv", opts)
+keymap("n", "N", "N<Plug>SearchIndexzzzv", opts)
 
 -- Insert --
 keymap("i", "jk", "<ESC>", opts)
