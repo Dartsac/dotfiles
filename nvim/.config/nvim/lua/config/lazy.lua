@@ -29,4 +29,8 @@ require("lazy").setup({
 		{ "google/vim-searchindex" },
 		{ "christoomey/vim-tmux-navigator" },
 	},
+	change_detection = {
+		enabled = true,
+		notify = false,
+	},
 })
