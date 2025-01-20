@@ -100,6 +100,8 @@ return {
 		Group.new("IlluminatedWordRead", colors.none, colors.thisHighlight, styles.bold + styles.italic)
 		Group.new("IlluminatedWordWrite", colors.none, colors.thisHighlightDefinition, styles.bold + styles.italic)
 
+		Group.new("TelescopePromptCounter", colors.thisFg, colors.none, styles.NONE)
+
 		local cError = groups.Error.fg
 		local cInfo = groups.Information.fg
 		local cWarn = groups.Warning.fg
