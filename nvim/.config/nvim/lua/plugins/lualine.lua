@@ -95,9 +95,30 @@ return {
 							color = { fg = "#F8F8F2" },
 						},
 						{
-							"encoding",
+							function()
+								local ok, harpoon = pcall(require, "harpoon")
+								if not ok then
+									return "󱡀 Harpoon Error"
+								end
+
+								local current_file = vim.fn.fnamemodify(vim.fn.expand("%:p"), ":.")
+								local harpoon_list = harpoon:list().items
+
+								for index, item in ipairs(harpoon_list) do
+									if item.value == current_file then
+										return "󱡀 " .. index
+									end
+								end
+								return ""
+							end,
 							cond = hide_in_width,
-							color = { fg = "#F8F8F2" },
+							color = function()
+								local hl = vim.api.nvim_get_hl(0, { name = "WhichKeyIconBlue", link = false })
+								if hl and hl.fg then
+									return { fg = string.format("#%06x", hl.fg) }
+								end
+								return { fg = "#F8F8F2" } -- Fallback color if highlight group doesn't exist
+							end,
 						},
 						{
 							"filetype",
