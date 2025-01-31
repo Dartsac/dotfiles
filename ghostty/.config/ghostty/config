@@ -8,8 +8,8 @@ theme = Dracula-Pro
 
 font-family = Hack Nerd Font Mono
 
-background-blur-radius = 35
-background-opacity = 0.8
+# background-blur-radius = 35
+# background-opacity = 0.8
 
 window-decoration = true
 
