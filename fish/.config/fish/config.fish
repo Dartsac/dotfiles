@@ -83,7 +83,14 @@ alias ll "ls -l"
 alias lla "ll -A"
 alias lg lazygit
 alias g git
-alias v "vim ."
+
+function v
+    if test (count $argv) -eq 0
+        nvim
+    else
+        env NVIM_NO_HARPOON=1 nvim $argv
+    end
+end
 
 command -qv nvim && alias vim nvim
 
