@@ -35,7 +35,6 @@ return {
 				col = 1,
 			},
 			current_line_blame = false,
-			show_deleted = false,
 		})
 	end,
 }
