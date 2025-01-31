@@ -121,12 +121,12 @@ return {
 				{ "<leader>g", group = "Git" },
 				{
 					"<leader>gj",
-					"<cmd>lua require 'gitsigns'.next_hunk({navigation_message = false})<cr>",
+					"<cmd>lua require 'gitsigns'.nav_hunk('next', {navigation_message = false})<cr>",
 					desc = "Next Hunk",
 				},
 				{
 					"<leader>gk",
-					"<cmd>lua require 'gitsigns'.prev_hunk({navigation_message = false})<cr>",
+					"<cmd>lua require 'gitsigns'.nav_hunk('prev', {navigation_message = false})<cr>",
 					desc = "Prev Hunk",
 				},
 				{ "<leader>gp", "<cmd>lua require 'gitsigns'.preview_hunk()<cr>", desc = "Preview Hunk" },
@@ -160,7 +160,7 @@ return {
 					desc = "Stage Selected Hunk",
 					mode = { "v" },
 				},
-				{ "<leader>gu", "<cmd>lua require 'gitsigns'.undo_stage_hunk()<cr>", desc = "Undo Stage Hunk" },
+				{ "<leader>gu", "<cmd>lua require 'gitsigns'.reset_buffer_index()<cr>", desc = "Undo Stage Hunk" },
 				{ "<leader>gd", "<cmd>Gitsigns diffthis HEAD<cr>", desc = "Git Diff" },
 			})
 		end,
