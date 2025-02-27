@@ -53,8 +53,19 @@ set -g theme_display_user yes
 set -g theme_hide_hostname no
 set -g theme_hostname always
 
-# TMUX
+# Improve tmux integration
+set -g fish_escape_delay_ms 10
 
+# Better SSH agent handling in tmux
+if status is-interactive
+    and not set -q TMUX
+    eval (ssh-agent -c) >/dev/null
+end
+
+# Make tmux use fish by default
+set -gx SHELL (which fish)
+
+# TMUX
 function dev
     if test -n "$TMUX"
         # Inside a tmux session: split and configure panes
@@ -75,7 +86,6 @@ alias ks "tmux kill-session"
 alias ls "tmux list-sessions -f '#s'"
 alias a "tmux a"
 alias d "tmux detach"
-
 
 # aliases
 alias la "ls -A"
