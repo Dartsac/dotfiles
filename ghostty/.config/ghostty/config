@@ -38,10 +38,12 @@ shell-integration-features = no-cursor,title
 copy-on-select = true
 clipboard-paste-protection = true
 clipboard-trim-trailing-spaces = true
+clipboard-read = allow
+clipboard-write = allow
 
 # Terminal Features
-term = xterm-ghostty
-mouse-hide-while-typing = true
+term = xterm-256color
+mouse-hide-while-typing = false
 scrollback-limit = 10000000
 
 # App Behavior
