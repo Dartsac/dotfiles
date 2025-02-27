@@ -6,15 +6,77 @@ theme = Dracula-Pro
 # theme = Dracula-Morbius
 # theme = Dracula-Van-Helsing
 
+# Font Configuration
 font-family = Hack Nerd Font Mono
+font-size = 14
 
-# background-blur-radius = 35
-# background-opacity = 0.8
-
+# Window and UI
+window-padding-x = 10
+window-padding-y = 10
 window-decoration = true
+window-theme = dark
+macos-titlebar-style = transparent
+macos-option-as-alt = true
+macos-auto-secure-input = true
+macos-non-native-fullscreen = false
+background-blur = 35
+background-opacity = 0.8
+window-vsync = true
+# window-padding-color = extend
 
-shell-integration-features = no-cursor
+# Cursor and Selection
 cursor-style = block
 cursor-style-blink = true
+unfocused-split-opacity = 0.8
+selection-invert-fg-bg = true
 
+# Shell Integration
+shell-integration = detect
+shell-integration-features = no-cursor,title
+
+# Copy/Paste Behavior
+copy-on-select = true
+clipboard-paste-protection = true
+clipboard-trim-trailing-spaces = true
+
+# Terminal Features
+term = xterm-ghostty
+mouse-hide-while-typing = true
+scrollback-limit = 10000000
+
+# App Behavior
+confirm-close-surface = true
+window-inherit-working-directory = true
+window-step-resize = true
+resize-overlay = after-first
+resize-overlay-position = center
+
+# Quick Terminal settings
+keybind = global:super+`=toggle_quick_terminal
+quick-terminal-screen = mouse
+quick-terminal-position = bottom
+quick-terminal-animation-duration = 0.2
+
+# for ctrl+F that I use for telescope multi grep in nvim
 keybind = ctrl+shift+f=esc:O5F
+
+# mac keybinds - basics
+keybind = super+c=copy_to_clipboard
+keybind = super+v=paste_from_clipboard
+keybind = super+t=new_tab
+keybind = super+w=close_surface
+
+
+# Font size adjustment
+keybind = super+equal=increase_font_size:1
+keybind = super+minus=decrease_font_size:1
+keybind = super+zero=reset_font_size
+
+# Mac-style screen navigation alternatives
+keybind = super+up=scroll_page_up
+keybind = super+down=scroll_page_down
+keybind = super+left=scroll_to_top
+keybind = super+right=scroll_to_bottom
+
+# Clear screen
+keybind = super+k=clear_screen
