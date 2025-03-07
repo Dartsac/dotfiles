@@ -49,7 +49,7 @@ scrollback-limit = 10000000
 # App Behavior
 confirm-close-surface = true
 window-inherit-working-directory = true
-window-step-resize = true
+window-step-resize = false
 resize-overlay = after-first
 resize-overlay-position = center
 
