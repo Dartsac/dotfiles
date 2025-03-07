@@ -43,7 +43,7 @@ clipboard-write = allow
 
 # Terminal Features
 term = xterm-256color
-mouse-hide-while-typing = false
+mouse-hide-while-typing = true
 scrollback-limit = 10000000
 
 # App Behavior
