@@ -9,7 +9,10 @@ return {
 		local ghostty_config_path = vim.fn.expand("~/.config/ghostty/config")
 
 		local function get_active_ghostty_theme(path)
-			local lines = vim.fn.readfile(path)
+			local ok, lines = pcall(vim.fn.readfile, path)
+			if not ok then
+				return
+			end
 			for _, line in ipairs(lines) do
 				local theme = line:match("^theme%s*=%s*(.+)$")
 				if theme then
