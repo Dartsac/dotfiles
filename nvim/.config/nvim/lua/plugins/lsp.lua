@@ -21,7 +21,7 @@ return {
 
 	{
 		"williamboman/mason-lspconfig.nvim",
-		dependencies = "williamboman/mason.nvim",
+		dependencies = { "williamboman/mason.nvim", "neovim/nvim-lspconfig" },
 		event = { "BufReadPre", "BufNewFile" },
 		config = function()
 			local servers = {
@@ -32,9 +32,35 @@ return {
 				"lua_ls",
 				"jdtls",
 			}
+			local handlers = require("lsp.handlers")
+
 			require("mason-lspconfig").setup({
 				ensure_installed = servers,
 				automatic_installation = true,
+				automatic_enable = true,
+
+				handlers = {
+					function(name)
+						local opts = {
+							on_attach = handlers.on_attach,
+							capabilities = handlers.capabilities,
+						}
+						local ok, custom = pcall(require, "lsp.settings." .. name)
+						if ok then
+							opts = vim.tbl_deep_extend("force", custom, opts)
+						end
+						require("lspconfig")[name].setup(opts)
+					end,
+
+					lua_ls = function()
+						local opts = {
+							on_attach = handlers.on_attach,
+							capabilities = handlers.capabilities,
+							settings = require("lsp.settings.lua_ls").settings,
+						}
+						require("lspconfig").lua_ls.setup(opts)
+					end,
+				},
 			})
 		end,
 	},
