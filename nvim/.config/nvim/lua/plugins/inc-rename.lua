@@ -8,7 +8,7 @@ return {
 				return
 			end
 
-			rename.setup()
+			rename.setup({})
 
 			vim.keymap.set("n", "<leader>r", function()
 				return ":IncRename " .. vim.fn.expand("<cword>")
