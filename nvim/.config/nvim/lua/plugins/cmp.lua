@@ -1,7 +1,8 @@
 -- lua/plugins/cmp.lua
 return {
 	"hrsh7th/nvim-cmp",
-	event = { "InsertEnter", "CmdlineEnter" },
+	lazy = false,
+	priority = 1000,
 	dependencies = {
 		{ "hrsh7th/cmp-nvim-lsp" },
 		{ "hrsh7th/cmp-path", event = "CmdlineEnter" },
