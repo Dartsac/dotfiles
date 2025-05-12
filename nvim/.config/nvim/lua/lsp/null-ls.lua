@@ -1,9 +1,9 @@
 -- lua/lsp/null-ls.lua
 local M = {}
-local handlers = require("lsp.handlers")
 
 function M.setup()
 	local null_ls = require("null-ls")
+	local handlers = require("lsp.handlers")
 
 	local formatting = null_ls.builtins.formatting
 	local diagnostics = null_ls.builtins.diagnostics
