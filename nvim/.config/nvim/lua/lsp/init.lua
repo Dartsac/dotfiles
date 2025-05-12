@@ -1,21 +1,18 @@
--- lua/lsp/init.lua
-local M = {}
-
-function M.setup()
-	local lspconfig_status_ok, _ = pcall(require, "lspconfig")
-	if not lspconfig_status_ok then
-		return
-	end
-
-	-- Mason and LSP server setup
-	require("lsp.mason")
-
-	-- Load handlers (capabilities, on_attach) first
-	local handlers = require("lsp.handlers")
-	handlers.setup()
-
-	-- Null-ls setup is already triggered by plugin config, but we can also
-	-- call require("lsp.null-ls").setup() here if needed.
-end
-
-return M
+-- -- lua/lsp/init.lua
+-- local M = {}
+--
+-- function M.setup()
+--   -- Shared diagnostic config + key‑maps
+--   local handlers = require("lsp.handlers")
+--   handlers.setup()
+--
+--   -- Nothing else if lspconfig is missing
+--   if not pcall(require, "lspconfig") then
+--     return
+--   end
+--
+--   -- One call that wires Mason + language‑extras (typescript‑tools, etc.)
+--   require("lsp.mason").setup(handlers)
+-- end
+--
+-- return M
