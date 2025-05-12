@@ -1,5 +1,11 @@
--- lua/plugins/lsp.lua
+-- Unified LSP stack: Mason → mason‑lspconfig → lspconfig.
+-- NOTE: the custom ‘lua_ls’ override has been removed; its settings now
+-- live exclusively in lua/lsp/settings/lua_ls.lua to avoid duplication.
+
 return {
+	-------------------------------------------------------------------------
+	-- Mason ----------------------------------------------------------------
+	-------------------------------------------------------------------------
 	{
 		"williamboman/mason.nvim",
 		cmd = "Mason",
@@ -19,19 +25,31 @@ return {
 		end,
 	},
 
+	-------------------------------------------------------------------------
+	-- mason‑lspconfig -------------------------------------------------------
+	-------------------------------------------------------------------------
 	{
 		"williamboman/mason-lspconfig.nvim",
-		dependencies = { "williamboman/mason.nvim", "neovim/nvim-lspconfig" },
+		dependencies = {
+			"williamboman/mason.nvim",
+			"neovim/nvim-lspconfig",
+		},
 		event = { "BufReadPre", "BufNewFile" },
 		config = function()
 			local servers = {
+				-- core
+				"bashls",
 				"cssls",
+				"eslint",
 				"html",
 				"jsonls",
-				"pyright",
 				"lua_ls",
+				"marksman",
+				"pyright",
+				-- language‑specific
 				"jdtls",
 			}
+
 			local handlers = require("lsp.handlers")
 
 			require("mason-lspconfig").setup({
@@ -39,49 +57,41 @@ return {
 				automatic_installation = true,
 				automatic_enable = true,
 
+				-- One generic handler plus per‑server overrides located
+				-- in lua/lsp/settings/<server>.lua
 				handlers = {
 					function(name)
 						local opts = {
 							on_attach = handlers.on_attach,
 							capabilities = handlers.capabilities,
 						}
+
 						local ok, custom = pcall(require, "lsp.settings." .. name)
 						if ok then
 							opts = vim.tbl_deep_extend("force", custom, opts)
 						end
-						require("lspconfig")[name].setup(opts)
-					end,
 
-					lua_ls = function()
-						local opts = {
-							on_attach = handlers.on_attach,
-							capabilities = handlers.capabilities,
-							settings = require("lsp.settings.lua_ls").settings,
-						}
-						require("lspconfig").lua_ls.setup(opts)
+						require("lspconfig")[name].setup(opts)
 					end,
 				},
 			})
 		end,
 	},
 
+	-------------------------------------------------------------------------
+	-- lspconfig (core) ------------------------------------------------------
+	-------------------------------------------------------------------------
 	{
 		"neovim/nvim-lspconfig",
 		event = { "BufReadPre", "BufNewFile" },
-		config = function()
-			-- We'll do the main setup in lua/lsp/init.lua
-			require("lsp").setup()
-		end,
 		dependencies = {
-			{ "hrsh7th/cmp-nvim-lsp" }, -- For LSP capabilities
+			"hrsh7th/cmp-nvim-lsp",
 			{
 				"folke/lazydev.nvim",
-				ft = "lua", -- only load on lua files
+				ft = "lua",
 				cmd = "LadyDev",
 				opts = {
 					library = {
-						-- See the configuration section for more details
-						-- Load luvit types when the `vim.uv` word is found
 						{ path = "${3rd}/luv/library", words = { "vim%.uv" } },
 						{ path = "LazyVim", words = { "LazyVim" } },
 						{ path = "snacks.nvim", words = { "Snacks" } },
@@ -90,22 +100,21 @@ return {
 				},
 			},
 		},
-	},
-
-	{
-		"nvimtools/none-ls.nvim",
-		enabled = true,
-		event = "BufReadPre",
 		config = function()
-			-- We'll handle this in lua/lsp/null-ls.lua
-			require("lsp.null-ls").setup()
+			-- All real LSP setup now happens in plugins/mason‑lspconfig above
+			-- (kept here so :LspInfo still works before Mason loads).
 		end,
 	},
 
+	-------------------------------------------------------------------------
+	-- null‑ls ---------------------------------------------------------------
+	-------------------------------------------------------------------------
 	{
-		"pmizio/typescript-tools.nvim",
-		ft = { "typescript", "typescriptreact", "javascript", "javascriptreact" },
-		dependencies = { "nvim-lua/plenary.nvim", "neovim/nvim-lspconfig" },
-		opts = {},
+		"nvimtools/none-ls.nvim",
+		dependencies = "neovim/nvim-lspconfig",
+		event = "BufReadPre",
+		config = function()
+			require("lsp.null-ls").setup()
+		end,
 	},
 }
