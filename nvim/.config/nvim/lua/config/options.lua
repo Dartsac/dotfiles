@@ -20,7 +20,7 @@ local options = {
 	winblend = 0,
 	timeoutlen = 300, -- time to wait for a mapped sequence to complete (in milliseconds)
 	undofile = true, -- enable persistent undo
-	updatetime = 50, -- faster completion (4000ms default)
+	updatetime = 300, -- faster completion (4000ms default)
 	writebackup = false, -- if a file is being edited by another program (or was written to file while editing with another program), it is not allowed to be edited
 	expandtab = true, -- convert tabs to spaces
 	autoindent = true, -- coppy indent from current line when starting new one
@@ -48,5 +48,6 @@ end
 vim.opt.shortmess:append("c") -- don't give |ins-completion-menu| messages
 vim.opt.shortmess:append("S") -- remove search count diplay, bc google/vim-searchindex plugin handles it
 vim.opt.iskeyword:append("-") -- hyphenated words recognized by searches
+-- vim.opt.shortmess:append("I")
 vim.opt.formatoptions:remove({ "c", "r", "o" }) -- don't insert the current comment leader automatically for auto-wrapping comments using 'textwidth', hitting <Enter> in insert mode, or hitting 'o' or 'O' in normal mode.
 vim.opt.runtimepath:remove("/usr/share/vim/vimfiles") -- separate vim plugins from neovim in case vim still in use

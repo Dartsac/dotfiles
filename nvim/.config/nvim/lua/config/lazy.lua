@@ -27,10 +27,14 @@ require("lazy").setup({
 	spec = {
 		{ import = "plugins" },
 		{ "google/vim-searchindex" },
-		{ "christoomey/vim-tmux-navigator" },
+		-- { "christoomey/vim-tmux-navigator" },
 	},
 	change_detection = {
 		enabled = true,
 		notify = false,
+	},
+	cache = {
+		enabled = true,
+		-- path = vim.fn.stdpath("cache") .. "/lazy/cache",
 	},
 })
