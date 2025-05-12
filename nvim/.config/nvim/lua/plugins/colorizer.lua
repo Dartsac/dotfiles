@@ -9,7 +9,12 @@ return {
 		end
 
 		colorizer.setup({
-			"*",
+			"css",
+			"scss",
+			"html",
+			"javascript",
+			"typescript",
+			"lua",
 			css = {
 				RGB = true, -- Enable #RGB hex codes
 				RRGGBB = true, -- Enable #RRGGBB hex codes

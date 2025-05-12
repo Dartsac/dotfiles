@@ -13,7 +13,7 @@ local icons = require("config.icons")
 local s = vim.diagnostic.severity
 vim.diagnostic.config({
 	virtual_text = true,
-	update_in_insert = true,
+	update_in_insert = false,
 	severity_sort = true,
 	float = { style = "minimal", border = "rounded", source = "if_many" },
 	signs = {

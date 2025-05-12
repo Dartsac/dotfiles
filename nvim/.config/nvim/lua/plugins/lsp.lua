@@ -47,7 +47,7 @@ return {
 				"marksman",
 				"pyright",
 				-- language‑specific
-				"jdtls",
+				-- "jdtls",
 			}
 
 			local handlers = require("lsp.handlers")
