@@ -1,6 +1,4 @@
 -- Unified LSP stack: Mason → mason‑lspconfig → lspconfig.
--- NOTE: the custom ‘lua_ls’ override has been removed; its settings now
--- live exclusively in lua/lsp/settings/lua_ls.lua to avoid duplication.
 
 return {
 	-------------------------------------------------------------------------
