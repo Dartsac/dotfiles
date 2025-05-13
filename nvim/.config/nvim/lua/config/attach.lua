@@ -1,17 +1,12 @@
--- Jump to the first Harpoon mark only *after* Lazy has had a chance
--- to load Harpoon.  Using vim.schedule guarantees this runs on the
--- very next event‑loop tick, after plug‑ins are initialised.
+-- lua/config/attach.lua
+local ok, harpoon = pcall(require, "harpoon")
+if not ok or vim.tbl_isempty(harpoon:list().items) then
+	return
+end
 
+-- Don’t show the splash
+vim.opt.shortmess:append("I")
+-- Jump *after* all startup-autocmds run
 vim.schedule(function()
-	if os.getenv("NVIM_NO_HARPOON") == "1" then
-		return
-	end
-
-	local ok, harpoon = pcall(require, "harpoon")
-	if ok then
-		local list = harpoon:list()
-		if list and #list.items > 0 then
-			list:select(1)
-		end
-	end
+	harpoon:list():select(1)
 end)
