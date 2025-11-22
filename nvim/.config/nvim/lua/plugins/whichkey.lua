@@ -279,6 +279,15 @@ return {
 				},
 				{ "<leader>gu", "<cmd>lua require 'gitsigns'.reset_buffer_index()<cr>", desc = "Undo Stage Hunk" },
 				{ "<leader>gd", "<cmd>Gitsigns diffthis HEAD<cr>", desc = "Git Diff" },
+
+				-- Tmux Group
+				{ "<leader>T", group = "Tmux" },
+				{
+					"<leader>Tc",
+					"<cmd>lua require('config.tmux').create_session()<cr>",
+					desc = "Create/Attach Tmux Session",
+					mode = "n",
+				},
 			})
 		end,
 	},

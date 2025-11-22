@@ -102,6 +102,23 @@ function v
     end
 end
 
+function nvim
+    command nvim $argv
+    # Check for tmux attach marker
+    set marker_file ~/.vim-tmux-attach
+    if test -f $marker_file
+        set session (cat $marker_file)
+        rm -f $marker_file
+        # Use regular attach, not exec, so shell persists
+        tmux attach -t $session
+        # After detaching/exiting tmux, we're back here
+        # Check if we should remove the session marker again in case vim created it
+        if test -f $marker_file
+            rm -f $marker_file
+        end
+    end
+end
+
 command -qv nvim && alias vim nvim
 
 bind \cf "tmux-sessionizer.sh"
