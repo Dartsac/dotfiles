@@ -82,3 +82,4 @@ keybind = super+right=scroll_to_bottom
 
 # Clear screen
 keybind = super+k=clear_screen
+keybind = shift+enter=text:\x1b\r
