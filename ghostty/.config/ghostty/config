@@ -62,6 +62,9 @@ quick-terminal-animation-duration = 0.2
 # for ctrl+F that I use for telescope multi grep in nvim
 keybind = ctrl+shift+f=esc:O5F
 
+# map ctrl+[ as esc
+keybind = ctrl+[=text:\\x1b
+
 # mac keybinds - basics
 keybind = super+c=copy_to_clipboard
 keybind = super+v=paste_from_clipboard
