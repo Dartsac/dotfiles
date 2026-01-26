@@ -65,6 +65,9 @@ end
 # Make tmux use fish by default
 set -gx SHELL (which fish)
 
+# Use the default key bindings
+set -g fish_key_bindings fish_default_key_bindings
+
 # TMUX
 function dev
     if test -n "$TMUX"
