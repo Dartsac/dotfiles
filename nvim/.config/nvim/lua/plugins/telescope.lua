@@ -1,7 +1,7 @@
 -- Core Telescope plug‑in
 return {
 	"nvim-telescope/telescope.nvim",
-	tag = "0.1.8",
+	branch = "master",
 	cmd = "Telescope",
 	keys = {
 		{
@@ -29,6 +29,14 @@ return {
 		telescope.setup({
 			defaults = {
 				file_ignore_patterns = { "node_modules" },
+				-- Show current position counter and consistent ordering
+				selection_strategy = "reset",
+				sorting_strategy = "ascending",
+				layout_config = {
+					horizontal = {
+						prompt_position = "top",
+					},
+				},
 				mappings = {
 					i = {
 						["<C-j>"] = actions.move_selection_next,
