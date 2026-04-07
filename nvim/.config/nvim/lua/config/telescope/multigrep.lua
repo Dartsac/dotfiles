@@ -64,6 +64,13 @@ return function(opts)
 			finder = custom_grep,
 			previewer = conf.grep_previewer(opts),
 			sorter = require("telescope.sorters").empty(),
+			selection_strategy = "reset",
+			sorting_strategy = "ascending",
+			layout_config = {
+				horizontal = {
+					prompt_position = "top",
+				},
+			},
 		})
 		:find()
 end
