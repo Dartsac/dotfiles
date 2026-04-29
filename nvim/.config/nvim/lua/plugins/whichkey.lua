@@ -280,6 +280,12 @@ return {
 				{ "<leader>gu", "<cmd>lua require 'gitsigns'.reset_buffer_index()<cr>", desc = "Undo Stage Hunk" },
 				{ "<leader>gd", "<cmd>Gitsigns diffthis HEAD<cr>", desc = "Git Diff" },
 
+				-- Database Group
+				{ "<leader>D", group = "Database" },
+				{ "<leader>Du", "<cmd>DBUIToggle<cr>", desc = "Toggle DB UI", mode = "n" },
+				{ "<leader>Da", "<cmd>DBUIAddConnection<cr>", desc = "Add Connection", mode = "n" },
+				{ "<leader>Df", "<cmd>DBUIFindBuffer<cr>", desc = "Find Buffer", mode = "n" },
+
 				-- Tmux Group
 				{ "<leader>T", group = "Tmux" },
 				{

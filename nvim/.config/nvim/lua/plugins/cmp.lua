@@ -145,8 +145,8 @@ return {
 			},
 		})
 
-		-- sql specific dadbod completion
-		cmp.setup.filetype({ "sql" }, {
+		-- dadbod completion for SQL filetypes
+		cmp.setup.filetype({ "sql", "mysql", "plsql" }, {
 			sources = {
 				{ name = "vim-dadbod-completion" },
 				{ name = "buffer" },
