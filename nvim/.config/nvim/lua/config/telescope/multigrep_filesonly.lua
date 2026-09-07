@@ -29,8 +29,22 @@ return function(opts)
 			local args = { "rg", "-l" }
 
 			if prompt_split[1] then
-				table.insert(args, "-e")
-				table.insert(args, prompt_split[1])
+				local and_terms = vim.split(prompt_split[1], " && ", { plain = true })
+
+				if #and_terms > 1 then
+					local lookaheads = {}
+					for _, term in ipairs(and_terms) do
+						table.insert(lookaheads, "(?=.*" .. vim.trim(term) .. ")")
+					end
+
+					table.insert(args, "-P")
+					table.insert(args, "-U")
+					table.insert(args, "-e")
+					table.insert(args, "(?s)" .. table.concat(lookaheads))
+				else
+					table.insert(args, "-e")
+					table.insert(args, prompt_split[1])
+				end
 			end
 
 			if prompt_split[2] then
