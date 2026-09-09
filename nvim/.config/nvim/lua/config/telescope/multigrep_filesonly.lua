@@ -5,8 +5,7 @@ local pickers = require("telescope.pickers")
 
 return function(opts)
 	opts = opts or {}
-	---@diagnostic disable-next-line: undefined-field
-	opts.cwd = opts.cwd and vim.fn.expand(opts.cwd) or vim.loop.cwd()
+	opts.cwd = opts.cwd and vim.fn.expand(opts.cwd) or vim.uv.cwd()
 	opts.shortcuts = opts.shortcuts
 		or {
 			["l"] = "*.lua",

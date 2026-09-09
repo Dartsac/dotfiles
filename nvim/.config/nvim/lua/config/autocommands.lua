@@ -10,14 +10,16 @@ vim.api.nvim_create_autocmd("TextYankPost", {
 	group = general_settings,
 	desc = "Highlight when yanking text",
 	callback = function()
-		vim.highlight.on_yank({ higroup = "Visual", timeout = 250 })
+		vim.hl.on_yank({ higroup = "Visual", timeout = 250 })
 	end,
 })
 vim.api.nvim_create_autocmd("BufWinEnter", {
 	group = general_settings,
 	pattern = "*",
-	command = "set formatoptions-=cro",
-	desc = "Remove 'cro' from formatoptions",
+	desc = "Don't auto-insert comment leaders (ftplugins reset this, so redo it per window)",
+	callback = function()
+		vim.opt_local.formatoptions:remove({ "c", "r", "o" })
+	end,
 })
 vim.api.nvim_create_autocmd("FileType", {
 	group = general_settings,

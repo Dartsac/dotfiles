@@ -3,7 +3,7 @@ local M = {}
 
 function M.setup()
 	local null_ls = require("null-ls")
-	local handlers = require("lsp.handlers")
+	require("lsp.handlers") -- diagnostics UI, keymaps, format-on-save
 
 	local formatting = null_ls.builtins.formatting
 	local diagnostics = null_ls.builtins.diagnostics
@@ -17,9 +17,6 @@ function M.setup()
 
 			diagnostics.fish,
 		},
-		on_attach = function(client, bufnr)
-			handlers.on_attach(client, bufnr)
-		end,
 	})
 end
 
