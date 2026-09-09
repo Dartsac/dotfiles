@@ -78,6 +78,9 @@ return {
 			end, opts("Vertical Split in tmux"))
 
 			-- Open file in a tmux horizontal split
+			vim.keymap.set("n", "=", "<cmd>NvimTreeResize -5<CR>", opts("Shrink tree"))
+			vim.keymap.set("n", "+", "<cmd>NvimTreeResize +5<CR>", opts("Grow tree"))
+
 			vim.keymap.set("n", "H", function()
 				local node = api.tree.get_node_under_cursor()
 				if not node or not node.absolute_path then
@@ -156,19 +159,5 @@ return {
 				side = "right",
 			},
 		})
-
-		vim.api.nvim_set_keymap(
-			"n", -- Normal mode
-			"+", -- Increase size
-			[[:lua if require("nvim-tree.view").is_visible() then vim.cmd("NvimTreeResize +5") end<CR>]],
-			{ noremap = true, silent = true }
-		)
-
-		vim.api.nvim_set_keymap(
-			"n", -- Normal mode
-			"=", -- Decrease size
-			[[:lua if require("nvim-tree.view").is_visible() then vim.cmd("NvimTreeResize -5") end<CR>]],
-			{ noremap = true, silent = true }
-		)
 	end,
 }

@@ -79,8 +79,8 @@ return {
 				},
 				{ "<leader>e", "<cmd>NvimTreeToggle<cr>", desc = "Explorer", mode = "n" },
 				{ "<leader>n", "<cmd>nohlsearch<CR>", desc = "No Highlight", mode = "n" },
-				{ "<leader>q", "<cmd>q!<CR>", desc = "Quit", mode = "n" },
-				{ "<leader>w", "<cmd>w!<CR>", desc = "Save", mode = "n" },
+				{ "<leader>q", "<cmd>confirm q<CR>", desc = "Quit", mode = "n" },
+				{ "<leader>w", "<cmd>w<CR>", desc = "Save", mode = "n" },
 				{ "<leader>m", "<cmd>messages<CR>", desc = "Messages", mode = { "n", "v" } },
 
 				-- Lazy
@@ -110,26 +110,7 @@ return {
 				{
 					"<leader>lf",
 					function()
-						local clients = vim.lsp.get_clients({ bufnr = 0 })
-						local has_null = vim.tbl_contains(
-							vim.tbl_map(function(c)
-								return c.name
-							end, clients),
-							"null-ls"
-						)
-
-						vim.lsp.buf.format({
-							async = true,
-							filter = function(client)
-								if has_null then
-									-- if null-ls is present, restrict to null-ls only
-									return client.name == "null-ls"
-								else
-									-- otherwise allow any formatter
-									return true
-								end
-							end,
-						})
+						require("lsp.handlers").format({ async = true })
 					end,
 					desc = "Format (null-ls preferred)",
 					mode = "n",
@@ -142,13 +123,17 @@ return {
 				},
 				{
 					"<leader>lj",
-					"<cmd>lua vim.lsp.diagnostic.goto_next()<CR>",
+					function()
+						vim.diagnostic.jump({ count = 1, float = true })
+					end,
 					desc = "Next Diagnostic",
 					mode = "n",
 				},
 				{
 					"<leader>lk",
-					"<cmd>lua vim.lsp.diagnostic.goto_prev()<cr>",
+					function()
+						vim.diagnostic.jump({ count = -1, float = true })
+					end,
 					desc = "Prev Diagnostic",
 					mode = "n",
 				},

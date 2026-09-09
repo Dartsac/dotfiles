@@ -1,13 +1,10 @@
 -- lua/lsp/handlers.lua
+-- Shared LSP behaviour: capabilities, diagnostics UI, keymaps, formatting.
+-- Per-server settings live in lua/lsp/settings/<server>.lua and are applied
+-- with vim.lsp.config() from lua/plugins/lsp.lua.
 local M = {}
 
-local cmp_nvim_lsp = require("cmp_nvim_lsp")
-M.capabilities = cmp_nvim_lsp.default_capabilities(vim.lsp.protocol.make_client_capabilities())
-
-local has_ui, lspui = pcall(require, "lspconfig.ui.windows")
-if has_ui then
-	lspui.default_options.border = "rounded"
-end
+M.capabilities = require("cmp_nvim_lsp").default_capabilities()
 
 local icons = require("config.icons")
 local s = vim.diagnostic.severity
@@ -27,103 +24,99 @@ vim.diagnostic.config({
 	},
 })
 
-function M.setup() end
-
-vim.lsp.handlers["textDocument/hover"] = vim.lsp.buf.hover
-vim.lsp.handlers["textDocument/signatureHelp"] = vim.lsp.buf.signature_help
-
-local wk = require("which-key")
-
-local function set_typescript_keymaps(bufnr)
-	wk.add({
-		{ "<leader>t", buffer = bufnr, group = "TypeScript Tools" },
-		{
-			"<leader>ta",
-			"<cmd>TSToolsAddMissingImports<CR>",
-			buffer = bufnr,
-			desc = "Add Missing Imports",
-		},
-		{
-			"<leader>tr",
-			"<cmd>TSToolsRemoveUnused<CR>",
-			buffer = bufnr,
-			desc = "Remove Unused Imports",
-		},
-		{ "<leader>to", "<cmd>TSToolsOrganizeImports<CR>", buffer = bufnr, desc = "Organize Imports" },
-		{ "<leader>ti", "<cmd>TSToolsSortImports<CR>", buffer = bufnr, desc = "Sort Imports" },
-		{
-			"<leader>tu",
-			"<cmd>TSToolsRemoveUnusedImports<CR>",
-			buffer = bufnr,
-			desc = "Remove Unused Imports",
-		},
-		{ "<leader>tf", "<cmd>TSToolsFixAll<CR>", buffer = bufnr, desc = "Fix All Errors" },
-		{
-			"<leader>tg",
-			"<cmd>TSToolsGoToSourceDefinition<CR>",
-			buffer = bufnr,
-			desc = "Go to Source Definition",
-		},
-		{ "<leader>tR", "<cmd>TSToolsRenameFile<CR>", buffer = bufnr, desc = "Rename File" },
-		{ "<leader>tF", "<cmd>TSToolsFileReferences<CR>", buffer = bufnr, desc = "File References" },
-	})
-end
-
-local function lsp_keymaps(client, bufnr)
-	wk.add({
-		{ "K", "<cmd>lua vim.lsp.buf.hover()<CR>", buffer = bufnr, desc = "Hover Documentation" },
-		{ "gD", "<cmd>lua vim.lsp.buf.declaration()<CR>", buffer = bufnr, desc = "Go to Declaration" },
-		{ "gI", "<cmd>lua vim.lsp.buf.implementation()<CR>", buffer = bufnr, desc = "Go to Implementation" },
-		{ "gd", "<cmd>lua vim.lsp.buf.definition()<CR>", buffer = bufnr, desc = "Go to Definition" },
-		{ "gr", "<cmd>lua vim.lsp.buf.references()<CR>", buffer = bufnr, desc = "Find References" },
-		{ "gl", "<cmd>lua vim.diagnostic.open_float()<CR>", buffer = bufnr, desc = "Open Diagnostics" },
-	})
-
-	if client.name == "typescript-tools" then
-		set_typescript_keymaps(bufnr)
+-------------------------------------------------------------------------------
+-- Formatting
+-- null-ls is the preferred formatter. When it has no formatter for the buffer,
+-- fall back to any LSP client that can format. Used by both format-on-save and
+-- <leader>lf so the two always agree.
+-------------------------------------------------------------------------------
+local function null_ls_formats(bufnr)
+	for _, client in ipairs(vim.lsp.get_clients({ bufnr = bufnr, name = "null-ls" })) do
+		if client:supports_method("textDocument/formatting", bufnr) then
+			return true
+		end
 	end
+	return false
 end
 
-local function enable_formatting_on_save(bufnr)
-	if vim.b[bufnr].format_on_save_registered then
+---@param opts? { bufnr?: integer, async?: boolean }
+function M.format(opts)
+	opts = opts or {}
+	local bufnr = opts.bufnr or vim.api.nvim_get_current_buf()
+	if #vim.lsp.get_clients({ bufnr = bufnr, method = "textDocument/formatting" }) == 0 then
 		return
 	end
-	vim.b[bufnr].format_on_save_registered = true
-
-	vim.api.nvim_create_autocmd("BufWritePre", {
-		buffer = bufnr,
-		callback = function()
-			vim.lsp.buf.format({
-				filter = function(client)
-					return client.name == "null-ls"
-				end,
-			})
+	local prefer_null = null_ls_formats(bufnr)
+	vim.lsp.buf.format({
+		bufnr = bufnr,
+		async = opts.async,
+		filter = function(client)
+			if prefer_null then
+				return client.name == "null-ls"
+			end
+			return true
 		end,
 	})
 end
 
-function M.on_attach(client, bufnr)
-	lsp_keymaps(client, bufnr)
-	enable_formatting_on_save(bufnr)
-end
+local group = vim.api.nvim_create_augroup("_lsp", { clear = true })
 
-vim.api.nvim_create_autocmd("BufEnter", {
-	callback = function()
-		local bufnr = vim.api.nvim_get_current_buf()
-		for _, client in ipairs(vim.lsp.get_clients({ bufnr = bufnr })) do
-			if client.name == "typescript-tools" then
-				set_typescript_keymaps(bufnr)
-				break
-			end
+vim.api.nvim_create_autocmd("BufWritePre", {
+	group = group,
+	desc = "Format on save",
+	callback = function(args)
+		if vim.b[args.buf].disable_format_on_save then
+			return
 		end
+		M.format({ bufnr = args.buf })
 	end,
 })
 
+-------------------------------------------------------------------------------
+-- Keymaps
+-------------------------------------------------------------------------------
+local wk = require("which-key")
+
+local function lsp_keymaps(bufnr)
+	wk.add({
+		{ "K", vim.lsp.buf.hover, buffer = bufnr, desc = "Hover Documentation" },
+		{ "gD", vim.lsp.buf.declaration, buffer = bufnr, desc = "Go to Declaration" },
+		{ "gI", vim.lsp.buf.implementation, buffer = bufnr, desc = "Go to Implementation" },
+		{ "gd", vim.lsp.buf.definition, buffer = bufnr, desc = "Go to Definition" },
+		{ "gr", vim.lsp.buf.references, buffer = bufnr, desc = "Find References" },
+		{ "gl", vim.diagnostic.open_float, buffer = bufnr, desc = "Open Diagnostics" },
+	})
+end
+
+-- ts_ls exposes its refactors as source code actions; run one without a picker.
+local function ts_action(kind)
+	return function()
+		vim.lsp.buf.code_action({ context = { only = { kind }, diagnostics = {} }, apply = true })
+	end
+end
+
+local function typescript_keymaps(bufnr)
+	wk.add({
+		{ "<leader>t", buffer = bufnr, group = "TypeScript" },
+		{ "<leader>ta", ts_action("source.addMissingImports.ts"), buffer = bufnr, desc = "Add Missing Imports" },
+		{ "<leader>tu", ts_action("source.removeUnusedImports.ts"), buffer = bufnr, desc = "Remove Unused Imports" },
+		{ "<leader>tr", ts_action("source.removeUnused.ts"), buffer = bufnr, desc = "Remove Unused" },
+		{ "<leader>to", ts_action("source.organizeImports.ts"), buffer = bufnr, desc = "Organize Imports" },
+		{ "<leader>ti", ts_action("source.sortImports.ts"), buffer = bufnr, desc = "Sort Imports" },
+		{ "<leader>tf", ts_action("source.fixAll.ts"), buffer = bufnr, desc = "Fix All" },
+	})
+end
+
 vim.api.nvim_create_autocmd("LspAttach", {
+	group = group,
 	callback = function(args)
 		local client = vim.lsp.get_client_by_id(args.data.client_id)
-		if client and client.name == "typescript-tools" then
-			set_typescript_keymaps(args.buf)
+		if not client then
+			return
+		end
+		lsp_keymaps(args.buf)
+		if client.name == "ts_ls" then
+			typescript_keymaps(args.buf)
 		end
 	end,
 })

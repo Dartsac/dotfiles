@@ -1,84 +1,40 @@
--- Unified LSP stack: Mason → mason‑lspconfig → lspconfig.
+-- Unified LSP stack: Mason → mason-lspconfig → vim.lsp.config/enable.
+--
+-- nvim-lspconfig supplies the default config for each server (lsp/<name>.lua
+-- on the runtimepath). Overrides live in lua/lsp/settings/<name>.lua and are
+-- merged with vim.lsp.config(). mason-lspconfig installs the servers and
+-- enables every Mason-installed one via vim.lsp.enable().
+
+local servers = {
+	"bashls",
+	"cssls",
+	"eslint",
+	"html",
+	"jsonls",
+	"lua_ls",
+	"marksman",
+	"pyright",
+	"ts_ls",
+}
 
 return {
-	-------------------------------------------------------------------------
-	-- Mason ----------------------------------------------------------------
-	-------------------------------------------------------------------------
 	{
 		"williamboman/mason.nvim",
 		cmd = "Mason",
-		config = function()
-			require("mason").setup({
-				ui = {
-					border = "none",
-					icons = {
-						package_installed = "✓",
-						package_pending = "➜",
-						package_uninstalled = "✗",
-					},
+		opts = {
+			ui = {
+				border = "none",
+				icons = {
+					package_installed = "✓",
+					package_pending = "➜",
+					package_uninstalled = "✗",
 				},
-				log_level = vim.log.levels.INFO,
-				max_concurrent_installers = 4,
-			})
-		end,
-	},
-
-	-------------------------------------------------------------------------
-	-- mason‑lspconfig -------------------------------------------------------
-	-------------------------------------------------------------------------
-	{
-		"williamboman/mason-lspconfig.nvim",
-		dependencies = {
-			"williamboman/mason.nvim",
-			"neovim/nvim-lspconfig",
+			},
+			log_level = vim.log.levels.INFO,
+			max_concurrent_installers = 4,
 		},
-		event = { "BufReadPre", "BufNewFile" },
-		config = function()
-			local servers = {
-				-- core
-				"bashls",
-				"cssls",
-				"eslint",
-				"html",
-				"jsonls",
-				"lua_ls",
-				"marksman",
-				"pyright",
-				-- language‑specific
-				-- "jdtls",
-			}
-
-			local handlers = require("lsp.handlers")
-
-			require("mason-lspconfig").setup({
-				ensure_installed = servers,
-				automatic_installation = true,
-				automatic_enable = true,
-
-				-- One generic handler plus per‑server overrides located
-				-- in lua/lsp/settings/<server>.lua
-				handlers = {
-					function(name)
-						local opts = {
-							on_attach = handlers.on_attach,
-							capabilities = handlers.capabilities,
-						}
-
-						local ok, custom = pcall(require, "lsp.settings." .. name)
-						if ok then
-							opts = vim.tbl_deep_extend("force", custom, opts)
-						end
-
-						require("lspconfig")[name].setup(opts)
-					end,
-				},
-			})
-		end,
 	},
 
-	-------------------------------------------------------------------------
-	-- lspconfig (core) ------------------------------------------------------
-	-------------------------------------------------------------------------
 	{
 		"neovim/nvim-lspconfig",
 		event = { "BufReadPre", "BufNewFile" },
@@ -87,26 +43,41 @@ return {
 			{
 				"folke/lazydev.nvim",
 				ft = "lua",
-				cmd = "LadyDev",
+				cmd = "LazyDev",
 				opts = {
 					library = {
 						{ path = "${3rd}/luv/library", words = { "vim%.uv" } },
-						{ path = "LazyVim", words = { "LazyVim" } },
-						{ path = "snacks.nvim", words = { "Snacks" } },
-						{ path = "lazy.nvim", words = { "LazyVim" } },
 					},
 				},
 			},
 		},
+	},
+
+	{
+		"williamboman/mason-lspconfig.nvim",
+		dependencies = { "williamboman/mason.nvim", "neovim/nvim-lspconfig" },
+		event = { "BufReadPre", "BufNewFile" },
 		config = function()
-			-- All real LSP setup now happens in plugins/mason‑lspconfig above
-			-- (kept here so :LspInfo still works before Mason loads).
+			local handlers = require("lsp.handlers")
+
+			vim.lsp.config("*", { capabilities = handlers.capabilities })
+
+			for _, name in ipairs(servers) do
+				local path = "lua/lsp/settings/" .. name .. ".lua"
+				if #vim.api.nvim_get_runtime_file(path, false) > 0 then
+					vim.lsp.config(name, require("lsp.settings." .. name))
+				end
+			end
+
+			require("mason-lspconfig").setup({
+				ensure_installed = servers,
+				-- Mason also installs tools that happen to have an lspconfig entry
+				-- (stylua). Those are formatters run through null-ls, not servers.
+				automatic_enable = { exclude = { "stylua" } },
+			})
 		end,
 	},
 
-	-------------------------------------------------------------------------
-	-- null‑ls ---------------------------------------------------------------
-	-------------------------------------------------------------------------
 	{
 		"nvimtools/none-ls.nvim",
 		dependencies = "neovim/nvim-lspconfig",

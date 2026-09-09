@@ -2,10 +2,14 @@
 
 local function harpoon_index(filepath)
 	local ok, harpoon = pcall(require, "harpoon")
-	if not ok then return nil end
+	if not ok then
+		return nil
+	end
 	local rel = vim.fn.fnamemodify(filepath, ":.")
 	for i, item in ipairs(harpoon:list().items) do
-		if item.value == rel then return i end
+		if item.value == rel then
+			return i
+		end
 	end
 end
 
@@ -19,7 +23,9 @@ local function make_harpoon_entry(opts)
 	local original = make_entry.gen_from_file(opts)
 	return function(line)
 		local entry = original(line)
-		if not entry then return end
+		if not entry then
+			return
+		end
 		entry.display = function(e)
 			local index = harpoon_index(e.path)
 			return displayer({
@@ -46,16 +52,36 @@ return {
 			end,
 			desc = "Find files in CWD",
 		},
-		{ "<leader>fh", require("telescope.builtin").help_tags },
-		{ "<Esc>O5F", require("config.telescope.multigrep") },
-		{ "<leader>mf", require("config.telescope.multigrep_filesonly") },
+		{
+			"<leader>fh",
+			function()
+				require("telescope.builtin").help_tags()
+			end,
+			desc = "Help tags",
+		},
+		{
+			"<Esc>O5F",
+			function()
+				require("config.telescope.multigrep")()
+			end,
+			desc = "Multi grep",
+		},
+		{
+			"<leader>mf",
+			function()
+				require("config.telescope.multigrep_filesonly")()
+			end,
+			desc = "Multi grep (files only)",
+		},
 	},
 	dependencies = {
 		{ "nvim-lua/plenary.nvim" },
 	},
 	config = function()
 		local ok, telescope = pcall(require, "telescope")
-		if not ok then return end
+		if not ok then
+			return
+		end
 
 		local actions = require("telescope.actions")
 		local action_state = require("telescope.actions.state")
@@ -78,9 +104,13 @@ return {
 						["<CR>"] = actions.select_default,
 						["<C-h>"] = function(prompt_bufnr)
 							local entry = action_state.get_selected_entry()
-							if not entry then return end
+							if not entry then
+								return
+							end
 							local filepath = entry.path or entry.filename
-							if not filepath then return end
+							if not filepath then
+								return
+							end
 							local rel = vim.fn.fnamemodify(filepath, ":.")
 							local list = require("harpoon"):list()
 							local index = harpoon_index(filepath)
