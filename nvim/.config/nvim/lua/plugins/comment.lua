@@ -1,21 +1,23 @@
+-- Commenting uses Neovim's built-in `gc` operator (gcc, gc{motion}, visual gc).
+-- ts-context-commentstring makes 'commentstring' follow the treesitter node
+-- under the cursor so JSX, Vue templates, embedded CSS, etc. comment correctly.
 return {
-	"numToStr/Comment.nvim",
-	dependencies = { "JoosepAlviste/nvim-ts-context-commentstring" },
+	"JoosepAlviste/nvim-ts-context-commentstring",
 	event = "BufReadPost",
+	init = function()
+		vim.g.skip_ts_context_commentstring_module = true
+	end,
 	config = function()
 		require("ts_context_commentstring").setup({ enable_autocmd = false })
 
-		---@diagnostic disable: missing-fields
-		require("Comment").setup({
-			padding = true,
-			sticky = true,
-			mappings = { basic = true, extra = false },
-			toggler = { line = "gcc", block = "gbc" },
-			opleader = { line = "gc", block = "gb" },
-			extra = { above = "gcO", below = "gco", eol = "gcA" },
-
-			-- keep ts‑context‑commentstring working
-			pre_hook = require("ts_context_commentstring.integrations.comment_nvim").create_pre_hook(),
-		})
+		local get_option = vim.filetype.get_option
+		---@diagnostic disable-next-line: duplicate-set-field
+		vim.filetype.get_option = function(filetype, option)
+			if option == "commentstring" then
+				return require("ts_context_commentstring.internal").calculate_commentstring()
+					or get_option(filetype, option)
+			end
+			return get_option(filetype, option)
+		end
 	end,
 }
