@@ -4,6 +4,7 @@ fish/.config/fish/fish_greeting_last_run
 
 #lazygit
 lazygit/Library/Application Support/lazygit/state.yml
+lazygit/Library/Application Support/lazygit/github_pull_requests.json
 
 # Compiled Lua sources
 luac.out
