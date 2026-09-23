@@ -132,8 +132,10 @@ set -gx PATH bin $PATH
 set -gx PATH ~/bin $PATH
 set -gx PATH ~/.local/bin $PATH
 
-#Python@3.11
-set -Ux fish_user_paths /opt/homebrew/opt/python@3.11/libexec/bin $fish_user_paths
+#Python@3.11 (universal, so it only needs setting once; rewriting it on every
+# start costs ~30 ms)
+contains /opt/homebrew/opt/python@3.11/libexec/bin $fish_user_paths
+or set -Ux fish_user_paths /opt/homebrew/opt/python@3.11/libexec/bin $fish_user_paths
 
 # NodeJS
 set -gx PATH node_modules/.bin $PATH
@@ -165,7 +167,11 @@ set LOCAL_CONFIG (dirname (status --current-filename))/config-local.fish
 if test -f $LOCAL_CONFIG
     source $LOCAL_CONFIG
 end
-eval "$(perl -I$HOME/perl5/lib/perl5 -Mlocal::lib=$HOME/perl5)"
+# local::lib only exports variables; a shell started from another shell (Neovim,
+# tmux, scripts) inherits them, so skip the ~13 ms perl start there.
+if not set -q PERL_LOCAL_LIB_ROOT
+    eval "$(perl -I$HOME/perl5/lib/perl5 -Mlocal::lib=$HOME/perl5)"
+end
 
 # bun
 set --export BUN_INSTALL "$HOME/.bun"
