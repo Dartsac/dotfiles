@@ -1,4 +1,6 @@
-if type -q eza
+# Interactive conveniences only: defining these costs ~80 ms in every
+# non-interactive `fish -c` (Neovim's system(), scripts).
+if status is-interactive; and type -q eza
     # ld — lists only directories (no files)
     alias ld "eza -lD"
     # lf — lists only files (no directories)
