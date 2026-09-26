@@ -132,6 +132,10 @@ set -gx PATH bin $PATH
 set -gx PATH ~/bin $PATH
 set -gx PATH ~/.local/bin $PATH
 
+# homebrew (exported per shell: a universal variable is rewritten to disk on
+# every start)
+set -gx HOMEBREW_NO_ASK 1
+
 #Python@3.11 (universal, so it only needs setting once; rewriting it on every
 # start costs ~30 ms)
 contains /opt/homebrew/opt/python@3.11/libexec/bin $fish_user_paths
