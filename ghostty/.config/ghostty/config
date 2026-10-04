@@ -82,4 +82,5 @@ keybind = super+right=scroll_to_bottom
 
 # Clear screen
 keybind = super+k=clear_screen
-keybind = shift+enter=text:\x1b\r
+# Preserve Shift+Enter through tmux using an explicit CSI-u key sequence.
+keybind = shift+enter=text:\x1b[13;2u
