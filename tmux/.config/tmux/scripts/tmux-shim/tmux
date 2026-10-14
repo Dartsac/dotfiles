@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# tmux for resurrect's save.sh and restore.sh (and their hooks), run by
+# resurrect_save.py in their own process group.
+real=$RESURRECT_SAVE_TMUX
+
+# Fixed for this run: the directory the wrapper locked, and no pruning of old
+# saves (the wrapper prunes once `last` is settled, never its target).
+if [ "$#" -eq 3 ] && [ "$1 $2" = "show-option -gqv" ] && [ -n "$RESURRECT_SAVE_DIR" ]; then
+	case $3 in
+	@resurrect-dir) printf '%s\n' "$RESURRECT_SAVE_DIR"; exit 0 ;;
+	@resurrect-delete-backup-after) echo 1000000; exit 0 ;;
+	esac
+fi
+
+# Each command runs on the server the wrapper was asked of, or not at all: in
+# the same tmux command sequence, after a query for an option only that server
+# has. A sequence stops at its first error, and on any other server (a
+# replacement started on the same socket) that query is one.
+flags=()
+case $1 in
+-S | -L) flags=("$1" "$2"); shift 2 ;;
+esac
+if [ -n "$RESURRECT_SAVE_GUARD" ] && [ "$#" -gt 0 ] && [ "${1#-}" = "$1" ]; then
+	"$real" "${flags[@]}" show-option -gv "$RESURRECT_SAVE_GUARD" \; "$@" | tail -n +2
+	status=${PIPESTATUS[0]}
+	ours() { [ -n "$("$real" "${flags[@]}" show-option -gqv "$RESURRECT_SAVE_GUARD" 2>/dev/null)" ]; }
+else
+	"$real" "${flags[@]}" "$@"
+	status=$?
+	ours() { "$real" "${flags[@]}" show-option -gqv status >/dev/null 2>&1; }
+fi
+# A command that failed because the server went away (or was replaced) stops
+# the whole save or restore, before resurrect saves an empty environment or
+# restores into another server.
+if [ "$status" -ne 0 ] && ! ours; then
+	kill -TERM 0
+fi
+exit "$status"

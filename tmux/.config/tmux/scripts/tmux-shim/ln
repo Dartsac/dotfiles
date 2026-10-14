@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# ln for resurrect's save.sh, run by resurrect_save.py: instead of pointing
+# `last` at the new save, tell the wrapper, which links it once it has checked
+# the save is complete (save.sh links one it failed to write in full, too).
+if [ "$#" -eq 3 ] && [ "$1" = -fs ] && [ "$3" = "$RESURRECT_SAVE_DIR/last" ] && [ -n "$RESURRECT_SAVE_LINK_FD" ]; then
+	printf '%s\n' "$2" >&"$RESURRECT_SAVE_LINK_FD"
+	exit
+fi
+PATH=${PATH#"${0%/*}:"} exec ln "$@"
