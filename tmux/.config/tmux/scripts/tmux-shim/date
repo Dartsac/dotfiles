@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# date for resurrect's save.sh, run by resurrect_save.py: the save's file is
+# named with the stamp the wrapper chose, one no existing save has (local time
+# repeats, e.g. when the clocks go back).
+if [ "$#" -eq 1 ] && [ "$1" = "+%Y%m%dT%H%M%S" ] && [ -n "$RESURRECT_SAVE_STAMP" ]; then
+	printf '%s\n' "$RESURRECT_SAVE_STAMP"
+	exit
+fi
+PATH=${PATH#"${0%/*}:"} exec date "$@"
