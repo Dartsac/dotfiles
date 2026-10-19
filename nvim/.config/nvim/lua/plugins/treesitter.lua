@@ -4,7 +4,7 @@ return {
 	branch = "main",
 	dependencies = "nvim-treesitter/nvim-treesitter-context",
 	build = ":TSUpdate",
-	event = { "BufReadPre", "BufNewFile" },
+	lazy = false, -- The rewritten main branch does not support lazy-loading.
 	init = function()
 		local highlight_disabled = { css = true, scss = true }
 		local indent_disabled = { python = true, css = true }
