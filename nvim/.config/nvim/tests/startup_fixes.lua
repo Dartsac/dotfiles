@@ -25,4 +25,9 @@ test("Colorizer filetypes and CSS overrides reach setup", function()
 	package.loaded.colorizer = nil
 end)
 
+test("Treesitter is eager-loaded", function()
+	local spec = dofile("lua/plugins/treesitter.lua")
+	assert(spec.lazy == false and spec.event == nil)
+end)
+
 print("All startup-fix regression tests passed")
