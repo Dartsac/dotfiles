@@ -36,16 +36,10 @@ return {
 		end
 
 		local ghostty_theme = get_active_ghostty_theme(ghostty_config_path)
-		if ghostty_theme then
-			local vim_colorscheme = get_vim_colorscheme(ghostty_theme)
-			if vim_colorscheme then
-				vim.cmd("colorscheme " .. vim_colorscheme)
-			else
-				print("No matching Vim color scheme for Ghostty theme:", ghostty_theme)
-			end
-		else
-			print("No active Ghostty theme found.")
-		end
+		-- Always load a Dracula palette, even outside Ghostty or with an
+		-- unrecognized terminal theme, before applying palette-based highlights.
+		local vim_colorscheme = ghostty_theme and get_vim_colorscheme(vim.trim(ghostty_theme))
+		vim.cmd.colorscheme(vim_colorscheme or "dracula_pro")
 
 		local Color = cb.Color
 		local Group = cb.Group

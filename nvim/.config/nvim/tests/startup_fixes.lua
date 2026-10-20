@@ -30,4 +30,25 @@ test("Treesitter is eager-loaded", function()
 	assert(spec.lazy == false and spec.event == nil)
 end)
 
+-- Use the installed Colorbuddy and bundled themes for a real highlight smoke test.
+vim.opt.runtimepath:append(vim.fn.stdpath("data") .. "/lazy/colorbuddy.nvim")
+local readfile = vim.fn.readfile
+local theme_spec = dofile("lua/plugins/colorscheme.lua")
+for _, scenario in ipairs({ "missing", "unknown", "known" }) do
+	test("colorscheme fallback: " .. scenario, function()
+		vim.fn.readfile = function(path, ...)
+			if path == vim.fn.expand("~/.config/ghostty/config") then
+				if scenario == "missing" then
+					error("missing config")
+				end
+				return { scenario == "known" and "theme = Dracula-Blade" or "theme = Unknown" }
+			end
+			return readfile(path, ...)
+		end
+		theme_spec.config()
+		assert(vim.g.colors_name == (scenario == "known" and "dracula_pro_blade" or "dracula_pro"))
+		assert(vim.g["dracula_pro#palette"].fg)
+	end)
+end
+vim.fn.readfile = readfile
 print("All startup-fix regression tests passed")
