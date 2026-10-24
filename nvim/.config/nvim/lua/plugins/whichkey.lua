@@ -145,7 +145,7 @@ return {
 				},
 				{
 					"<leader>lq",
-					"<cmd>lua vim.diagnostic.setloclist()<cr>",
+					"<cmd>lua vim.diagnostic.setqflist()<cr>",
 					desc = "Quickfix",
 					mode = "n",
 				},
@@ -262,7 +262,7 @@ return {
 					desc = "Stage Selected Hunk",
 					mode = { "v" },
 				},
-				{ "<leader>gu", "<cmd>lua require 'gitsigns'.reset_buffer_index()<cr>", desc = "Undo Stage Hunk" },
+				{ "<leader>gu", "<cmd>lua require 'gitsigns'.undo_stage_hunk()<cr>", desc = "Undo Stage Hunk" },
 				{ "<leader>gd", "<cmd>Gitsigns diffthis HEAD<cr>", desc = "Git Diff" },
 
 				-- Database Group

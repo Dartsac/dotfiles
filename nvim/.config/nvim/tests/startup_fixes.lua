@@ -30,6 +30,24 @@ test("Treesitter is eager-loaded", function()
 	assert(spec.lazy == false and spec.event == nil)
 end)
 
+test("quickfix and undo-stage mappings call the correct APIs", function()
+	local mappings
+	package.loaded["which-key"] = {
+		setup = function() end,
+		add = function(items)
+			mappings = items
+		end,
+	}
+	dofile("lua/plugins/whichkey.lua")[1].config()
+	local found = {}
+	for _, mapping in ipairs(mappings) do
+		found[mapping[1]] = mapping[2]
+	end
+	assert(found["<leader>lq"]:find("setqflist", 1, true))
+	assert(found["<leader>gu"]:find("undo_stage_hunk", 1, true))
+	package.loaded["which-key"] = nil
+end)
+
 -- Use the installed Colorbuddy and bundled themes for a real highlight smoke test.
 vim.opt.runtimepath:append(vim.fn.stdpath("data") .. "/lazy/colorbuddy.nvim")
 local readfile = vim.fn.readfile
