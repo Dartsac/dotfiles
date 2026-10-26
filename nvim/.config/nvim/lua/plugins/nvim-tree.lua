@@ -57,48 +57,20 @@ return {
 				end
 			end, opts("Open File or Folder"))
 
-			-- Open file in a tmux vertical split
-			vim.keymap.set("n", "V", function()
-				local node = api.tree.get_node_under_cursor()
-				if not node or not node.absolute_path then
-					return
+			-- Open the file under the cursor in a tmux split, closing the tree.
+			local function tmux_split(direction)
+				return function()
+					local node = api.tree.get_node_under_cursor()
+					if node and node.absolute_path and require("config.tmux").split(node.absolute_path, direction) then
+						api.tree.close()
+					end
 				end
+			end
+			vim.keymap.set("n", "V", tmux_split("vertical"), opts("Vertical Split in tmux"))
+			vim.keymap.set("n", "H", tmux_split("horizontal"), opts("Horizontal Split in tmux"))
 
-				local filepath = node.absolute_path
-				local cwd = vim.fn.getcwd()
-
-				local cmd = string.format(
-					"tmux split-window -h -c %s 'NVIM_NO_HARPOON=1 nvim %s; exec $SHELL'",
-					vim.fn.fnameescape(cwd),
-					vim.fn.fnameescape(filepath)
-				)
-				os.execute(cmd)
-
-				api.tree.close()
-			end, opts("Vertical Split in tmux"))
-
-			-- Open file in a tmux horizontal split
 			vim.keymap.set("n", "=", "<cmd>NvimTreeResize -5<CR>", opts("Shrink tree"))
 			vim.keymap.set("n", "+", "<cmd>NvimTreeResize +5<CR>", opts("Grow tree"))
-
-			vim.keymap.set("n", "H", function()
-				local node = api.tree.get_node_under_cursor()
-				if not node or not node.absolute_path then
-					return
-				end
-
-				local filepath = node.absolute_path
-				local cwd = vim.fn.getcwd()
-
-				local cmd = string.format(
-					"tmux split-window -v -c %s 'NVIM_NO_HARPOON=1 nvim %s; exec $SHELL'",
-					vim.fn.fnameescape(cwd),
-					vim.fn.fnameescape(filepath)
-				)
-				os.execute(cmd)
-
-				api.tree.close()
-			end, opts("Horizontal Split in tmux"))
 		end
 
 		nvim_tree.setup({
