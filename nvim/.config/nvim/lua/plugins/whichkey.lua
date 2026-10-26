@@ -276,7 +276,7 @@ return {
 				{
 					"<leader>Tc",
 					"<cmd>lua require('config.tmux').create_session()<cr>",
-					desc = "Create/Attach Tmux Session",
+					desc = "Create/Switch Tmux Session",
 					mode = "n",
 				},
 			})
