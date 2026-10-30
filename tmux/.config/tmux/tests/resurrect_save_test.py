@@ -438,6 +438,138 @@ class ResurrectSaveTest(unittest.TestCase):
                 for extra in set(self.saves()) - set(saved):
                     (self.dir / extra).unlink()
 
+    @staticmethod
+    def drop(kind, nth):
+        """A cut_saves expression: the save without its `nth` `kind` record."""
+        lines = "data.splitlines(True)"
+        return (f"b''.join(l for i, l in enumerate({lines}) if i != "
+                f"[i for i, l in enumerate({lines}) if l.startswith(b'{kind}\\t')][{nth}])")
+
+    def grouped_setup(self, t):
+        """Three panes, two windows and a grouped session (whose panes and
+        windows resurrect doesn't save: it records the session instead)."""
+        t.tmux(["split-window", "-d"])
+        t.tmux(["split-window", "-d"])
+        t.tmux(["new-window", "-d"])
+        t.tmux(["new-session", "-d", "-t", t.tmux(["display-message", "-p", "#{session_name}"]), "-s", "twin"])
+
+    def test_save_with_grouped_sessions_is_linked(self):
+        t = Server(self, "grouped", self.dir)
+        self.grouped_setup(t)
+        self.assertEqual(t.wrapper("quiet").wait(timeout=20), 0)
+        self.assert_last_valid()
+        text = (self.dir / "last").read_text()
+        self.assertEqual([line.split("\t")[1] for line in text.splitlines() if line.startswith("grouped_session")], ["twin"])
+
+    def test_save_missing_a_record_is_never_linked(self):
+        # Each part of a save is a separate write: one that fails (a full
+        # disk) loses its records, and the parts after it can still succeed,
+        # state line and all. Here the post-save-layout hook drops one record.
+        t = Server(self, "records", self.dir)
+        self.grouped_setup(t)
+        self.assertEqual(t.wrapper("quiet").wait(timeout=20), 0)
+        saved = self.saves()
+        good = (self.dir / "last").read_bytes()
+        for kind, nth in (("pane", 1), ("window", 0), ("grouped_session", 0)):
+            with self.subTest(kind):
+                t.tmux(["split-window", "-d"])  # the next save differs
+                self.cut_saves(t, self.drop(kind, nth))
+                self.assertEqual(t.wrapper("quiet").wait(timeout=20), 1)
+                self.assertEqual(self.saves(), saved)
+                self.assert_last_valid()
+                # What the file's shape alone would have let through.
+                cut = self.dir / "cut.txt"
+                subprocess.run([sys.executable, "-c", f"import pathlib; data = pathlib.Path('{self.dir}/last').read_bytes(); "
+                                f"pathlib.Path('{cut}').write_bytes({self.drop(kind, nth)})"], check=True)
+                self.assertTrue(resurrect_save.complete(cut))
+                self.assertLess(len(cut.read_bytes()), len(good))
+                cut.unlink()
+
+    def test_save_the_shim_cannot_check_fails_loudly(self):
+        # tmux-shim/tmux no longer recognizing save.sh's lists (after a
+        # tmux-resurrect update, say) looks like this: no copies of them.
+        t = Server(self, "unchecked", self.dir)
+        self.assertEqual(t.wrapper("quiet").wait(timeout=20), 0)
+        saved = self.saves()
+        t.tmux(["split-window", "-d"])
+        # (resurrect appends the save's path to the hook: `:` takes it.)
+        t.tmux(["set-option", "-g", "@resurrect-hook-post-save-layout", 'rm -f "$RESURRECT_SAVE_RECORDS"/*; :'])
+        wrapper = t.wrapper("quiet", stderr=subprocess.PIPE, text=True)
+        _, error = wrapper.communicate(timeout=20)
+        self.assertEqual(wrapper.returncode, 1)
+        self.assertIn("tmux-shim/tmux no longer sees save.sh's pane and window lists", error)
+        self.assertEqual(self.saves(), saved)
+        self.assert_last_valid()
+
+    def test_shim_never_keeps_a_list_copy_cut_short_as_a_whole_one(self):
+        # A copy cut short (a full disk) would require too little of the save:
+        # it stays .partial, which the wrapper rejects.
+        records = self.dir / "records"
+        records.mkdir()
+        fake = self.dir / "fake-tmux"
+        fake.write_text("#!/bin/sh\necho guard\nfor i in $(seq 2000); do printf 'pane\\tmain\\t1\\t1\\t:*\\t%s\\n' $i; done\n")
+        fake.chmod(0o755)
+        env = {**os.environ, "RESURRECT_SAVE_TMUX": str(fake), "RESURRECT_SAVE_GUARD": "@guard",
+               "RESURRECT_SAVE_RECORDS": str(records)}
+        shim = ROOT / "scripts/tmux-shim/tmux"
+        subprocess.run(["bash", "-c", 'ulimit -f 8; "$0" list-panes -a -F "pane$(printf "\\t")x"', str(shim)],
+                       env=env, capture_output=True, timeout=20)
+        self.assertEqual(sorted(p.name for p in records.iterdir()), ["panes.partial"])
+        self.assertFalse(resurrect_save.holds_every_record(self.dir / "any", records))
+
+    def test_a_list_copy_not_written_in_full_is_never_trusted(self):
+        # Even beside a .partial whose rename failed, a short copy is rejected.
+        records = self.dir / "records"
+        records.mkdir()
+        save = self.dir / "save.txt"
+        save.write_text("pane\tmain\t0\t1\t:*\t0\tt\t:/\t1\tsh\t:\nwindow\tmain\t0\t:sh\t1\t:*\tlayout\t:\nstate\tmain\t\n")
+        (records / "panes").write_text("pane\tmain\t0\t1\t:*\t0\tt\t:/\t1\tsh\t1\t0\n")
+        (records / "windows").write_text("window\tmain\t0\t:sh\t1\t:*\tlayout\n")
+        self.assertTrue(resurrect_save.holds_every_record(save, records))
+        (records / "panes.partial").write_text("pane\tmain\t0\t1\t:*\t0\tt\t:/\t1\tsh\t1\t0\npane\tmain\t0")
+        self.assertFalse(resurrect_save.holds_every_record(save, records))
+
+    def settled(self, t):
+        """Wait for the window's name to follow its shell, which starts after
+        the server: until then each save differs from the one before."""
+        name = lambda: t.tmux(["display-message", "-p", "#{==:#{window_name},#{pane_current_command}}"]) == "1"
+        self.wait_until(name)
+
+    def test_unchanged_save_succeeds(self):
+        t = Server(self, "unchanged-ok", self.dir, panes=2)
+        self.settled(t)
+        self.assertEqual(t.wrapper("quiet").wait(timeout=20), 0)
+        saved = self.saves()
+        self.assertEqual(t.wrapper("quiet").wait(timeout=20), 0)  # deleted by save.sh as unchanged
+        self.assertEqual(self.saves(), saved)
+        self.assert_last_valid()
+
+    def test_unchanged_save_missing_records_fails_and_prunes_nothing(self):
+        # save.sh deletes a save no different from `last`'s, and links
+        # nothing. A new window whose records were lost makes it look so.
+        t = Server(self, "unchanged", self.dir)
+        self.settled(t)
+        self.assertEqual(t.wrapper("quiet").wait(timeout=20), 0)
+        last = os.readlink(self.dir / "last")
+        old = self.aged_copies((self.dir / "last").read_bytes(), [60, 61, 62, 63, 64, 65])  # prunable
+        session = t.tmux(["display-message", "-p", "#{session_name}"])
+        window = t.tmux(["new-window", "-d", "-P", "-F", "#{window_index}"])
+        lost = (f"pane\t{session}\t{window}\t", f"window\t{session}\t{window}\t")
+        self.cut_saves(t, f"b''.join(l for l in data.splitlines(True) if not l.decode().startswith({lost!r}))")
+        self.assertEqual(t.wrapper("quiet").wait(timeout=20), 1)
+        self.assertEqual(os.readlink(self.dir / "last"), last)
+        self.assertTrue(all((self.dir / name).exists() for name in old.values()))
+
+    def test_unchanged_save_the_shim_cannot_check_fails_loudly(self):
+        t = Server(self, "unchanged-unchecked", self.dir)
+        self.settled(t)
+        self.assertEqual(t.wrapper("quiet").wait(timeout=20), 0)
+        t.tmux(["set-option", "-g", "@resurrect-hook-post-save-layout", 'rm -f "$RESURRECT_SAVE_RECORDS"/*; :'])
+        wrapper = t.wrapper("quiet", stderr=subprocess.PIPE, text=True)
+        _, error = wrapper.communicate(timeout=20)
+        self.assertEqual(wrapper.returncode, 1)
+        self.assertIn("tmux-shim/tmux no longer sees save.sh's pane and window lists", error)
+
     def test_autosave_during_restore_leaves_last_alone(self):
         # A restore reads `last` again and again; a save in between changes
         # what it restores.
