@@ -20,9 +20,31 @@ flags=()
 case $1 in
 -S | -L) flags=("$1" "$2"); shift 2 ;;
 esac
+#
+# A copy of the lists save.sh writes a save from (the first of each), for the
+# wrapper to check the save holds a record of everything in them: a failed
+# write mid-save loses records but can leave the rest (resurrect_save.py,
+# holds_every_record). Each is written as .partial and renamed only once
+# written in full, so a copy cut short is never taken for a whole one.
+record=
+if [ -n "$RESURRECT_SAVE_RECORDS" ]; then
+	tab=$'\t'
+	case "$1 $2 $3 ${4%%"$tab"*}" in
+	"list-panes -a -F pane") record=$RESURRECT_SAVE_RECORDS/panes ;;
+	"list-windows -a -F window") record=$RESURRECT_SAVE_RECORDS/windows ;;
+	esac
+	if [ -e "$record" ] || [ -e "$record.partial" ]; then record=; fi
+fi
 if [ -n "$RESURRECT_SAVE_GUARD" ] && [ "$#" -gt 0 ] && [ "${1#-}" = "$1" ]; then
-	"$real" "${flags[@]}" show-option -gv "$RESURRECT_SAVE_GUARD" \; "$@" | tail -n +2
-	status=${PIPESTATUS[0]}
+	if [ -n "$record" ]; then
+		"$real" "${flags[@]}" show-option -gv "$RESURRECT_SAVE_GUARD" \; "$@" | tail -n +2 | tee "$record.partial"
+		statuses=("${PIPESTATUS[@]}")
+		[ "${statuses[0]}${statuses[1]}${statuses[2]}" = 000 ] && mv -f "$record.partial" "$record"
+		status=${statuses[0]}
+	else
+		"$real" "${flags[@]}" show-option -gv "$RESURRECT_SAVE_GUARD" \; "$@" | tail -n +2
+		status=${PIPESTATUS[0]}
+	fi
 	ours() { [ -n "$("$real" "${flags[@]}" show-option -gqv "$RESURRECT_SAVE_GUARD" 2>/dev/null)" ]; }
 else
 	"$real" "${flags[@]}" "$@"

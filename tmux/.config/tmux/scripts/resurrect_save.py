@@ -227,6 +227,35 @@ def complete(path):
             and all(kind in FIELDS and line.count("\t") + 1 >= FIELDS[kind] for kind, line in zip(kinds, lines)))
 
 
+RECORDS = ("panes", "windows")  # tmux-shim/tmux's copies of save.sh's lists
+
+
+def holds_every_record(path, records):
+    """Whether the save at `path` has a record of every pane and window in the
+    lists save.sh wrote it from, as tmux-shim/tmux copied them into `records`
+    (save.sh leaves out those of the sessions it records as grouped; a lost
+    grouped_session line makes them required again). Each part of a save is
+    a separate write: one that fails (a full disk) loses its records, and the
+    parts after it can still succeed, state line and all."""
+    def rows(name):
+        with open(name, encoding="utf-8", errors="replace") as f:
+            return [line.rstrip("\n").split("\t") for line in f if line.strip()]
+    if any(os.path.exists(os.path.join(records, name + ".partial")) for name in RECORDS):
+        return False  # a copy not written in full
+    try:
+        panes, windows = (rows(os.path.join(records, name)) for name in RECORDS)
+        lines = rows(path)
+    except OSError:
+        return False
+    if any(len(row) < 12 for row in panes) or any(len(row) < 7 for row in windows):
+        return False
+    grouped = {line[1] for line in lines if line[0] == "grouped_session" and len(line) > 1}
+    saved_panes = {tuple(line[1:3] + line[5:6]) for line in lines if line[0] == "pane"}
+    saved_windows = {tuple(line[1:3]) for line in lines if line[0] == "window"}
+    return (all(tuple(row[1:3] + row[5:6]) in saved_panes for row in panes if row[1] not in grouped)
+            and all(tuple(row[1:3]) in saved_windows for row in windows if row[1] not in grouped))
+
+
 def link_last(directory, name):
     temporary = os.path.join(directory, f".last-{os.getpid()}")
     with contextlib.suppress(FileNotFoundError):
@@ -276,11 +305,23 @@ def save_locked(args, server, directory, fd):
     before = set(os.listdir(directory))
     previous = target(directory)
     links, link_fd = os.pipe()  # tmux-shim/ln writes there the save to link
-    env = shimmed(directory, marker, RESURRECT_SAVE_LINK_FD=str(link_fd), RESURRECT_SAVE_STAMP=stamp(directory))
+    # tmux-shim/tmux copies save.sh's lists there. In the locked directory,
+    # cleared first: a wrapper killed mid-save leaves at most this one.
+    records = os.path.join(directory, ".save-records")
+    shutil.rmtree(records, ignore_errors=True)
+    os.mkdir(records, 0o700)
+    env = shimmed(directory, marker, RESURRECT_SAVE_LINK_FD=str(link_fd), RESURRECT_SAVE_STAMP=stamp(directory),
+                  RESURRECT_SAVE_RECORDS=records)
     child = subprocess.Popen(["bash", SAVE, *args], env=env, start_new_session=True,
                              preexec_fn=recording(fd), pass_fds=(link_fd,))
     os.close(link_fd)
     status = child.wait()
+    result = finish_save(directory, server, days, before, previous, links, records, status)
+    shutil.rmtree(records, ignore_errors=True)
+    return result
+
+
+def finish_save(directory, server, days, before, previous, links, records, status):
     os.set_blocking(links, False)  # a hook's background process may hold it open
     try:
         requested = os.read(links, 65536).decode().split()
@@ -289,13 +330,30 @@ def save_locked(args, server, directory, fd):
     os.close(links)
 
     new = {name for name in set(os.listdir(directory)) - before if name.startswith("tmux_resurrect_")}
+
+    def whole(path):
+        """Whether `path` holds everything the save was written from."""
+        if not all(os.path.exists(os.path.join(records, kind)) or os.path.exists(os.path.join(records, kind + ".partial"))
+                   for kind in RECORDS):
+            # save.sh's lists no longer match tmux-shim/tmux (after a
+            # tmux-resurrect update, say): no save could be checked.
+            warn("resurrect_save.py: tmux-shim/tmux no longer sees save.sh's pane and window lists; "
+                 "it needs updating. Save discarded.")
+            return False
+        return complete(path) and holds_every_record(path, records)
+
     linked = None
     if status == 0 and requested:
         name = requested[-1]
-        if name in new and complete(os.path.join(directory, name)) and server_id() == server:
+        if name in new and whole(os.path.join(directory, name)) and server_id() == server:
             link_last(directory, name)
             linked = name
         else:
+            status = 1
+    elif status == 0 and target(directory) == previous and previous is not None:
+        # save.sh found the save no different from `last`'s and deleted it:
+        # then `last` must hold everything too, or the save failed.
+        if not whole(os.path.join(directory, previous)):
             status = 1
     elif not requested and target(directory) != previous:
         # save.sh linked `last` itself: its call no longer matches tmux-shim/ln
