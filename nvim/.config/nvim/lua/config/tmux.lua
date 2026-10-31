@@ -104,4 +104,41 @@ function M.create_session()
 	end
 end
 
+-- Window/pane navigation (formerly vim-tmux-navigator). Move between Neovim
+-- windows; at the edge, hand over to tmux. tmux is started directly and not
+-- waited for: vim-tmux-navigator went through system(), which starts
+-- Neovim's 'shell' (fish, with its whole config) on every move.
+local TMUX_FLAG = { h = "-L", j = "-D", k = "-U", l = "-R", p = "-l" }
+local last_was_tmux = false
+
+function M.navigate(direction)
+	local pane = in_tmux() and vim.env.TMUX_PANE
+	-- Like vim-tmux-navigator: "previous" returns to tmux's last pane if the
+	-- previous move left tmux, otherwise to Neovim's previous window.
+	local to_last_tmux_pane = direction == "p" and last_was_tmux
+	local window = vim.api.nvim_get_current_win()
+	if not to_last_tmux_pane then
+		pcall(vim.cmd.wincmd, direction)
+	end
+	local at_edge = vim.api.nvim_get_current_win() == window
+	if not pane or not (to_last_tmux_pane or at_edge) then
+		last_was_tmux = false
+		return nil
+	end
+	last_was_tmux = true
+	local ok, process = pcall(vim.system, adapted({ "tmux", "select-pane", "-t", pane, TMUX_FLAG[direction] }),
+		{ text = true }, function(result)
+			if result.code ~= 0 then
+				vim.schedule(function()
+					report(result, "tmux select-pane failed")
+				end)
+			end
+		end)
+	if not ok then
+		vim.notify(tostring(process), vim.log.levels.ERROR)
+		return nil
+	end
+	return process
+end
+
 return M

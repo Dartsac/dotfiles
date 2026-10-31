@@ -144,6 +144,33 @@ test("split and session shells preserve literal paths with Fish configured", fun
 	assert(ok, err)
 end)
 
+test("navigation moves between windows, then hands the edge to tmux without a shell", function()
+	reset(nil, true)
+	vim.env.TMUX_PANE = "%5"
+	vim.o.shell = "fish" -- must not be used
+	vim.cmd("silent! only")
+	vim.cmd("vsplit")
+	vim.cmd("wincmd h")
+	local left = vim.api.nvim_get_current_win()
+	tmux.navigate("l") -- inside Neovim: no tmux call
+	assert(vim.api.nvim_get_current_win() ~= left and #calls == 0)
+	tmux.navigate("l") -- right edge: tmux takes over
+	assert(#calls == 1, vim.inspect(calls))
+	assert(calls[1][1]:match("tmux%-pane%-clarity/bin/tmux$"))
+	assert(vim.deep_equal(vim.list_slice(calls[1], 2), { "select-pane", "-t", "%5", "-R" }))
+	tmux.navigate("p") -- back to tmux's last pane, not Neovim's previous window
+	assert(vim.deep_equal(vim.list_slice(calls[2], 2), { "select-pane", "-t", "%5", "-l" }))
+	tmux.navigate("h") -- a Neovim move resets the hand-over
+	tmux.navigate("p")
+	assert(#calls == 2 and vim.api.nvim_get_current_win() ~= left)
+	reset(nil, false) -- outside tmux the edge is a no-op
+	vim.cmd("wincmd l")
+	tmux.navigate("l")
+	assert(#calls == 0)
+	vim.cmd("silent! only")
+	vim.env.TMUX_PANE = nil
+end)
+
 vim.system = original_system
 vim.notify = original_notify
 vim.fn.executable = original_executable
