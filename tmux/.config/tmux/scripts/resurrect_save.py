@@ -46,6 +46,7 @@ import fcntl
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -54,6 +55,7 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 SCRIPTS = os.path.join(HERE, os.pardir, "plugins", "tmux-resurrect", "scripts")
 SAVE = os.path.join(SCRIPTS, "save.sh")
 RESTORE = os.path.join(SCRIPTS, "restore.sh")
+SPINNER = os.path.join(os.path.normpath(SCRIPTS), "tmux_spinner.sh")  # as save.sh and restore.sh run it
 SHIM = os.path.join(HERE, "tmux-shim")
 AUTO = f"#({os.path.join(HERE, 'resurrect_save.py')} auto)"
 CONTINUUM_JOB = "/tmux-continuum/scripts/continuum_save.sh)"
@@ -118,10 +120,12 @@ def serialized(server, run, wait=True):
             # (raises), or @resurrect-dir changed, in which case this belongs
             # under the new directory's lock.
             if backup_dir(server) == directory:
-                try:
-                    return run(directory, lock.fileno())
-                finally:
-                    write_record(lock.fileno(), pid=None)
+                result = run(directory, lock.fileno())
+                # Only now: a wrapper that raises instead (KeyboardInterrupt,
+                # say) may leave its run going, or its spinner; like one
+                # killed, it leaves the record for the next run to settle.
+                write_record(lock.fileno(), pid=None)
+                return result
 
 
 def guard(server):
@@ -177,7 +181,106 @@ def shimmed(directory, guard, **extra):
     into another server. Its ln leaves `last` to us; its date names the save."""
     return {**os.environ, "PATH": SHIM + os.pathsep + os.environ.get("PATH", ""),
             "RESURRECT_SAVE_TMUX": shutil.which("tmux") or "tmux", "RESURRECT_SAVE_DIR": directory,
-            "RESURRECT_SAVE_GUARD": guard, **extra}
+            "RESURRECT_SAVE_GUARD": guard, "RESURRECT_SAVE_SPINNER": SPINNER, **extra}
+
+
+# save.sh or restore.sh runs under this, which leads the run's process group
+# (and is what the lock file records). When the server goes away, tmux-shim/tmux
+# stops the whole group with TERM. If the script ends by that signal, the
+# leader stops itself, and finished() ends the rest of the group: resurrect's
+# spinner, whose TERM trap runs tmux, which stops the group again (Bash 5.3
+# then reruns that trap forever, holding the wrapper's output open), and
+# anything that trap started. With its wrapper gone (killed), the leader kills
+# the group itself, and settle() ends one left stopped. The leader only
+# catches TERM: an ignored signal would stay ignored in the scripts it starts.
+# A run that ends normally leaves the rest alone (a hook's background job, say),
+# but for resurrect's spinner, which is waited for (spinner_finished).
+# The script keeps stderr; the leader's own (bash's "Terminated") goes nowhere.
+LEADER = ('trap : TERM; exec 3>&2 2>/dev/null; "$@" 2>&3 3>&-; status=$?; if [ "$status" -gt 128 ]; then '
+          'if [ "$(ps -o ppid= -p $$)" -eq "$PPID" ]; then kill -STOP $$; else kill -KILL 0; fi; fi; exit "$status"')
+
+
+def led(script, *args):
+    return ["bash", "-c", LEADER, "resurrect_save.py", "bash", script, *args]
+
+
+def finished(child):
+    """Wait for a run started with led(); returns its exit status. A leader
+    stopped by its own signal still holds the group's id, so it can't be
+    reused: kill the group's other processes, again until none is left (one
+    started just as the group is signalled can miss it), then the leader."""
+    while True:
+        _, status = os.waitpid(child.pid, os.WUNTRACED)
+        if not os.WIFSTOPPED(status):
+            child.returncode = os.waitstatus_to_exitcode(status)
+            return child.returncode
+        end_group(child.pid)
+
+
+def spinning(command):
+    """Whether a process's command line is resurrect's spinner: bash running
+    its script (start_spinner runs it by path, under `#!/usr/bin/env bash`),
+    not any command that only names it (a hook's `tail -f`, say)."""
+    shell, _, rest = command.partition(" ")
+    return os.path.basename(shell) == "bash" and (rest + " ").startswith(SPINNER + " ")
+
+
+def spinners(group):
+    """resurrect's spinners in `group`, each as (pid, whether stopped)."""
+    rows = subprocess.run(["ps", "-axo", "pid=,pgid=,stat=,command="], capture_output=True, text=True).stdout
+    return [(int(fields[0]), fields[2].startswith("T")) for fields in (row.split(None, 3) for row in rows.splitlines())
+            if len(fields) == 4 and fields[1] == str(group) and spinning(fields[3])]
+
+
+def spinner_finished(group, timeout=5):
+    """Wait for resurrect's spinner in `group`: save.sh and restore.sh stop it
+    (TERM) as they end, without waiting, and its trap then runs one last tmux
+    call. The lock then outlasts it, so no part of the run is left unwatched,
+    and so does its record (the group's leader, whose id the group keeps):
+    a wrapper killed meanwhile leaves settle() to finish this. One still
+    running after `timeout` is killed, and its calls with it; one found
+    stopped at once (kill_tree cut short)."""
+    deadline = time.monotonic() + timeout
+    while found := spinners(group):
+        if time.monotonic() >= deadline or any(stopped for _, stopped in found):
+            for pid, _ in found:
+                kill_tree(pid)
+            return
+        time.sleep(0.01)
+
+
+def kill_tree(pid):
+    """Kill `pid` and every process descended from it (tmux-shim/tmux, and its
+    tmux client and tail), each stopped before its children are listed, so
+    none can start another unseen. Children die before their parents: cut
+    short, this leaves `pid` (stopped) atop whatever is left, to be found
+    again."""
+    tree, pending = [], [pid]
+    while pending:
+        process = pending.pop()
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(process, signal.SIGSTOP)
+        tree.append(process)
+        children = subprocess.run(["pgrep", "-P", str(process)], capture_output=True, text=True).stdout
+        pending += map(int, children.split())
+    for process in reversed(tree):  # each listed after its parent
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(process, signal.SIGKILL)
+
+
+def end_group(leader):
+    """Kill every process in a stopped leader's group, the leader last."""
+    for _ in range(500):
+        members = subprocess.run(["pgrep", "-g", str(leader)], capture_output=True, text=True).stdout.split()
+        others = [int(pid) for pid in members if int(pid) != leader]
+        if not others:
+            break
+        for pid in others:
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(pid, signal.SIGKILL)
+        time.sleep(0.01)
+    with contextlib.suppress(ProcessLookupError):
+        os.kill(leader, signal.SIGKILL)
 
 
 def stamp(directory):
@@ -290,13 +393,17 @@ def recording(fd):
 
 
 def settle(fd):
-    """Wait for a save or restore whose wrapper died: the lock file still
-    names its process. (A record lost to a deleted or tampered lock file
+    """Wait for a save or restore whose wrapper died, and its spinner: the
+    lock file still names its process. (A record lost to a deleted or tampered lock file
     names none; then the save's own file, named for no existing save, still
     keeps it apart.)"""
     pid = (read_record(fd) or {}).get("pid")
     while running(pid):
+        if subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True).stdout.startswith("T"):
+            end_group(pid)  # a leader stopped after its wrapper died (LEADER)
         time.sleep(0.05)
+    if pid:  # its spinner, if the wrapper died after the leader ended (spinner_finished)
+        spinner_finished(pid)
 
 
 def save_locked(args, server, directory, fd):
@@ -306,17 +413,19 @@ def save_locked(args, server, directory, fd):
     previous = target(directory)
     links, link_fd = os.pipe()  # tmux-shim/ln writes there the save to link
     # tmux-shim/tmux copies save.sh's lists there. In the locked directory,
-    # cleared first: a wrapper killed mid-save leaves at most this one.
+    # cleared first: a wrapper killed or interrupted mid-save (which leaves
+    # the save going, and so these) leaves at most this one.
     records = os.path.join(directory, ".save-records")
     shutil.rmtree(records, ignore_errors=True)
     os.mkdir(records, 0o700)
     env = shimmed(directory, marker, RESURRECT_SAVE_LINK_FD=str(link_fd), RESURRECT_SAVE_STAMP=stamp(directory),
                   RESURRECT_SAVE_RECORDS=records)
-    child = subprocess.Popen(["bash", SAVE, *args], env=env, start_new_session=True,
+    child = subprocess.Popen(led(SAVE, *args), env=env, start_new_session=True,
                              preexec_fn=recording(fd), pass_fds=(link_fd,))
     os.close(link_fd)
-    status = child.wait()
+    status = finished(child)
     result = finish_save(directory, server, days, before, previous, links, records, status)
+    spinner_finished(child.pid)  # after: a save is no less whole for its server going away since
     shutil.rmtree(records, ignore_errors=True)
     return result
 
@@ -377,8 +486,10 @@ def restore(server):
     reads it. Like a save, the restore is recorded in the lock file: if its
     wrapper dies, the next save or restore still waits for it."""
     def run(directory, fd):
-        status = subprocess.run(["bash", RESTORE], env=shimmed(directory, guard(server)[0]), start_new_session=True,
-                                preexec_fn=recording(fd)).returncode
+        child = subprocess.Popen(led(RESTORE), env=shimmed(directory, guard(server)[0]),
+                                 start_new_session=True, preexec_fn=recording(fd))
+        status = finished(child)
+        spinner_finished(child.pid)
         return 1 if status else 0
     return serialized(server, run)
 
