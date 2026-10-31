@@ -53,8 +53,27 @@ else
 fi
 # A command that failed because the server went away (or was replaced) stops
 # the whole save or restore, before resurrect saves an empty environment or
-# restores into another server.
-if [ "$status" -ne 0 ] && ! ours; then
+# restores into another server. (The wrapper's group leader then ends what
+# is left of the group: see LEADER in resurrect_save.py.) Not one from
+# resurrect's spinner, which only displays messages: save.sh's or restore.sh's
+# own next call stops the group, and from the spinner's TERM trap (its last
+# message, maybe after the run has ended) a stop reruns that trap forever in
+# Bash 5.3, and would stop a hook's background job.
+# The spinner is bash running its script (as resurrect_save.py's spinning()
+# tells), not any command that only names it.
+spinner() {
+	[ -n "$RESURRECT_SAVE_SPINNER" ] || return 1
+	command=$(ps -o command= -p "$PPID" 2>/dev/null) || return 1
+	case ${command%% *} in
+	bash | */bash) ;;
+	*) return 1 ;;
+	esac
+	case "${command#* } " in
+	"$RESURRECT_SAVE_SPINNER "*) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+if [ "$status" -ne 0 ] && ! ours && ! spinner; then
 	kill -TERM 0
 fi
 exit "$status"

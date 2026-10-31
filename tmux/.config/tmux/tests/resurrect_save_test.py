@@ -62,6 +62,8 @@ class ResurrectSaveTest(unittest.TestCase):
     def setUp(self):
         self.dir = Path(tempfile.mkdtemp(prefix="resurrect-save-test-"))
         self.addCleanup(subprocess.run, ["rm", "-rf", str(self.dir)])
+        self.control = Path(tempfile.mkdtemp(prefix="resurrect-save-control-"))  # outside the backup directory
+        self.addCleanup(subprocess.run, ["rm", "-rf", str(self.control)])
 
     def saves(self, directory=None):
         directory = directory or self.dir
@@ -121,7 +123,7 @@ class ResurrectSaveTest(unittest.TestCase):
         """Start the wrapper with `run` and wait until it reaches resurrect's
         `hook`, which then holds on (for at most 10s) until released. Returns
         the wrapper and a function that releases the hook."""
-        paused, release = self.dir / "paused", self.dir / "release"
+        paused, release = self.control / "paused", self.control / "release"
         paused.unlink(missing_ok=True)
         release.unlink(missing_ok=True)
         self.addCleanup(release.touch)
@@ -617,14 +619,254 @@ class ResurrectSaveTest(unittest.TestCase):
     def test_server_replaced_mid_restore(self):
         # Once a restore is under way, no further command may reach a
         # replacement on the same socket: restore.sh replaces existing panes.
+        # And all of the run stops, the spinner included: its TERM trap runs
+        # tmux, which stops the group again (rerunning that trap forever, in
+        # Bash 5.3). Nothing about that is kept in the backup directory, so
+        # neither an earlier stopped run nor a directory that can't be
+        # written to changes it.
         t = Server(self, "restore-swapped", self.dir, panes=2)
         self.assertEqual(t.wrapper("quiet").wait(timeout=20), 0)
+        for run in ("first", "again", "read-only directory"):
+            with self.subTest(run):
+                restoring, release = self.pause(t, "pre-restore-all", ["restore"])
+                group = json.loads((self.dir / ".save-lock").read_text())["pid"]  # leads the run's group
+                # A regression leaves the group running: end it after the test either way.
+                self.addCleanup(lambda group=group: subprocess.run(["pkill", "-KILL", "-g", str(group)]))
+                if run == "read-only directory":
+                    self.dir.chmod(0o500)
+                    self.addCleanup(self.dir.chmod, 0o700)
+                t.restart()
+                t.tmux(["split-window", "-d"])
+                panes = t.tmux(["list-panes", "-a", "-F", "#{pane_id} #{pane_pid}"])
+                release()
+                self.assertEqual(restoring.wait(timeout=20), 1)
+                self.assertEqual(t.tmux(["list-panes", "-a", "-F", "#{pane_id} #{pane_pid}"]), panes)
+                alive = lambda: subprocess.run(["pgrep", "-g", str(group)], capture_output=True).returncode == 0
+                self.wait_until(lambda: not alive(), timeout=5)
+                self.dir.chmod(0o700)
+
+    def test_restore_whose_wrapper_died_still_ends_its_group(self):
+        # The leader then has no wrapper to finish it: it ends the group itself.
+        t = Server(self, "restore-orphaned", self.dir, panes=2)
+        self.assertEqual(t.wrapper("quiet").wait(timeout=20), 0)
         restoring, release = self.pause(t, "pre-restore-all", ["restore"])
+        group = json.loads((self.dir / ".save-lock").read_text())["pid"]
+        self.addCleanup(lambda: subprocess.run(["pkill", "-KILL", "-g", str(group)]))
+        os.kill(restoring.pid, signal.SIGKILL)
+        restoring.wait()
         t.restart()
         panes = t.tmux(["list-panes", "-a", "-F", "#{pane_id} #{pane_pid}"])
         release()
-        self.assertEqual(restoring.wait(timeout=20), 1)
+        alive = lambda: subprocess.run(["pgrep", "-g", str(group)], capture_output=True).returncode == 0
+        self.wait_until(lambda: not alive(), timeout=5)
         self.assertEqual(t.tmux(["list-panes", "-a", "-F", "#{pane_id} #{pane_pid}"]), panes)
+
+    def delayed_spinner(self, t, message):
+        """Put a tmux first on t's PATH (the wrapper's real tmux, then) that,
+        once `arm` exists, holds the spinner's last call (its TERM trap's
+        `message`) until `release` exists. save.sh exports SPINNER_PID after
+        starting the spinner: only its own calls have it. Returns (arm, held,
+        release)."""
+        tools = self.control / "tools"
+        tools.mkdir()
+        arm, held, release = (self.control / name for name in ("arm", "held", "release-spinner"))
+        q = lambda path: shlex.quote(str(path))
+        (tools / "tmux").write_text(
+            "#!/bin/sh\n"
+            f'case " $* " in *" {message} "*) if [ -e {q(arm)} ] && [ -z "$SPINNER_PID" ]; then\n'
+            f"  touch {q(held)}; i=0\n"
+            f"  while [ ! -e {q(release)} ] && [ $i -lt 1500 ]; do sleep 0.01; i=$((i + 1)); done\n"
+            "fi ;; esac\n"
+            f'exec {q(shutil.which("tmux"))} "$@"\n')
+        (tools / "tmux").chmod(0o700)
+        t.env["PATH"] = f"{tools}{os.pathsep}{t.env['PATH']}"
+        self.addCleanup(release.touch)
+        return arm, held, release
+
+    LATE_SPINNERS = ((["restore"], "post-restore-all", "Tmux restore complete!"),
+                     ([], "post-save-all", "Tmux environment saved!"))
+
+    def late_spinner(self, run, hook, message):
+        """A server, and `run` on it (a restore, or a save with a spinner)
+        whose hook `hook` leaves a background job (`tail -f` of the spinner's
+        script: not a spinner for only naming it) and whose spinner's last
+        call is held (delayed_spinner). Returns the server, the wrapper, the
+        run's group, the job's pid, `last` before, and the release file."""
+        shutil.rmtree(self.control / "tools", ignore_errors=True)
+        t = Server(self, f"late-spinner-{len(run)}", self.dir, panes=2)
+        self.assertEqual(t.wrapper("quiet").wait(timeout=20), 0)
+        previous = os.readlink(self.dir / "last")
+        t.tmux(["rename-window", "changed"])  # a new save, not one found unchanged
+        arm, held, release = self.delayed_spinner(t, message)
+        background = self.control / "background"
+        background.unlink(missing_ok=True)
+        t.tmux(["set-option", "-g", f"@resurrect-hook-{hook}",
+                f"tail -f {shlex.quote(resurrect_save.SPINNER)} >/dev/null 2>&1 & "
+                f"echo $! > {shlex.quote(str(background))}"])
+        for path in (arm, held, release):
+            path.unlink(missing_ok=True)
+        wrapper, resume = self.pause(t, "pre-restore-all" if run else "post-save-layout", run)
+        group = json.loads((self.dir / ".save-lock").read_text())["pid"]
+        self.addCleanup(lambda: subprocess.run(["pkill", "-KILL", "-g", str(group)]))
+        arm.touch()
+        resume()
+        self.wait_until(held.exists)
+        time.sleep(0.5)
+        self.assertIsNone(wrapper.poll(), "the run ended before its spinner")
+        job = int(background.read_text())
+        self.addCleanup(lambda: subprocess.run(["kill", "-KILL", str(job)], stderr=subprocess.DEVNULL))
+        t.tmux(["set-option", "-gu", f"@resurrect-hook-{hook}"])  # no untracked jobs from later runs
+        return t, wrapper, group, job, previous, release
+
+    def assert_only_job_left(self, group, job):
+        members = subprocess.run(["pgrep", "-g", str(group)], capture_output=True, text=True).stdout.split()
+        self.assertEqual(members, [str(job)])  # the spinner and its calls gone, the hook's job kept
+
+    def test_successful_run_waits_for_its_spinner(self):
+        # resurrect stops its spinner without waiting, and the spinner's trap
+        # then makes a last tmux call: the run lasts until that ends. By then
+        # the server can be replaced. That call then fails, and must neither
+        # stop the group (left looping in Bash 5.3, and taking a hook's
+        # background job with it) nor fail the run, whose part is done.
+        for run, hook, message in self.LATE_SPINNERS:
+            with self.subTest(" ".join(run) or "manual save"):
+                t, wrapper, group, job, previous, release = self.late_spinner(run, hook, message)
+                t.restart()
+                panes = t.tmux(["list-panes", "-a", "-F", "#{pane_id} #{pane_pid}"])
+                started = time.monotonic()
+                release.touch()
+                self.assertEqual(wrapper.wait(timeout=20), 0)
+                self.assertLess(time.monotonic() - started, 3, "the spinner had to be killed")
+                self.assert_only_job_left(group, job)
+                self.assertEqual(t.tmux(["list-panes", "-a", "-F", "#{pane_id} #{pane_pid}"]), panes)
+                if not run:
+                    self.assertNotEqual(os.readlink(self.dir / "last"), previous)
+                    self.assert_last_valid()
+
+    def test_spinner_still_running_is_killed_with_its_calls(self):
+        # Its last call never returns (a hung server, say): after 5s the
+        # spinner is killed, and with it everything that call started
+        # (tmux-shim/tmux's tmux client and tail, here a held one), which
+        # would otherwise keep the run's output open. Nothing else is.
+        for run, hook, message in self.LATE_SPINNERS:
+            with self.subTest(" ".join(run) or "manual save"):
+                t, wrapper, group, job, previous, release = self.late_spinner(run, hook, message)
+                self.assertEqual(wrapper.wait(timeout=20), 0)
+                self.assert_only_job_left(group, job)
+                if not run:
+                    self.assertNotEqual(os.readlink(self.dir / "last"), previous)
+                    self.assert_last_valid()
+
+    def test_spinner_whose_wrapper_died_is_finished_by_the_next_run(self):
+        # The wrapper dies after the leader has ended: while it waits for the
+        # spinner, or in the middle of killing it (here: exiting just after
+        # its first stop or kill). The lock record still names the leader,
+        # whose id the spinner's group keeps: the next run finishes the job,
+        # at once for a spinner left stopped.
+        interrupt = ("import os, signal, sys; kill = os.kill\n"
+                     "def cut(pid, signum):\n"
+                     "    kill(pid, signum)\n"
+                     "    if signum == getattr(signal, sys.argv[2]): os._exit(9)\n"
+                     "os.kill = cut; resurrect_save.spinner_finished(int(sys.argv[3]), timeout=0)")
+        for (run, hook, message), cut in [(late, cut) for late in self.LATE_SPINNERS
+                                          for cut in ("waiting", "SIGSTOP", "SIGKILL")]:
+            with self.subTest(" ".join(run) or "manual save", cut=cut):
+                t, wrapper, group, job, _, _ = self.late_spinner(run, hook, message)
+                self.assertFalse(resurrect_save.running(group))  # the leader has ended
+                os.kill(wrapper.pid, signal.SIGKILL)
+                wrapper.wait()
+                if cut != "waiting":
+                    self.assertEqual(self.in_wrapper(t, interrupt, cut, str(group)).returncode, 9)
+                    self.assertTrue(resurrect_save.spinners(group), "nothing left to recover")
+                started = time.monotonic()
+                self.assertEqual(t.wrapper("quiet").wait(timeout=20), 0)
+                if cut != "waiting":
+                    self.assertLess(time.monotonic() - started, 3, "a stopped spinner was waited for")
+                self.assert_only_job_left(group, job)
+                self.assertEqual(json.loads((self.dir / ".save-lock").read_text())["pid"], None)
+                self.assert_last_valid()
+
+    def test_interrupted_wrapper_leaves_its_run_to_the_next(self):
+        # SIGINT raises (KeyboardInterrupt), so the wrapper's own cleanup can
+        # run, but its run carries on: its record must stay, as when killed.
+        record = lambda: json.loads((self.dir / ".save-lock").read_text())["pid"]
+        with self.subTest("restore under way"):
+            t = Server(self, "interrupted-restore", self.dir, panes=2)
+            self.assertEqual(t.wrapper("quiet").wait(timeout=20), 0)
+            restoring, release = self.pause(t, "pre-restore-all", ["restore"])
+            group = record()
+            self.addCleanup(lambda: subprocess.run(["pkill", "-KILL", "-g", str(group)]))
+            restoring.send_signal(signal.SIGINT)
+            restoring.wait(timeout=10)
+            self.assertEqual(record(), group)
+            successor = t.wrapper("quiet")
+            time.sleep(1)
+            self.assertIsNone(successor.poll(), "a save ran while the restore was still reading last")
+            release()
+            self.assertEqual(successor.wait(timeout=20), 0)
+            self.assertFalse(subprocess.run(["pgrep", "-g", str(group)], capture_output=True).stdout)
+            self.assertEqual(record(), None)
+        with self.subTest("spinner being killed"):
+            run, hook, message = self.LATE_SPINNERS[0]
+            t, wrapper, group, job, _, _ = self.late_spinner(run, hook, message)
+            wrapper.send_signal(signal.SIGINT)
+            wrapper.wait(timeout=10)
+            self.assertEqual(record(), group)
+            for pid, _ in resurrect_save.spinners(group):
+                os.kill(pid, signal.SIGSTOP)  # as kill_tree's first step
+            self.assertEqual(t.wrapper("quiet").wait(timeout=20), 0)
+            self.assert_only_job_left(group, job)
+            self.assertEqual(record(), None)
+
+    def test_a_hook_naming_the_spinner_is_not_one(self):
+        # Neither waited for (a quiet save starts no spinner) nor let past a
+        # guarded tmux failure: only bash running the spinner's script is one.
+        t = Server(self, "spinner-named", self.dir, panes=2)
+        q = lambda path: shlex.quote(str(path))
+        with self.subTest("background job"):
+            background = self.control / "background"
+            t.tmux(["set-option", "-g", "@resurrect-hook-post-save-all",
+                    f"tail -f {q(resurrect_save.SPINNER)} >/dev/null 2>&1 & echo $! > {q(background)}"])
+            started = time.monotonic()
+            self.assertEqual(t.wrapper("quiet").wait(timeout=20), 0)
+            self.assertLess(time.monotonic() - started, 3, "the job was taken for a spinner")
+            job = int(background.read_text())
+            self.addCleanup(lambda: subprocess.run(["kill", "-KILL", str(job)], stderr=subprocess.DEVNULL))
+            os.kill(job, 0)  # still running
+            t.tmux(["set-option", "-gu", "@resurrect-hook-post-save-all"])
+        with self.subTest("guarded failure"):
+            paused, release, continued = (self.control / name for name in ("paused", "release", "continued"))
+            t.tmux(["set-option", "-g", "@resurrect-hook-pre-restore-all",
+                    f"sh -c 'touch {paused}; i=0; while [ ! -e {release} ] && [ $i -lt 1000 ]; do sleep 0.01; "
+                    f"i=$((i + 1)); done; tmux display-message check; touch {continued}' hook {q(resurrect_save.SPINNER)}"])
+            self.addCleanup(release.touch)
+            restoring = t.wrapper("restore", start_new_session=True, stderr=subprocess.DEVNULL)
+            self.wait_until(paused.exists)
+            group = json.loads((self.dir / ".save-lock").read_text())["pid"]
+            self.addCleanup(lambda: subprocess.run(["pkill", "-KILL", "-g", str(group)]))
+            t.restart()
+            panes = t.tmux(["list-panes", "-a", "-F", "#{pane_id} #{pane_pid}"])
+            release.touch()
+            self.assertEqual(restoring.wait(timeout=20), 1)
+            self.assertFalse(continued.exists(), "the hook carried on past its failed tmux call")
+            self.assertEqual(t.tmux(["list-panes", "-a", "-F", "#{pane_id} #{pane_pid}"]), panes)
+
+    def test_settle_ends_a_stopped_leader_left_behind(self):
+        # A leader stops itself (its script ended by a signal) for its wrapper
+        # to end the group; if that wrapper dies first, the next run does it.
+        scripts = self.control / "tmux-resurrect/scripts"
+        scripts.mkdir(parents=True)
+        (scripts / "save.sh").write_text("sleep 60 &\nkill -TERM $$\n")
+        leader = subprocess.Popen(resurrect_save.led(str(scripts / "save.sh")), start_new_session=True)
+        self.addCleanup(lambda: subprocess.run(["pkill", "-KILL", "-g", str(leader.pid)]))
+        _, status = os.waitpid(leader.pid, os.WUNTRACED)  # what the wrapper would see
+        self.assertTrue(os.WIFSTOPPED(status))
+        leader.returncode = 0  # reaped below by settle's kill; not by Popen
+        with open(self.control / "lock", "w+") as lock:
+            resurrect_save.write_record(lock.fileno(), pid=leader.pid)
+            resurrect_save.settle(lock.fileno())  # returns once the group is gone
+        self.assertNotEqual(subprocess.run(["pgrep", "-g", str(leader.pid)], capture_output=True).returncode, 0)
+        os.waitpid(leader.pid, 0)
 
     def test_restore_wrapper_killed_still_holds_off_saves(self):
         t = Server(self, "restore-killed", self.dir)
