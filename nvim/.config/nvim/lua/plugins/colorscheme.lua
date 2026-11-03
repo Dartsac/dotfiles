@@ -13,13 +13,13 @@ return {
 			if not ok then
 				return
 			end
+			-- The last `theme =` line, the one Ghostty uses (as does tmux's
+			-- update-tmux-colors.sh).
+			local found
 			for _, line in ipairs(lines) do
-				local theme = line:match("^theme%s*=%s*(.+)$")
-				if theme then
-					return theme
-				end
+				found = line:match("^theme%s*=%s*(.+)$") or found
 			end
-			return nil
+			return found
 		end
 
 		local function get_vim_colorscheme(ghostty_theme)

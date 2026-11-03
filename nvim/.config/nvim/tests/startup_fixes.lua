@@ -220,19 +220,26 @@ end)
 vim.opt.runtimepath:append(vim.fn.stdpath("data") .. "/lazy/colorbuddy.nvim")
 local readfile = vim.fn.readfile
 local theme_spec = dofile("lua/plugins/colorscheme.lua")
-for _, scenario in ipairs({ "missing", "unknown", "known" }) do
+-- Ghostty uses the last `theme =` line: so must Neovim, to match it and tmux.
+local configs = {
+	unknown = { "theme = Unknown" },
+	known = { "theme = Dracula-Blade" },
+	last = { "theme = Dracula-Pro", "# theme = Dracula-Buffy", "theme = Dracula-Blade" },
+}
+for _, scenario in ipairs({ "missing", "unknown", "known", "last" }) do
 	test("colorscheme fallback: " .. scenario, function()
 		vim.fn.readfile = function(path, ...)
 			if path == vim.fn.expand("~/.config/ghostty/config") then
 				if scenario == "missing" then
 					error("missing config")
 				end
-				return { scenario == "known" and "theme = Dracula-Blade" or "theme = Unknown" }
+				return configs[scenario]
 			end
 			return readfile(path, ...)
 		end
 		theme_spec.config()
-		assert(vim.g.colors_name == (scenario == "known" and "dracula_pro_blade" or "dracula_pro"))
+		local blade = scenario == "known" or scenario == "last"
+		assert(vim.g.colors_name == (blade and "dracula_pro_blade" or "dracula_pro"))
 		assert(vim.g["dracula_pro#palette"].fg)
 	end)
 end
