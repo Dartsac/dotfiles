@@ -198,6 +198,7 @@ end)
 
 test("quickfix and undo-stage mappings call the correct APIs", function()
 	local mappings
+	package.loaded["which-key.plugins.spelling"] = {}
 	package.loaded["which-key"] = {
 		setup = function() end,
 		add = function(items)
@@ -212,6 +213,7 @@ test("quickfix and undo-stage mappings call the correct APIs", function()
 	assert(found["<leader>lq"]:find("setqflist", 1, true))
 	assert(found["<leader>gu"]:find("undo_stage_hunk", 1, true))
 	package.loaded["which-key"] = nil
+	package.loaded["which-key.plugins.spelling"] = nil
 end)
 
 -- Use the installed Colorbuddy and bundled themes for a real highlight smoke test.

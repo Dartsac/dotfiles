@@ -5,13 +5,16 @@ return {
 		event = "VeryLazy",
 		config = function()
 			local wk = require("which-key")
+			-- Keep the built-in popup and count handling, but replace its adapter
+			-- so the selected label is the exact text inserted into the buffer.
+			require("which-key.plugins.spelling").expand = require("config.spelling").expand
 
 			wk.setup({
 				preset = "helix",
 				plugins = {
 					marks = true,
 					registers = true,
-					spelling = { enabled = true, suggestions = 20 },
+					spelling = { enabled = true }, -- 10 suggestions: config/spelling.lua
 					presets = {
 						operators = false,
 						motions = false,
@@ -40,6 +43,9 @@ return {
 			})
 
 			wk.add({
+				-- Describe native spelling commands without replacing their behavior.
+				{ "zg", desc = "Add Word to Personal Dictionary", mode = "n" },
+				{ "zug", desc = "Undo Adding Word to Personal Dictionary", mode = "n" },
 				-- Dynamically add harpooned files using the expand function
 				{
 					"<leader>",
