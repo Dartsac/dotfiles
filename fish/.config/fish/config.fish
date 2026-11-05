@@ -108,7 +108,7 @@ contains /opt/homebrew/opt/python@3.11/libexec/bin $fish_user_paths
 or set -Ux fish_user_paths /opt/homebrew/opt/python@3.11/libexec/bin $fish_user_paths
 
 # Go
-set -g GOPATH $HOME/go
+set -gx GOPATH $HOME/go
 # Appended (after /usr/bin, Homebrew): anything `go install` drops here can't
 # stand in for a system command. --move also re-orders shells that inherited
 # the old order (open tmux panes).
