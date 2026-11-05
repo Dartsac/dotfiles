@@ -57,7 +57,9 @@ set -g theme_hostname always
 set -g fish_escape_delay_ms 10
 
 # Make tmux use fish by default
-set -gx SHELL (which fish)
+# `command -s` (not `status fish-path`): it gives the stable /opt/homebrew/bin
+# link, not the versioned Cellar path that `brew upgrade fish` deletes.
+set -gx SHELL (command -s fish)
 
 # Use the default key bindings
 set -g fish_key_bindings fish_default_key_bindings
