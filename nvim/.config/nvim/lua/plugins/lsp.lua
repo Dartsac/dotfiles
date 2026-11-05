@@ -1,9 +1,6 @@
--- Unified LSP stack: Mason → mason-lspconfig → vim.lsp.config/enable.
---
--- nvim-lspconfig supplies the default config for each server (lsp/<name>.lua
--- on the runtimepath). Overrides live in lua/lsp/settings/<name>.lua and are
--- merged with vim.lsp.config(). mason-lspconfig installs the servers and
--- enables every Mason-installed one via vim.lsp.enable().
+-- Runtime: nvim-lspconfig defaults → vim.lsp.config/enable.
+-- Installation: :Mason / :LspInstall loads Mason and mason-lspconfig.
+-- Only the servers below are enabled; installation stays off the file-open path.
 
 local servers = {
 	"bashls",
@@ -21,6 +18,13 @@ return {
 	{
 		"williamboman/mason.nvim",
 		cmd = "Mason",
+		init = function()
+			-- Match Mason's default install root without loading its modules.
+			local bin = vim.fn.stdpath("data") .. "/mason/bin"
+			if not vim.tbl_contains(vim.split(vim.env.PATH or "", ":", { plain = true }), bin) then
+				vim.env.PATH = bin .. ":" .. (vim.env.PATH or "")
+			end
+		end,
 		opts = {
 			ui = {
 				border = "none",
@@ -51,12 +55,6 @@ return {
 				},
 			},
 		},
-	},
-
-	{
-		"williamboman/mason-lspconfig.nvim",
-		dependencies = { "williamboman/mason.nvim", "neovim/nvim-lspconfig" },
-		event = { "BufReadPre", "BufNewFile" },
 		config = function()
 			local handlers = require("lsp.handlers")
 
@@ -69,13 +67,19 @@ return {
 				end
 			end
 
-			require("mason-lspconfig").setup({
-				ensure_installed = servers,
-				-- Mason also installs tools that happen to have an lspconfig entry
-				-- (stylua). Those are formatters run through null-ls, not servers.
-				automatic_enable = { exclude = { "stylua" } },
-			})
+			vim.lsp.enable(servers)
 		end,
+	},
+
+	{
+		"williamboman/mason-lspconfig.nvim",
+		cmd = { "Mason", "LspInstall", "LspUninstall" },
+		dependencies = { "williamboman/mason.nvim", "neovim/nvim-lspconfig" },
+		opts = {
+			-- Opening an installer command provisions missing configured servers.
+			ensure_installed = servers,
+			automatic_enable = false,
+		},
 	},
 
 	{
