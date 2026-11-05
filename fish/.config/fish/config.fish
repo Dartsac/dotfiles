@@ -111,7 +111,6 @@ bind \cf "tmux-sessionizer.sh"
 
 set -gx EDITOR nvim
 
-set -gx PATH bin $PATH
 set -gx PATH ~/bin $PATH
 set -gx PATH ~/.local/bin $PATH
 
@@ -123,9 +122,6 @@ set -gx HOMEBREW_NO_ASK 1
 # start costs ~30 ms)
 contains /opt/homebrew/opt/python@3.11/libexec/bin $fish_user_paths
 or set -Ux fish_user_paths /opt/homebrew/opt/python@3.11/libexec/bin $fish_user_paths
-
-# NodeJS
-set -gx PATH node_modules/.bin $PATH
 
 # Go
 set -g GOPATH $HOME/go
@@ -163,3 +159,10 @@ end
 # bun
 set --export BUN_INSTALL "$HOME/.bun"
 set --export PATH $BUN_INSTALL/bin $PATH
+
+# Only absolute PATH entries: a relative one (bin, node_modules/.bin) is a
+# different folder in every directory, so any project could stand in for a
+# real command. Also drops ones inherited from an older shell or tmux server.
+# A project's own tools: `use project_bins` in its .envrc (direnv/direnvrc).
+set -gx PATH (string match -- '/*' $PATH)
+command -qv direnv && direnv hook fish | source
