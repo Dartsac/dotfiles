@@ -80,7 +80,9 @@ end
 
 alias ke "tmux kill-server"
 alias ks "tmux kill-session"
-alias ls "tmux list-sessions -f '#s'"
+# (not `ls`: that name is taken by the eza alias on macOS, and on Linux it
+# would turn `ls`, `la`, `ll` and `lla` into tmux commands)
+alias tls "tmux list-sessions -f '#s'"
 alias a "tmux a"
 alias d "tmux detach"
 
