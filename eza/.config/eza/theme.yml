@@ -1,0 +1,5 @@
+# File icons for eza (https://github.com/eza-community/eza-themes)
+extensions:
+  puml:
+    icon:
+      glyph: "\uf1c1"  # nf-fa-file_pdf_o
