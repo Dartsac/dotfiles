@@ -125,14 +125,19 @@ function __nvm_auto_use --on-variable PWD --description 'Run `nvm use` when ente
     end
 end
 
+# Per-OS config; only config-osx.fish exists so far, so skip missing ones
+# instead of erroring on every Linux/other start.
 switch (uname)
     case Darwin
-        source (dirname (status --current-filename))/config-osx.fish
+        set os_config config-osx.fish
     case Linux
-        source (dirname (status --current-filename))/config-linux.fish
+        set os_config config-linux.fish
     case '*'
-        source (dirname (status --current-filename))/config-windows.fish
+        set os_config config-windows.fish
 end
+set os_config (dirname (status --current-filename))/$os_config
+test -f $os_config && source $os_config
+set -e os_config
 
 set LOCAL_CONFIG (dirname (status --current-filename))/config-local.fish
 if test -f $LOCAL_CONFIG
