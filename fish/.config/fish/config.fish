@@ -117,12 +117,11 @@ set -gx GOPATH $HOME/go
 fish_add_path --path --append --move $GOPATH/bin
 
 # NVM
-function __check_rvm --on-variable PWD --description 'Do nvm stuff'
+function __nvm_auto_use --on-variable PWD --description 'Run `nvm use` when entering a directory with .nvmrc'
     status --is-command-substitution; and return
 
     if test -f .nvmrc; and test -r .nvmrc
         nvm use
-    else
     end
 end
 
