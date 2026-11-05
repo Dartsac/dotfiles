@@ -56,12 +56,6 @@ set -g theme_hostname always
 # Improve tmux integration
 set -g fish_escape_delay_ms 10
 
-# Better SSH agent handling in tmux
-if status is-interactive
-    and not set -q TMUX
-    eval (ssh-agent -c) >/dev/null
-end
-
 # Make tmux use fish by default
 set -gx SHELL (which fish)
 
