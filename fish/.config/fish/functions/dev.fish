@@ -10,7 +10,7 @@ function dev
         # Create a new session with a good name
         set session_name (basename (pwd))
         tmux new-session -s $session_name -c (pwd) -n $session_name -A\; \
-            send-keys 'nvim .' C-m \; \
+            send-keys v C-m \; \
             split-window -v -p 20 \;
     end
 end
