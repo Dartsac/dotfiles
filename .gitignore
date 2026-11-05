@@ -61,3 +61,6 @@ ghostty/.config/ghostty/themes/Dracula-Lincoln
 ghostty/.config/ghostty/themes/Dracula-Morbius
 ghostty/.config/ghostty/themes/Dracula-Pro
 ghostty/.config/ghostty/themes/Dracula-Van-Helsing
+
+# Tide prompt settings: contain Dracula Pro colors (paid theme), keep local
+fish/.config/fish/tide-theme.private.fish
