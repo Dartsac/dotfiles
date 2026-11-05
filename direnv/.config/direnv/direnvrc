@@ -1,0 +1,11 @@
+# Loaded by direnv before a project's .envrc.
+
+# Run a project's own tools by name: its bin/ and node_modules/.bin, as
+# absolute paths at the end of PATH (not direnv's PATH_add, which puts them
+# first). A real command of the same name (tmux, git, ...) always wins, and
+# nothing applies outside the project. Enable it per project, once, after
+# reading what it ships:
+#   echo 'use project_bins' > .envrc && direnv allow
+use_project_bins() {
+  export PATH="$PATH:$PWD/bin:$PWD/node_modules/.bin"
+}
