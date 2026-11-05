@@ -92,8 +92,11 @@ bind \cf "tmux-sessionizer.sh"
 
 set -gx EDITOR nvim
 
-set -gx PATH ~/bin $PATH
-set -gx PATH ~/.local/bin $PATH
+# fish_add_path skips entries already present, so nested shells (tmux, Neovim)
+# don't stack duplicates. --path edits $PATH only, never the universal
+# fish_user_paths.
+fish_add_path --path ~/bin
+fish_add_path --path ~/.local/bin
 
 # homebrew (exported per shell: a universal variable is rewritten to disk on
 # every start)
@@ -106,7 +109,10 @@ or set -Ux fish_user_paths /opt/homebrew/opt/python@3.11/libexec/bin $fish_user_
 
 # Go
 set -g GOPATH $HOME/go
-set -gx PATH $GOPATH/bin $PATH
+# Appended (after /usr/bin, Homebrew): anything `go install` drops here can't
+# stand in for a system command. --move also re-orders shells that inherited
+# the old order (open tmux panes).
+fish_add_path --path --append --move $GOPATH/bin
 
 # NVM
 function __check_rvm --on-variable PWD --description 'Do nvm stuff'
@@ -139,7 +145,7 @@ end
 
 # bun
 set --export BUN_INSTALL "$HOME/.bun"
-set --export PATH $BUN_INSTALL/bin $PATH
+fish_add_path --path --append --move $BUN_INSTALL/bin  # same reason as Go
 
 # Only absolute PATH entries: a relative one (bin, node_modules/.bin) is a
 # different folder in every directory, so any project could stand in for a
