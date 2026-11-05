@@ -190,3 +190,13 @@ fish_add_path --path --append --move $BUN_INSTALL/bin  # same reason as Go
 # A project's own tools: `use project_bins` in its .envrc (direnv/direnvrc).
 set -gx PATH (string match -- '/*' $PATH)
 command -qv direnv && direnv hook fish | source
+
+# zoxide: `z <name>` jumps to a frequently used folder, `zi` picks one with fzf.
+# (Replaces the jethrokuan/z plugin; its history was imported on 2026-11-05.)
+if status is-interactive; and command -qv zoxide
+    zoxide init fish | source
+    # `zo <name>`: open the matching folder in Finder (z's old `zo` command)
+    function zo --description 'Open a zoxide match in Finder'
+        set -l dir (zoxide query -- $argv); and open $dir
+    end
+end
