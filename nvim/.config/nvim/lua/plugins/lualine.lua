@@ -31,7 +31,13 @@ return {
 					theme = "auto", -- Allows mode-specific background color
 					section_separators = { left = "", right = "" },
 					component_separators = { left = "", right = "" },
-					disabled_filetypes = { "dashboard", "NvimTree", "Outline" },
+					disabled_filetypes = {
+						"dashboard",
+						"snacks_picker_list",
+						"snacks_picker_input",
+						"snacks_layout_box",
+						"Outline",
+					},
 					always_divide_middle = true,
 				},
 				sections = {

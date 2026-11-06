@@ -8,7 +8,13 @@ return {
 				illuminate.configure({
 					providers = { "lsp", "treesitter", "regex" },
 					delay = 200,
-					filetypes_denylist = { "NvimTree", "harpoon", "TelescopePrompt", "TelescopeResults" },
+					filetypes_denylist = {
+						"snacks_picker_list",
+						"snacks_picker_input",
+						"harpoon",
+						"TelescopePrompt",
+						"TelescopeResults",
+					},
 					filetypes_allowlist = {},
 					modes_denylist = { "v", "V", "nov", "noV", "CTRL-V", "noCTRL-V" },
 					modes_allowlist = {},

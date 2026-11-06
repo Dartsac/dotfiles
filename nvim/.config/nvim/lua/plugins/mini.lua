@@ -5,12 +5,24 @@ return {
 	config = function()
 		local icons = require("mini.icons")
 
-		icons.setup({
+		local config = {
 			style = "glyph",
+			-- Every folder icon takes the explorer's muted structure colour
+			-- (lua/config/explorer.lua), as in nvim-tree: special folders such
+			-- as .git or docs keep their own glyph, not a colour of their own.
+			default = { directory = { hl = "SnacksPickerDirectoryIcon" } },
+			directory = {},
 			extension = {
 				puml = { glyph = "", hl = "MiniIconsBlue", name = "PlantUML" },
 			},
-		})
+		}
+		icons.setup(config)
+		-- Built-in folder names are only listable after setup; override their
+		-- colour (mini.icons keeps the built-in glyph when only `hl` is given).
+		for _, name in ipairs(icons.list("directory")) do
+			config.directory[name] = { hl = "SnacksPickerDirectoryIcon" }
+		end
+		icons.setup(config)
 
 		icons.mock_nvim_web_devicons()
 
