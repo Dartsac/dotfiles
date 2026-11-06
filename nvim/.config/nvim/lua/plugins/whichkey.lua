@@ -83,7 +83,6 @@ return {
 					desc = "Buffers",
 					mode = "n",
 				},
-				{ "<leader>e", "<cmd>NvimTreeToggle<cr>", desc = "Explorer", mode = "n" },
 				{ "<leader>n", "<cmd>nohlsearch<CR>", desc = "No Highlight", mode = "n" },
 				{ "<leader>q", "<cmd>confirm q<CR>", desc = "Quit", mode = "n" },
 				{ "<leader>w", "<cmd>w<CR>", desc = "Save", mode = "n" },
