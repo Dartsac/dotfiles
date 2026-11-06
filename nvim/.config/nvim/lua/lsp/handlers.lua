@@ -37,39 +37,10 @@ vim.diagnostic.config({
 })
 
 -------------------------------------------------------------------------------
--- Formatting
--- null-ls is the preferred formatter. When it has no formatter for the buffer,
--- fall back to any LSP client that can format. Used by both format-on-save and
--- <leader>lf so the two always agree.
+-- Formatting: policy and routing live in lua/lsp/formatting.lua so that
+-- format-on-save, <leader>lf and the tooling report always agree.
 -------------------------------------------------------------------------------
-local function null_ls_formats(bufnr)
-	for _, client in ipairs(vim.lsp.get_clients({ bufnr = bufnr, name = "null-ls" })) do
-		if client:supports_method("textDocument/formatting", bufnr) then
-			return true
-		end
-	end
-	return false
-end
-
----@param opts? { bufnr?: integer, async?: boolean }
-function M.format(opts)
-	opts = opts or {}
-	local bufnr = opts.bufnr or vim.api.nvim_get_current_buf()
-	if #vim.lsp.get_clients({ bufnr = bufnr, method = "textDocument/formatting" }) == 0 then
-		return
-	end
-	local prefer_null = null_ls_formats(bufnr)
-	vim.lsp.buf.format({
-		bufnr = bufnr,
-		async = opts.async,
-		filter = function(client)
-			if prefer_null then
-				return client.name == "null-ls"
-			end
-			return true
-		end,
-	})
-end
+M.format = require("lsp.formatting").format
 
 local group = vim.api.nvim_create_augroup("_lsp", { clear = true })
 

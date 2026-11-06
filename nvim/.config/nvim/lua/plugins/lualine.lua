@@ -121,6 +121,19 @@ return {
 							end,
 						},
 						{
+							-- Attached language clients and the formatting route for this
+							-- buffer (lua/config/tooling.lua). Truncated in narrow windows,
+							-- hidden below 70 columns; <leader>li has the full report.
+							function()
+								local tooling = require("config.tooling")
+								return tooling.summary(0, tooling.summary_width(vim.api.nvim_win_get_width(0)))
+							end,
+							cond = function()
+								return require("config.tooling").summary_width(vim.api.nvim_win_get_width(0)) > 0
+							end,
+							color = { fg = "#F8F8F2" },
+						},
+						{
 							"filetype",
 							colored = true,
 							color = { fg = "#F8F8F2" },
