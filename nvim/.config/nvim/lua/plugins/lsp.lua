@@ -6,6 +6,7 @@ local servers = {
 	"bashls",
 	"cssls",
 	"eslint",
+	"harper_ls",
 	"html",
 	"jsonls",
 	"lua_ls",

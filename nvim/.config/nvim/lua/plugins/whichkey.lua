@@ -205,6 +205,9 @@ return {
 					mode = "n",
 				},
 
+				-- Markdown Group (buffer-local keys: lua/config/markdown.lua)
+				{ "<leader>d", group = "Markdown" },
+
 				-- Search Group
 				{ "<leader>s", group = "Search" },
 				{

@@ -54,8 +54,13 @@ vim.api.nvim_create_autocmd("FileType", {
 vim.api.nvim_create_autocmd("FileType", {
 	group = markdown_settings,
 	pattern = "markdown",
-	command = "setlocal spell",
-	desc = "Enable spell checking for markdown",
+	desc = "Markdown spelling: Harper when installed, otherwise native spell",
+	callback = function()
+		-- Harper (harper_ls) reports Markdown spelling; native underlines on top
+		-- would duplicate it. Without harper-ls, keep native spell checking.
+		-- z= suggestions work either way.
+		vim.opt_local.spell = vim.fn.executable("harper-ls") == 0
+	end,
 })
 
 -- Auto resize windows
