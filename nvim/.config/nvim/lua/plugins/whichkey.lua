@@ -174,6 +174,27 @@ return {
 					mode = "n",
 				},
 
+				-- Quickfix Group (]q/[q, ]Q/[Q are Neovim's own next/prev/last/first)
+				{ "<leader>c", group = "Quickfix" },
+				{ "<leader>co", "<cmd>copen<cr>", desc = "Open Quickfix", mode = "n" },
+				{ "<leader>cc", "<cmd>cclose<cr>", desc = "Close Quickfix (keeps list)", mode = "n" },
+				{
+					"<leader>cp",
+					function()
+						require("config.quickfix").history("older")
+					end,
+					desc = "Older Quickfix List",
+					mode = "n",
+				},
+				{
+					"<leader>cn",
+					function()
+						require("config.quickfix").history("newer")
+					end,
+					desc = "Newer Quickfix List",
+					mode = "n",
+				},
+
 				-- Search Group
 				{ "<leader>s", group = "Search" },
 				{
@@ -222,6 +243,14 @@ return {
 					"<leader>sr",
 					"<cmd>Telescope oldfiles<cr>",
 					desc = "Open Recent File",
+					mode = "n",
+				},
+				{
+					"<leader>sl",
+					function()
+						require("telescope.builtin").resume()
+					end,
+					desc = "Resume Last Picker",
 					mode = "n",
 				},
 

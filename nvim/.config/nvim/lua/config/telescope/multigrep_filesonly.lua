@@ -1,76 +1,31 @@
 -- lua/config/telescope/multigrep_filesonly.lua
+-- File shortlist: files containing every `&&` term. See config/telescope/compound.lua.
 local conf = require("telescope.config").values
 local finders = require("telescope.finders")
 local pickers = require("telescope.pickers")
+local compound = require("config.telescope.compound")
 
 return function(opts)
 	opts = opts or {}
 	opts.cwd = opts.cwd and vim.fn.expand(opts.cwd) or vim.uv.cwd()
-	opts.shortcuts = opts.shortcuts
-		or {
-			["l"] = "*.lua",
-			["v"] = "*.vim",
-			["n"] = "*.{vim,lua}",
-			["c"] = "*.c",
-			["r"] = "*.rs",
-			["g"] = "*.go",
-		}
+	opts.shortcuts = opts.shortcuts or compound.shortcuts
 	opts.pattern = opts.pattern or "%s"
 
 	local custom_grep = finders.new_async_job({
-		command_generator = function(prompt)
-			if not prompt or prompt == "" then
-				return nil
-			end
+		command_generator = compound.generator("files", opts),
 
-			local prompt_split = vim.split(prompt, "  ")
-
-			local args = { "rg", "-l" }
-
-			if prompt_split[1] then
-				local and_terms = vim.split(prompt_split[1], " && ", { plain = true })
-
-				if #and_terms > 1 then
-					local lookaheads = {}
-					for _, term in ipairs(and_terms) do
-						table.insert(lookaheads, "(?=.*" .. vim.trim(term) .. ")")
-					end
-
-					table.insert(args, "-P")
-					table.insert(args, "-U")
-					table.insert(args, "-e")
-					table.insert(args, "(?s)" .. table.concat(lookaheads))
-				else
-					table.insert(args, "-e")
-					table.insert(args, prompt_split[1])
-				end
-			end
-
-			if prompt_split[2] then
-				table.insert(args, "-g")
-				local pattern
-				if opts.shortcuts[prompt_split[2]] then
-					pattern = opts.shortcuts[prompt_split[2]]
-				else
-					pattern = prompt_split[2]
-				end
-				table.insert(args, string.format(opts.pattern, pattern))
-			end
-
-			return vim.iter({
-				args,
-				{ "--color=auto", "--no-heading", "--smart-case" },
-			})
-				:flatten()
-				:totable()
-		end,
-
+		-- ripgrep prints names relative to the search directory. The entry keeps
+		-- the absolute path, so opening or exporting a result still names this
+		-- project's file after the working directory changes (e.g. <leader>sl
+		-- resuming the cached picker from another project).
 		entry_maker = function(line)
+			local path = line:sub(1, 1) == "/" and line or vim.fs.joinpath(opts.cwd, line)
 			return {
 				value = line,
 				display = line,
 				ordinal = line,
-				path = line,
+				path = vim.fs.normalize(path),
+				cwd = opts.cwd,
 			}
 		end,
 

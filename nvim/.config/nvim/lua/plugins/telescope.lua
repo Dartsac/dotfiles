@@ -73,6 +73,13 @@ return {
 			end,
 			desc = "Multi grep (files only)",
 		},
+		{
+			"<leader>mg",
+			function()
+				require("config.telescope.multigrep")()
+			end,
+			desc = "Multi grep (locations)",
+		},
 	},
 	dependencies = {
 		{ "nvim-lua/plenary.nvim" },
@@ -89,6 +96,9 @@ return {
 		telescope.setup({
 			defaults = {
 				file_ignore_patterns = { "node_modules" },
+				-- <leader>sl resumes the most recent picker. Keep the cache bounded
+				-- (Telescope's defaults, stated explicitly): one picker, 1000 entries.
+				cache_picker = { num_pickers = 1, limit_entries = 1000 },
 				selection_strategy = "reset",
 				sorting_strategy = "ascending",
 				layout_config = {
