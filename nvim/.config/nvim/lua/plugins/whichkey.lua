@@ -123,8 +123,10 @@ return {
 				},
 				{
 					"<leader>li",
-					"<cmd>LspInfo<cr>",
-					desc = "Info",
+					function()
+						require("config.tooling").show_report()
+					end,
+					desc = "Info (clients, formatter route)",
 					mode = "n",
 				},
 				{
