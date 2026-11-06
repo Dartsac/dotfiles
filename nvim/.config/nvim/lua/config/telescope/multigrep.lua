@@ -1,71 +1,19 @@
 -- lua/config/telescope/multigrep.lua
+-- Location results: `primary && filter ...  glob`. See config/telescope/compound.lua.
 local conf = require("telescope.config").values
 local finders = require("telescope.finders")
 local make_entry = require("telescope.make_entry")
 local pickers = require("telescope.pickers")
+local compound = require("config.telescope.compound")
 
 return function(opts)
 	opts = opts or {}
 	opts.cwd = opts.cwd and vim.fn.expand(opts.cwd) or vim.uv.cwd()
-	opts.shortcuts = opts.shortcuts
-		or {
-			["l"] = "*.lua",
-			["v"] = "*.vim",
-			["n"] = "*.{vim,lua}",
-			["c"] = "*.c",
-			["r"] = "*.rs",
-			["g"] = "*.go",
-		}
+	opts.shortcuts = opts.shortcuts or compound.shortcuts
 	opts.pattern = opts.pattern or "%s"
 
 	local custom_grep = finders.new_async_job({
-		command_generator = function(prompt)
-			if not prompt or prompt == "" then
-				return nil
-			end
-
-			local prompt_split = vim.split(prompt, "  ")
-
-			local args = { "rg" }
-			if prompt_split[1] then
-				local and_terms = vim.split(prompt_split[1], " && ", { plain = true })
-
-				if #and_terms > 1 then
-					local lookaheads = {}
-					for _, term in ipairs(and_terms) do
-						table.insert(lookaheads, "(?=.*" .. vim.trim(term) .. ")")
-					end
-
-					table.insert(args, "-P")
-					table.insert(args, "-U")
-					table.insert(args, "-e")
-					table.insert(args, "(?s)" .. table.concat(lookaheads))
-				else
-					table.insert(args, "-e")
-					table.insert(args, prompt_split[1])
-				end
-			end
-
-			if prompt_split[2] then
-				table.insert(args, "-g")
-
-				local pattern
-				if opts.shortcuts[prompt_split[2]] then
-					pattern = opts.shortcuts[prompt_split[2]]
-				else
-					pattern = prompt_split[2]
-				end
-
-				table.insert(args, string.format(opts.pattern, pattern))
-			end
-
-			return vim.iter({
-				args,
-				{ "--color=never", "--no-heading", "--with-filename", "--line-number", "--column", "--smart-case" },
-			})
-				:flatten()
-				:totable()
-		end,
+		command_generator = compound.generator("lines", opts),
 		entry_maker = make_entry.gen_from_vimgrep(opts),
 		cwd = opts.cwd,
 	})
@@ -73,7 +21,7 @@ return function(opts)
 	pickers
 		.new(opts, {
 			debounce = 100,
-			prompt_title = "Multi Grep",
+			prompt_title = "Multi Grep (primary && filters  glob)",
 			finder = custom_grep,
 			previewer = conf.grep_previewer(opts),
 			sorter = require("telescope.sorters").empty(),
