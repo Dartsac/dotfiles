@@ -36,4 +36,7 @@ require("lazy").setup({
 		enabled = true,
 		-- path = vim.fn.stdpath("cache") .. "/lazy/cache",
 	},
+	-- Normally lazy-lock.json beside this config. $NVIM_LAZY_LOCKFILE points it
+	-- at a copy, so a throwaway (test) session can never rewrite the real one.
+	lockfile = vim.env.NVIM_LAZY_LOCKFILE,
 })
