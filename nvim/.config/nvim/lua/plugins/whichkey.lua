@@ -104,7 +104,7 @@ return {
 				{
 					"<leader>la",
 					"<cmd>lua vim.lsp.buf.code_action()<cr>",
-					desc = "Code Action",
+					desc = "Code Action (fixes the server offers)",
 					mode = "n",
 				},
 				{
@@ -171,6 +171,14 @@ return {
 					"<leader>lw",
 					"<cmd>Telescope diagnostics<cr>",
 					desc = "Workspace Diagnostics",
+					mode = "n",
+				},
+				{
+					"<leader>ly",
+					function()
+						require("config.diagnostics").copy()
+					end,
+					desc = "Copy Diagnostic (location, source, code)",
 					mode = "n",
 				},
 

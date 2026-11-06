@@ -12,7 +12,19 @@ vim.diagnostic.config({
 	virtual_text = true,
 	update_in_insert = false,
 	severity_sort = true,
-	float = { style = "minimal", border = "rounded", source = "if_many" },
+	-- Provenance in the float: always the source (tool), plus the rule/error code
+	-- when the server supplies one. gl shows this; <leader>ly copies it.
+	float = {
+		style = "minimal",
+		border = "rounded",
+		source = true,
+		suffix = function(diagnostic)
+			if diagnostic.code == nil or diagnostic.code == "" then
+				return ""
+			end
+			return string.format(" [%s]", diagnostic.code), "Comment"
+		end,
+	},
 	signs = {
 		text = {
 			[s.ERROR] = icons.diagnostics.BoldError,
@@ -84,7 +96,7 @@ local function lsp_keymaps(bufnr)
 		{ "gI", vim.lsp.buf.implementation, buffer = bufnr, desc = "Go to Implementation" },
 		{ "gd", vim.lsp.buf.definition, buffer = bufnr, desc = "Go to Definition" },
 		{ "gr", vim.lsp.buf.references, buffer = bufnr, desc = "Find References" },
-		{ "gl", vim.diagnostic.open_float, buffer = bufnr, desc = "Open Diagnostics" },
+		{ "gl", vim.diagnostic.open_float, buffer = bufnr, desc = "Show Diagnostics (source, code)" },
 	})
 end
 
