@@ -5,6 +5,28 @@
             "complex_modifications": {
                 "rules": [
                     {
+                        "description": "Disable Command+M except in Ghostty (Pi model picker)",
+                        "manipulators": [
+                            {
+                                "from": {
+                                    "key_code": "m",
+                                    "modifiers": {
+                                        "mandatory": ["command"],
+                                        "optional": ["caps_lock"]
+                                    }
+                                },
+                                "to": [{ "key_code": "vk_none" }],
+                                "type": "basic",
+                                "conditions": [
+                                    {
+                                        "type": "frontmost_application_unless",
+                                        "bundle_identifiers": ["^com\\.mitchellh\\.ghostty$"]
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
                         "description": "Add Ctrl+Backward-Delete to Option+Delete (delete current word).",
                         "manipulators": [
                             {
