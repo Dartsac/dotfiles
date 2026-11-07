@@ -20,7 +20,7 @@ vim.diagnostic.config({
 		source = true,
 		suffix = function(diagnostic)
 			if diagnostic.code == nil or diagnostic.code == "" then
-				return ""
+				return "", "NormalFloat" -- (Neovim's default suffix highlight)
 			end
 			return string.format(" [%s]", diagnostic.code), "Comment"
 		end,
