@@ -60,6 +60,8 @@ ghostty/.config/ghostty/themes/Dracula-Lincoln
 ghostty/.config/ghostty/themes/Dracula-Morbius
 ghostty/.config/ghostty/themes/Dracula-Pro
 ghostty/.config/ghostty/themes/Dracula-Van-Helsing
+# Karabiner rewrites these timestamped copies on its own; keep the real karabiner.json
+/karabiner/.config/karabiner/automatic_backups/
 
 # Tide prompt settings: contain Dracula Pro colors (paid theme), keep local
 fish/.config/fish/tide-theme.private.fish
