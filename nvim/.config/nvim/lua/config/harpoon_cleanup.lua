@@ -47,7 +47,7 @@ local function harpoon()
 end
 
 --- Every list for the current project key, including lists only in the data file.
----@return string|nil key, table[] lists
+---@return string key, table[] lists
 local function current_lists(h)
 	local key = h.config.settings.key()
 	local default = require("harpoon.config").DEFAULT_LIST

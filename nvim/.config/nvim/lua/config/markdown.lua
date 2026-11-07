@@ -358,17 +358,15 @@ end
 -------------------------------------------------------------------------------
 
 ---@class MarkdownLink
----@field kind "markdown"|"wiki"|"url"
----@field target string
----@field anchor string|nil
+---@field kind "markdown"|"wiki"|"url"|"reference"
+---@field target? string
+---@field anchor? string
+---@field label? string reference label (kind "reference")
 
---- The link under the cursor column (0-based), if any.
----@param line string
----@param col integer
----@return MarkdownLink|nil
 --- Classify a link destination: a URL (any scheme) or a local path with an
 --- optional #anchor. Strips a "title" and <angle brackets>.
 ---@param raw string
+---@return MarkdownLink
 function M.classify_target(raw)
 	local target = vim.trim(raw)
 	target = target:match("^<([^>]*)>") or target:gsub('%s+["\'(].*$', "")
@@ -439,6 +437,10 @@ function M.resolve_reference(lines, label, in_code)
 	return nil
 end
 
+--- The link under the cursor column (0-based), if any.
+---@param line string
+---@param col integer
+---@return MarkdownLink|nil
 function M.link_at(line, col)
 	local pos = col + 1
 	local function covers(s, e)
@@ -656,7 +658,9 @@ end
 
 ---@param bufnr? integer
 function M.attach(bufnr)
-	bufnr = (bufnr == nil or bufnr == 0) and vim.api.nvim_get_current_buf() or bufnr
+	if bufnr == nil or bufnr == 0 then
+		bufnr = vim.api.nvim_get_current_buf()
+	end
 	if vim.b[bufnr].markdown_attached then
 		return
 	end
