@@ -67,6 +67,9 @@ keybind = super+c=copy_to_clipboard
 keybind = super+v=paste_from_clipboard
 keybind = super+t=new_tab
 keybind = super+w=close_surface
+# Command+M opens Pi's model picker; encode an unused chord for tmux.
+# This replaces Ghostty's Minimize action
+keybind = super+m=text:\x1b[109;8u
 
 # Switch between the transparent background above and a solid one
 keybind = super+shift+o=toggle_background_opacity
