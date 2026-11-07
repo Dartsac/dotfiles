@@ -173,6 +173,9 @@ local function pushLevel(v)
 end
 
 local function setStatusColor(color)
+	if not hud then
+		return
+	end
 	hud[dotIdx].fillColor = color
 	for _, i in ipairs(textIdx) do
 		hud[i].fillColor = color

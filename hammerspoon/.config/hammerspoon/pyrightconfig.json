@@ -1,0 +1,6 @@
+{
+  // ~/.dictation-venv holds sounddevice and websockets. Pyright doesn't expand ~ or
+  // env vars here, so venvPath climbs from this repo dir to $HOME.
+  "venvPath": "../../../..",
+  "venv": ".dictation-venv"
+}
