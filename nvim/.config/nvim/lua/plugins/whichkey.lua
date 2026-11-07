@@ -79,7 +79,18 @@ return {
 				-- General mappings
 				{
 					"<leader>b",
-					"<cmd>lua require('telescope.builtin').buffers(require('telescope.themes').get_dropdown{previewer = false})<cr>",
+					function()
+						local actions = require("telescope.actions")
+						require("telescope.builtin").buffers(require("telescope.themes").get_dropdown({
+							previewer = false,
+							-- Close the highlighted buffer: Ctrl-d in insert mode, dd in normal mode
+							attach_mappings = function(_, map)
+								map("i", "<C-d>", actions.delete_buffer)
+								map("n", "dd", actions.delete_buffer)
+								return true
+							end,
+						}))
+					end,
 					desc = "Buffers",
 					mode = "n",
 				},
