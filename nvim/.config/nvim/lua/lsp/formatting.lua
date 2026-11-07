@@ -12,10 +12,12 @@ local M = {}
 
 local METHOD = "textDocument/formatting"
 
---- How long a synchronous format (format-on-save) waits for the formatter
---- before the file is written unformatted. A ceiling, not a delay: a running
---- formatter answers in well under 100 ms. Neovim's default (1000 ms) was
---- missed by prettierd's first answer after its daemon starts on a busy
+--- How long a synchronous format (format-on-save) waits for each formatting
+--- client before that client's edits are skipped. A ceiling, not a delay: a
+--- running formatter answers in well under 100 ms. It applies per client, so
+--- the fallback route with several formatting servers could wait up to this
+--- long for each; the null-ls route is one client. Neovim's default (1000 ms)
+--- was missed by prettierd's first answer after its daemon starts on a busy
 --- machine. Ignored by async formats (<leader>lf).
 M.TIMEOUT_MS = 3000
 
