@@ -653,6 +653,10 @@ function M.detach(bufnr)
 	if vim.b[bufnr].table_mode_active == 1 then
 		set_table_mode(bufnr, false)
 	end
+	if vim.b[bufnr].markdown_vault_save_off then
+		vim.b[bufnr].disable_format_on_save = nil
+		vim.b[bufnr].markdown_vault_save_off = nil
+	end
 	vim.b[bufnr].markdown_attached = nil
 end
 
@@ -711,6 +715,14 @@ function M.attach(bufnr)
 
 	if require("config.vault").contains(vim.api.nvim_buf_get_name(bufnr)) then
 		map(bufnr, "n", "<leader>db", "<cmd>Obsidian backlinks<cr>", "Backlinks (vault)")
+		-- Vault notes are also edited in Obsidian, which never reformats them;
+		-- Prettier on save would rewrite whole notes (list markers, blank lines,
+		-- tables). No format-on-save here: <leader>lf formats when asked. An
+		-- explicit b:disable_format_on_save set before this is left alone.
+		if vim.b[bufnr].disable_format_on_save == nil then
+			vim.b[bufnr].disable_format_on_save = true
+			vim.b[bufnr].markdown_vault_save_off = true
+		end
 	end
 
 	local ok, wk = pcall(require, "which-key")
