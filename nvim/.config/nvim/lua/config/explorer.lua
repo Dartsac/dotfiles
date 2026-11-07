@@ -34,9 +34,10 @@ function M.source()
 		win = {
 			list = {
 				keys = {
-					-- V/H keep their tmux split meaning; hidden files toggle on <a-h>.
-					["V"] = { "tmux_vertical", desc = "Vertical split in tmux" },
-					["H"] = { "tmux_horizontal", desc = "Horizontal split in tmux" },
+					-- | and _ open tmux splits, as in tmux itself; H and <a-h> (Snacks'
+					-- defaults) toggle hidden files.
+					["|"] = { "tmux_vertical", desc = "Vertical split in tmux" },
+					["_"] = { "tmux_horizontal", desc = "Horizontal split in tmux" },
 					-- Leave Ctrl-j/k to window/tmux pane navigation, as in every other window.
 					["<c-j>"] = false,
 					["<c-k>"] = false,
