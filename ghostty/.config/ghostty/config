@@ -68,6 +68,9 @@ keybind = super+v=paste_from_clipboard
 keybind = super+t=new_tab
 keybind = super+w=close_surface
 
+# Switch between the transparent background above and a solid one
+keybind = super+shift+o=toggle_background_opacity
+
 
 # Font size adjustment
 keybind = super+equal=increase_font_size:1
