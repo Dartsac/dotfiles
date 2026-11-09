@@ -7,6 +7,7 @@ vim.g.loaded_matchparen = 1
 
 require("config.options")
 require("config.autocommands")
+require("config.colorscheme").setup() -- before plugins, so they see its highlights
 require("config.lazy")
 require("config.attach")
 require("config.keymaps")

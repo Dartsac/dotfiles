@@ -1,5 +1,7 @@
 return {
 	"jmbuhr/otter.nvim",
+	-- Loaded before FileType for Markdown files: see plugins/markdown.lua.
+	event = { "BufReadPre *.md,*.markdown", "BufNewFile *.md,*.markdown" },
 	ft = "markdown",
 	dependencies = { "nvim-treesitter/nvim-treesitter" },
 	opts = {

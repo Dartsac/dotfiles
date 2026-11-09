@@ -5,9 +5,18 @@
 -- configured with the other language servers.
 local vault = require("config.vault")
 
+-- Markdown plugins load as a Markdown file is read, before its FileType. Loaded
+-- by `ft` alone, lazy.nvim replays FileType for the buffer, so the ftplugins
+-- run twice and Neovim's undo_ftplugin stops treesitter, which reloads the
+-- regex syntax files (markdown, html, css…) only to start treesitter again.
+-- `ft` stays as the fallback for buffers with no Markdown file name. The same
+-- list is in otter.lua and markdown-preview.lua.
+local markdown_open = { "BufReadPre *.md,*.markdown", "BufNewFile *.md,*.markdown" }
+
 return {
 	{
 		"MeanderingProgrammer/render-markdown.nvim",
+		event = markdown_open,
 		ft = "markdown",
 		dependencies = { "nvim-treesitter/nvim-treesitter", "echasnovski/mini.nvim" },
 		opts = {
@@ -22,12 +31,23 @@ return {
 			latex = { enabled = false },
 			completions = { lsp = { enabled = false } },
 		},
+		config = function(_, opts)
+			-- With no completion integration enabled, render-markdown registers an
+			-- nvim-cmp source on attach; its pcall(require, "cmp") makes lazy.nvim
+			-- load nvim-cmp, LuaSnip and every snippet (~40 ms) as the first
+			-- Markdown file opens. That source is not in cmp's sources
+			-- (plugins/cmp.lua), so it would never be asked: skip registering it
+			-- and leave cmp to load on InsertEnter.
+			package.loaded["render-markdown.integ.cmp"] = { init = function() end }
+			require("render-markdown").setup(opts)
+		end,
 	},
 
 	{
 		-- List continuation and nesting. Mappings are made by config.markdown
 		-- (so they can be switched off per buffer and skip code fences).
 		"bullets-vim/bullets.vim",
+		event = markdown_open,
 		ft = "markdown",
 		init = function()
 			vim.g.bullets_enabled_file_types = { "markdown" }
@@ -52,6 +72,7 @@ return {
 		-- Automatic table alignment and cell helpers. Its own mappings are off;
 		-- config.markdown maps the helpers under <leader>dt per buffer.
 		"dhruvasagar/vim-table-mode",
+		event = markdown_open,
 		ft = "markdown",
 		cmd = { "TableModeEnable", "TableModeDisable", "TableModeToggle", "TableModeRealign", "Tableize" },
 		init = function()

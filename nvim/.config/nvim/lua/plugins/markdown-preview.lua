@@ -6,6 +6,8 @@ return {
 		init = function()
 			vim.g.mkdp_filetypes = { "markdown" }
 		end,
+		-- Loaded before FileType for Markdown files: see plugins/markdown.lua.
+		event = { "BufReadPre *.md,*.markdown", "BufNewFile *.md,*.markdown" },
 		ft = { "markdown" },
 	},
 }

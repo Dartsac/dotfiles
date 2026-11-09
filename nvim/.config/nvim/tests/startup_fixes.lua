@@ -216,10 +216,9 @@ test("quickfix and undo-stage mappings call the correct APIs", function()
 	package.loaded["which-key.plugins.spelling"] = nil
 end)
 
--- Use the installed Colorbuddy and bundled themes for a real highlight smoke test.
-vim.opt.runtimepath:append(vim.fn.stdpath("data") .. "/lazy/colorbuddy.nvim")
+-- Use the bundled themes for a real highlight smoke test.
 local readfile = vim.fn.readfile
-local theme_spec = dofile("lua/plugins/colorscheme.lua")
+local colorscheme = require("config.colorscheme")
 -- Ghostty uses the last `theme =` line: so must Neovim, to match it and tmux.
 local configs = {
 	unknown = { "theme = Unknown" },
@@ -237,10 +236,18 @@ for _, scenario in ipairs({ "missing", "unknown", "known", "last" }) do
 			end
 			return readfile(path, ...)
 		end
-		theme_spec.config()
+		colorscheme.setup()
 		local blade = scenario == "known" or scenario == "last"
 		assert(vim.g.colors_name == (blade and "dracula_pro_blade" or "dracula_pro"))
-		assert(vim.g["dracula_pro#palette"].fg)
+		local palette = vim.g["dracula_pro#palette"]
+		assert(palette.fg)
+		-- The overrides are applied on top of the theme, from its palette.
+		local red = tonumber(palette.red[1]:sub(2), 16)
+		local virt = vim.api.nvim_get_hl(0, { name = "DiagnosticVirtualTextError" })
+		assert(virt.bg == red and virt.bold, vim.inspect(virt))
+		assert(vim.tbl_isempty(vim.api.nvim_get_hl(0, { name = "Normal" })))
+		local visual = vim.api.nvim_get_hl(0, { name = "Visual" })
+		assert(visual.reverse and visual.bold, vim.inspect(visual))
 	end)
 end
 vim.fn.readfile = readfile
