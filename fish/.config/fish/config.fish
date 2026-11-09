@@ -95,14 +95,58 @@ set -gx SHELL (command -s fish)
 # Use the default key bindings
 set -g fish_key_bindings fish_default_key_bindings
 
-# TMUX (`dev` lives in functions/dev.fish)
-alias ke "tmux kill-server"
-alias ks "tmux kill-session"
+# Multiplexer shortcuts act on the multiplexer that applies here (functions/
+# multiplexer.fish): the pane's own, else the Default multiplexer. A herdr
+# session corresponds to a tmux session per project, so ks closes the
+# workspace. `dev` lives in functions/dev.fish.
+function ke --description 'stop the multiplexer server and every pane in it'
+    switch (multiplexer)
+        case herdr
+            herdr server stop
+        case tmux
+            tmux kill-server
+    end
+end
+function ks --description 'close the current session (herdr: workspace)'
+    switch (multiplexer)
+        case herdr
+            if not set -q HERDR_WORKSPACE_ID
+                echo "ks: run inside a herdr pane" >&2
+                return 1
+            end
+            herdr workspace close $HERDR_WORKSPACE_ID >/dev/null
+        case tmux
+            tmux kill-session
+    end
+end
 # (not `ls`: that name is taken by the eza alias on macOS, and on Linux it
 # would turn `ls`, `la`, `ll` and `lla` into tmux commands)
-alias tls "tmux list-sessions -f '#s'"
-alias a "tmux a"
-alias d "tmux detach"
+function tls --description 'list sessions (herdr: workspaces)'
+    switch (multiplexer)
+        case herdr
+            herdr workspace list | jq -r '.result.workspaces[].label'
+        case tmux
+            tmux list-sessions -f '#s'
+    end
+end
+function a --description 'attach to the multiplexer'
+    switch (multiplexer)
+        case herdr
+            herdr
+        case tmux
+            tmux a
+    end
+end
+function d --description 'detach from the multiplexer'
+    switch (multiplexer)
+        case herdr
+            # herdr has no detach command; only its client can detach.
+            echo "d: detach from herdr with Ctrl-t d" >&2
+            return 1
+        case tmux
+            tmux detach
+    end
+end
 
 # aliases
 alias la "ls -A"
@@ -121,7 +165,7 @@ end
 
 command -qv nvim && alias vim nvim
 
-bind \cf "tmux-sessionizer.sh"
+bind \cf sessionizer
 
 set -gx EDITOR nvim
 

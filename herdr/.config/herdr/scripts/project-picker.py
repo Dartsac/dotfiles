@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Herdr popup counterpart to ~/.local/bin/tmux-sessionizer.sh.
+"""herdr counterpart to ~/.local/bin/tmux-sessionizer.sh.
 
-Run from Herdr with Ctrl-t Ctrl-f. --list only prints candidate directories.
-An optional directory argument skips fzf. No tmux commands are used.
+Inside herdr (Ctrl-t Ctrl-f, or plain Ctrl-f in fish) it opens or focuses the
+chosen project's workspace in the current session. Outside herdr it refuses
+unless --default-session or --attach names the default session explicitly.
+--list only prints candidate directories. An optional directory skips fzf.
 """
 
 import argparse
@@ -12,6 +14,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 
 
 def subdirectories(path):
@@ -58,6 +61,8 @@ def choose_project(candidates):
 
 def herdr(binary, *args):
     result = subprocess.run([binary, *args], check=True, capture_output=True, text=True)
+    if not result.stdout.strip():
+        return None  # e.g. `workspace report-metadata` prints nothing on success.
     response = json.loads(result.stdout)
     if "error" in response:
         raise RuntimeError(str(response["error"]))
@@ -69,6 +74,10 @@ def same_directory(value, path):
 
 
 def open_project(selected, binary):
+    """Focus the project's workspace, creating it if needed.
+
+    Returns the new workspace's root pane id, or None for an existing one.
+    """
     path = Path(selected).expanduser().resolve(strict=True)
     if not path.is_dir():
         raise RuntimeError(f"Not a directory: {path}")
@@ -87,6 +96,7 @@ def open_project(selected, binary):
                       if pane["workspace_id"] in untagged
                       and same_directory(pane.get("cwd") or pane.get("foreground_cwd"), path)), None)
 
+    root_pane = None
     if match:
         workspace_id = match["workspace_id"]
         herdr(binary, "workspace", "focus", workspace_id)
@@ -94,25 +104,61 @@ def open_project(selected, binary):
         created = herdr(binary, "workspace", "create", "--cwd", str(path),
                         "--label", path.name.replace(".", "_") or "root", "--focus")
         workspace_id = created["workspace"]["workspace_id"]
+        root_pane = created["root_pane"]["pane_id"]
     herdr(binary, "workspace", "report-metadata", workspace_id,
           "--source", "project-picker", "--token", f"project_path={path}")
+    return root_pane
+
+
+def server_running(binary):
+    status = subprocess.run([binary, "workspace", "list"], capture_output=True)
+    return status.returncode == 0
+
+
+def ensure_default_server(binary):
+    """Start the default session's server headless, as `herdr` itself would."""
+    if server_running(binary):
+        return
+    subprocess.Popen([binary, "server"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL, start_new_session=True)
+    deadline = time.monotonic() + 10
+    while not server_running(binary):
+        if time.monotonic() > deadline:
+            raise RuntimeError("the herdr server did not start within 10 seconds.")
+        time.sleep(0.1)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", nargs="?")
     parser.add_argument("--list", action="store_true", help="list projects without contacting Herdr")
+    parser.add_argument("--default-session", action="store_true",
+                        help="outside herdr, use the default session, starting its server if needed")
+    parser.add_argument("--attach", action="store_true",
+                        help="like --default-session, then attach to it (outside herdr only)")
+    parser.add_argument("--print-pane", action="store_true",
+                        help="print the root pane id of a newly created workspace")
     args = parser.parse_args()
     if args.list:
         print("\n".join(projects(Path.home())))
         return 0
-    # Custom-command popups receive the owning server socket explicitly.
-    # Never silently target the default session from a normal terminal.
-    if not os.environ.get("HERDR_SOCKET_PATH"):
-        raise RuntimeError("Run this picker inside Herdr using Ctrl-t Ctrl-f.")
+    binary = os.environ.get("HERDR_BIN_PATH") or shutil.which("herdr") or "herdr"
+    # Herdr panes and custom commands receive their own server's socket. Never
+    # silently target the default session from another terminal (e.g. tmux).
+    inside = bool(os.environ.get("HERDR_SOCKET_PATH"))
+    if not inside and not (args.default_session or args.attach):
+        raise RuntimeError("Run this picker inside Herdr, or pass --attach.")
     selected = args.directory or choose_project(projects(Path.home()))
-    if selected:
-        open_project(selected, os.environ.get("HERDR_BIN_PATH") or "herdr")
+    if not selected:
+        return 0
+    if not inside:
+        ensure_default_server(binary)
+    root_pane = open_project(selected, binary)
+    if args.print_pane and root_pane:
+        print(root_pane)
+    if args.attach and not inside:
+        sys.stdout.flush()
+        os.execvp(binary, [binary])
     return 0
 
 
