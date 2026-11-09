@@ -243,28 +243,37 @@ test("herdr navigation hands the edge to herdr; <C-\\> stays in Neovim", functio
 	vim.cmd("silent! only")
 end)
 
-test("herdr sessions go through the project picker; only new workspaces get the editor", function()
+test("herdr sessions go through the project picker; existing workspaces get a new tab", function()
 	local picker = vim.fn.expand("~/.config/herdr/scripts/project-picker.py")
 	local file = vim.fn.expand("%:p")
-	reset({ { code = 0, stdout = "w3:p1\n" } }, "herdr")
+	local typed_file = file:gsub("'", "\\'")
+	reset({ { code = 0, stdout = '{"workspace_id": "w3", "root_pane_id": "w3:p1"}\n' } }, "herdr")
 	tmux.create_session()
-	assert(vim.deep_equal(calls[1], { "python3", picker, "--print-pane", vim.fn.getcwd() }), vim.inspect(calls[1]))
+	assert(vim.deep_equal(calls[1], { "python3", picker, "--json", vim.fn.getcwd() }), vim.inspect(calls[1]))
 	assert(vim.deep_equal(vim.list_slice(calls[2], 1, 4), { "herdr", "pane", "run", "w3:p1" }))
-	assert(calls[2][5]:find(file:gsub("'", "\\'"), 1, true), calls[2][5])
+	assert(calls[2][5]:find(typed_file, 1, true), calls[2][5])
 	assert(#notifications == 0)
 
-	reset({ { code = 0, stdout = "" } }, "herdr") -- existing workspace: focused only
+	reset({
+		{ code = 0, stdout = '{"workspace_id": "w2", "root_pane_id": null}\n' },
+		{ code = 0, stdout = '{"result": {"root_pane": {"pane_id": "w2:p5"}}}' },
+	}, "herdr")
 	tmux.create_session()
-	assert(#calls == 1)
+	assert(#calls == 3, vim.inspect(calls))
+	assert(vim.deep_equal(calls[2], {
+		"herdr", "tab", "create", "--workspace", "w2", "--cwd", vim.fn.getcwd(), "--focus",
+	}), vim.inspect(calls[2]))
+	assert(vim.deep_equal(vim.list_slice(calls[3], 1, 4), { "herdr", "pane", "run", "w2:p5" }))
+	assert(calls[3][5]:find(typed_file, 1, true))
 
-	reset({ { code = 0, stdout = "w1:p1\n" } }, nil, "herdr") -- outside: default session
-	tmux.create_session()
-	assert(vim.deep_equal(calls[1], { "python3", picker, "--print-pane", "--default-session", vim.fn.getcwd() }))
+	reset({ { code = 0, stdout = '{"workspace_id": "w1", "root_pane_id": "w1:p1"}' } }, nil, "herdr")
+	tmux.create_session() -- outside herdr: default session, then a hint to attach
+	assert(vim.deep_equal(calls[1], { "python3", picker, "--json", "--default-session", vim.fn.getcwd() }))
 	assert(notifications[1]:find("herdr", 1, true))
 
 	local buftype = vim.bo.buftype
-	vim.bo.buftype = "nofile"
-	reset({ { code = 0, stdout = "w4:p1\n" } }, "herdr")
+	vim.bo.buftype = "nofile" -- nothing to open: the workspace is only focused
+	reset({ { code = 0, stdout = '{"workspace_id": "w4", "root_pane_id": null}' } }, "herdr")
 	tmux.create_session()
 	vim.bo.buftype = buftype
 	assert(#calls == 1)

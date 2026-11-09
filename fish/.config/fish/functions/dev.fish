@@ -9,8 +9,9 @@ function dev
                 and herdr pane run $HERDR_PANE_ID 'nvim .' >/dev/null
             else
                 # Open this directory's workspace, laying it out only if new
-                set -l pane (python3 ~/.config/herdr/scripts/project-picker.py --default-session --print-pane (pwd))
+                set -l opened (python3 ~/.config/herdr/scripts/project-picker.py --default-session --json (pwd))
                 or return
+                set -l pane (printf '%s' $opened | jq -r '.root_pane_id // empty')
                 if test -n "$pane"
                     herdr pane run $pane v >/dev/null
                     and herdr pane split $pane --direction down --ratio 0.8 --focus >/dev/null

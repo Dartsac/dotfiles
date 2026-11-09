@@ -138,23 +138,47 @@ local function editable_file()
 	end
 end
 
+local function json_field(result, ...)
+	local ok, response = pcall(vim.json.decode, result.stdout or "", { luanil = { object = true } })
+	return ok and type(response) == "table" and vim.tbl_get(response, ...) or nil
+end
+
 local function create_herdr_workspace()
 	-- The project picker owns workspace matching (project_path metadata), so
 	-- Ctrl-f and this command find each other's workspaces.
-	local args = { "python3", vim.fn.expand("~/.config/herdr/scripts/project-picker.py"), "--print-pane" }
+	local cwd = vim.fn.getcwd()
+	local args = { "python3", vim.fn.expand("~/.config/herdr/scripts/project-picker.py"), "--json" }
 	if not in_herdr() then
 		table.insert(args, "--default-session")
 	end
-	table.insert(args, vim.fn.getcwd())
+	table.insert(args, cwd)
 	local result = checked(args)
 	if not result then
 		return
 	end
-	local pane = vim.trim(result.stdout or "")
+	local workspace = json_field(result, "workspace_id")
+	if not workspace then
+		vim.notify("The herdr project picker returned no workspace", vim.log.levels.ERROR)
+		return
+	end
 	local file = editable_file()
-	if pane ~= "" and file then
-		-- Only a new workspace gets the editor; an existing one is just focused.
-		herdr_type(pane, nvim_command(file))
+	if file then
+		-- A new workspace's first pane gets the editor; an existing workspace
+		-- gets it in a new tab.
+		local pane = json_field(result, "root_pane_id")
+		if not pane then
+			local tab = checked({ herdr_bin(), "tab", "create", "--workspace", workspace, "--cwd", cwd, "--focus" })
+			pane = tab and json_field(tab, "result", "root_pane", "pane_id")
+			if not pane then
+				if tab then
+					vim.notify("herdr tab create returned no pane id", vim.log.levels.ERROR)
+				end
+				return
+			end
+		end
+		if not herdr_type(pane, nvim_command(file)) then
+			return
+		end
 	end
 	if not in_herdr() then
 		vim.notify("Workspace ready. Attach from a shell with: herdr")

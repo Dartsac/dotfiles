@@ -76,7 +76,7 @@ def same_directory(value, path):
 def open_project(selected, binary):
     """Focus the project's workspace, creating it if needed.
 
-    Returns the new workspace's root pane id, or None for an existing one.
+    Returns (workspace id, the new workspace's root pane id or None).
     """
     path = Path(selected).expanduser().resolve(strict=True)
     if not path.is_dir():
@@ -107,7 +107,7 @@ def open_project(selected, binary):
         root_pane = created["root_pane"]["pane_id"]
     herdr(binary, "workspace", "report-metadata", workspace_id,
           "--source", "project-picker", "--token", f"project_path={path}")
-    return root_pane
+    return workspace_id, root_pane
 
 
 def server_running(binary):
@@ -136,8 +136,9 @@ def main():
                         help="outside herdr, use the default session, starting its server if needed")
     parser.add_argument("--attach", action="store_true",
                         help="like --default-session, then attach to it (outside herdr only)")
-    parser.add_argument("--print-pane", action="store_true",
-                        help="print the root pane id of a newly created workspace")
+    parser.add_argument("--json", action="store_true",
+                        help='print {"workspace_id", "root_pane_id"}; root_pane_id is null '
+                             "unless the workspace was just created")
     args = parser.parse_args()
     if args.list:
         print("\n".join(projects(Path.home())))
@@ -153,9 +154,9 @@ def main():
         return 0
     if not inside:
         ensure_default_server(binary)
-    root_pane = open_project(selected, binary)
-    if args.print_pane and root_pane:
-        print(root_pane)
+    workspace_id, root_pane = open_project(selected, binary)
+    if args.json:
+        print(json.dumps({"workspace_id": workspace_id, "root_pane_id": root_pane}))
     if args.attach and not inside:
         sys.stdout.flush()
         os.execvp(binary, [binary])
