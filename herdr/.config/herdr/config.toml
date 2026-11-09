@@ -1,0 +1,159 @@
+onboarding = false
+
+# Standalone Herdr profile based on ~/.config/tmux/tmux.conf.
+# Run directly in Ghostty: an outer tmux would intercept these shortcuts.
+[theme]
+name = "dracula"
+auto_switch = false
+
+# Dracula Pro: Ghostty + Neovim surfaces, tmux's peach focus accent.
+# Static UI palette; no changes to the source apps or their theme scripts.
+[theme.custom]
+# Recessed sidebar: Neovim's bgdark, in the same cool hue family as
+# Ghostty's {{removed}} canvas (not the tmux script's warm #222120).
+sidebar_bg = "{{removed}}"
+# One step up for the active workspace; another for keyboard selection.
+active_row_bg = "{{removed}}"
+selection_bg = "{{removed}}"
+# tmux's status surface, Neovim's raised surface, and quiet dividers.
+panel_bg = "{{removed}}"
+surface0 = "{{removed}}"
+surface1 = "{{removed}}"
+surface_dim = "{{removed}}"
+# Cream primary text; Ghostty's softer selection foreground for inactive names.
+text = "#f8f8f2"
+subtext0 = "{{removed}}"
+overlay1 = "{{removed}}"
+# Dracula comment + 30% foreground: legible headers, controls and metadata.
+# Do not reuse this text color as a row background.
+overlay0 = "#9f99bf"
+# Dracula purple + 40% foreground: cool branch labels, >=5:1 on selection.
+mauve = "#bdb0fa"
+# Warm focus against cool surfaces. Herdr shares this with focused borders.
+accent = "{{removed}}"
+peach = "{{removed}}"
+# Dracula Pro semantic colors, consistent with Ghostty and Neovim.
+green = "{{removed}}"
+yellow = "{{removed}}"
+red = "{{removed}}"
+blue = "{{removed}}"
+teal = "{{removed}}"
+
+[terminal]
+default_shell = "/opt/homebrew/bin/fish"
+shell_mode = "auto"
+new_cwd = "follow"
+
+[keys]
+prefix = "ctrl+t"
+detach = ["prefix+d", "prefix+q"]
+reload_config = "prefix+r"
+resize_mode = "prefix+shift+r"
+
+split_vertical = "prefix+|"
+split_horizontal = "prefix+_"
+
+# Deliberately capture these even in Neovim, per your preference.
+# Unlike vim-tmux-navigator, Herdr does not forward them to Vim splits.
+focus_pane_left = ["ctrl+h", "prefix+h"]
+focus_pane_down = ["ctrl+j", "prefix+j"]
+focus_pane_up = ["ctrl+k", "prefix+k"]
+focus_pane_right = ["ctrl+l", "prefix+l"]
+resize_pane_left = "prefix+ctrl+h"
+resize_pane_down = "prefix+ctrl+j"
+resize_pane_up = "prefix+ctrl+k"
+resize_pane_right = "prefix+ctrl+l"
+
+move_tab_previous = "ctrl+shift+left"
+move_tab_next = "ctrl+shift+right"
+rename_tab = "prefix+comma"
+rename_workspace = "prefix+$"
+
+# Free g for lazygit and o for Finder; retain the displaced Herdr actions.
+goto = "prefix+f"
+open_notification_target = "prefix+shift+o"
+cycle_pane_next = "prefix+tab"
+# Do not repurpose your destructive tmux prefix+e as a different action.
+# Herdr has no built-in close-other-panes binding; use its pane menu instead.
+edit_scrollback = "prefix+shift+e"
+
+[[keys.command]]
+key = "prefix+ctrl+f"
+type = "popup"
+command = 'python3 "$HOME/.config/herdr/scripts/project-picker.py"'
+description = "find a project; open or focus its workspace"
+width = "100%"
+height = "100%"
+
+[[keys.command]]
+key = "prefix+g"
+type = "popup"
+command = "lazygit"
+description = "lazygit in the focused pane directory"
+width = "100%"
+height = "100%"
+
+[[keys.command]]
+key = "prefix+ctrl+g"
+type = "popup"
+command = "lazygit"
+description = "lazygit in the focused pane directory"
+width = "100%"
+height = "100%"
+
+[[keys.command]]
+key = "prefix+o"
+type = "shell"
+command = 'open "${HERDR_ACTIVE_PANE_CWD:-$PWD}"'
+description = "open the focused pane directory in Finder"
+
+[ui]
+# Match the 30-column Neovim tree; leave room for project and branch names.
+sidebar_width = 30
+sidebar_min_width = 24
+sidebar_max_width = 36
+mouse_capture = true
+copy_on_select = true
+prompt_new_tab_name = false
+pane_borders = "always"
+pane_outer_borders = true
+pane_gaps = true
+pane_scrollbars = false
+show_agent_labels_on_pane_borders = true
+tab_bar_position = "bottom"
+# tmux's `#h` is the short hostname; Herdr's `hostname` entry is the full one.
+# The command runs on the server, so `herdr --remote` still shows that machine.
+tab_bar_right = [
+  { type = "zoom" },
+  { type = "command", command = "hostname -s", interval_seconds = 3600, timeout_seconds = 2 },
+]
+window_title = "{terminal_title}"
+# Accent is defined once in [theme.custom]; ui.accent is a legacy fallback.
+
+# Names retain Herdr's active/inactive foreground and bold distinction.
+# Keep status icons and Git indicators semantic, not a single decorative color.
+[ui.sidebar.spaces]
+row_gap = 1
+rows = [
+  ["state_icon", "workspace"],
+  [{ token = "branch", fg = "#bdb0fa", bold = false, dim = false }, "git_status"],
+]
+
+[ui.sidebar.agents]
+rows = [["state_icon", "workspace", "tab"], ["terminal_title"], ["agent"]]
+
+[session]
+# Layout saving is built in; no tmux-resurrect/continuum scripts are needed.
+resume_agents_on_restore = true
+
+[experimental]
+# Leave on-disk terminal contents disabled: they can contain secrets.
+pane_history = false
+
+[advanced]
+# Herdr measures bytes, not tmux's 64096 lines; no exact conversion exists.
+# Keep Ghostty's 10 MB scrollback budget per pane.
+scrollback_limit_bytes = 10000000
+
+[ui.toast]
+delivery = "herdr"
