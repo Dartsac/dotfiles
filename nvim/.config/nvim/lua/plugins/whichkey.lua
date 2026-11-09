@@ -329,12 +329,12 @@ return {
 				{ "<leader>Da", "<cmd>DBUIAddConnection<cr>", desc = "Add Connection", mode = "n" },
 				{ "<leader>Df", "<cmd>DBUIFindBuffer<cr>", desc = "Find Buffer", mode = "n" },
 
-				-- Tmux Group
-				{ "<leader>T", group = "Tmux" },
+				-- Multiplexer Group (tmux or herdr, see config/multiplexer.lua)
+				{ "<leader>T", group = "Multiplexer" },
 				{
 					"<leader>Tc",
-					"<cmd>lua require('config.tmux').create_session()<cr>",
-					desc = "Create/Switch Tmux Session",
+					"<cmd>lua require('config.multiplexer').create_session()<cr>",
+					desc = "Create/Switch Project Session",
 					mode = "n",
 				},
 			})

@@ -1,0 +1,259 @@
+-- Splits, project sessions and window/pane navigation for the multiplexer that
+-- applies here, chosen as fish's functions/multiplexer.fish chooses it: the
+-- pane's own (herdr via $HERDR_ENV, tmux via $TMUX), otherwise the Default
+-- multiplexer ($DEFAULT_MULTIPLEXER, tmux when unset). Commands are argument
+-- lists, never shell strings, so paths with spaces and quotes stay literal.
+local M = {}
+
+local function adapted(args)
+	-- Route pane commands through clarity's adapter when available. It is a
+	-- transparent pass-through for windows not using always-framed mode.
+	local adapter = vim.fn.expand("~/.config/tmux/plugins/tmux-pane-clarity/bin/tmux")
+	if args[1] == "tmux" and vim.fn.executable(adapter) == 1 then
+		args = vim.deepcopy(args)
+		args[1] = adapter
+	end
+	return args
+end
+
+local function in_herdr()
+	return vim.env.HERDR_ENV == "1"
+end
+
+local function in_tmux()
+	return vim.env.TMUX ~= nil and vim.env.TMUX ~= ""
+end
+
+--- "herdr" or "tmux": the multiplexer that applies here.
+function M.current()
+	if in_herdr() then
+		return "herdr"
+	elseif in_tmux() then
+		return "tmux"
+	end
+	return vim.env.DEFAULT_MULTIPLEXER == "herdr" and "herdr" or "tmux"
+end
+
+local function herdr_bin()
+	return vim.env.HERDR_BIN_PATH or "herdr"
+end
+
+local function report(result, fallback)
+	vim.notify(vim.trim(result.stderr or "") ~= "" and result.stderr or fallback, vim.log.levels.ERROR)
+end
+
+local function run(args)
+	args = adapted(args)
+	local ok, result = pcall(function()
+		return vim.system(args, { text = true }):wait()
+	end)
+	if not ok then
+		vim.notify(tostring(result), vim.log.levels.ERROR)
+		return nil
+	end
+	return result
+end
+
+local function checked(args)
+	local result = run(args)
+	if not result then
+		return nil
+	end
+	if result.code ~= 0 then
+		report(result, args[1] .. " command failed")
+		return nil
+	end
+	return result
+end
+
+local function nvim_args(filepath)
+	-- Use a fixed POSIX script with literal arguments, regardless of Neovim's
+	-- 'shell' or tmux's default-shell. Leave a shell open after Neovim exits.
+	return { "/bin/sh", "-c", '"$1" -- "$2"; exec "$SHELL"', "nvim-tmux", vim.v.progpath, filepath }
+end
+
+-- herdr panes start their own shell (fish, per herdr's config.toml), so the
+-- editor command is typed into it: quote each word for fish.
+local function fish_quote(word)
+	return "'" .. word:gsub("\\", "\\\\"):gsub("'", "\\'") .. "'"
+end
+
+local function nvim_command(filepath)
+	return fish_quote(vim.v.progpath) .. " -- " .. fish_quote(filepath)
+end
+
+local function herdr_type(pane, command)
+	return checked({ herdr_bin(), "pane", "run", pane, command }) ~= nil
+end
+
+local function herdr_split(filepath, direction)
+	local result = checked({
+		herdr_bin(),
+		"pane",
+		"split",
+		"--current",
+		"--direction",
+		direction == "horizontal" and "down" or "right",
+		"--cwd",
+		vim.fn.getcwd(),
+		"--focus",
+	})
+	if not result then
+		return false
+	end
+	local ok, response = pcall(vim.json.decode, result.stdout)
+	local pane = ok and vim.tbl_get(response, "result", "pane", "pane_id")
+	if not pane then
+		vim.notify("herdr pane split returned no pane id", vim.log.levels.ERROR)
+		return false
+	end
+	return herdr_type(pane, nvim_command(filepath))
+end
+
+--- Open filepath in Neovim in a new pane: "vertical" splits side by side
+--- (tmux -h, herdr right), "horizontal" stacks it below.
+function M.split(filepath, direction)
+	if in_herdr() then
+		return herdr_split(filepath, direction)
+	end
+	if not in_tmux() then
+		vim.notify("Open Neovim inside tmux or herdr before creating a split", vim.log.levels.WARN)
+		return false
+	end
+	-- tmux executes multiple command arguments directly. Pass paths as positional
+	-- arguments so /bin/sh never parses quoting intended for Neovim's 'shell'.
+	return checked(vim.list_extend({
+		"tmux",
+		"split-window",
+		direction == "horizontal" and "-v" or "-h",
+		"-c",
+		vim.fn.getcwd(),
+	}, nvim_args(filepath))) ~= nil
+end
+
+local function editable_file()
+	local current_file = vim.fn.expand("%:p")
+	if current_file ~= "" and vim.bo.buftype == "" then
+		return current_file
+	end
+end
+
+local function create_herdr_workspace()
+	-- The project picker owns workspace matching (project_path metadata), so
+	-- Ctrl-f and this command find each other's workspaces.
+	local args = { "python3", vim.fn.expand("~/.config/herdr/scripts/project-picker.py"), "--print-pane" }
+	if not in_herdr() then
+		table.insert(args, "--default-session")
+	end
+	table.insert(args, vim.fn.getcwd())
+	local result = checked(args)
+	if not result then
+		return
+	end
+	local pane = vim.trim(result.stdout or "")
+	local file = editable_file()
+	if pane ~= "" and file then
+		-- Only a new workspace gets the editor; an existing one is just focused.
+		herdr_type(pane, nvim_command(file))
+	end
+	if not in_herdr() then
+		vim.notify("Workspace ready. Attach from a shell with: herdr")
+	end
+end
+
+function M.create_session()
+	if M.current() == "herdr" then
+		return create_herdr_workspace()
+	end
+	if vim.fn.executable("tmux") == 0 then
+		vim.notify("tmux is not installed", vim.log.levels.ERROR)
+		return
+	end
+
+	local cwd = vim.fn.getcwd()
+	-- Named as tmux-sessionizer.sh names it (`basename | tr . _`), so each finds
+	-- the other's session. tmux itself turns ':' into '_' too.
+	local basename = vim.fn.fnamemodify(cwd, ":t"):gsub("[.:]", "_")
+	local session_name = basename ~= "" and basename or "project"
+	local target = "=" .. session_name
+	local exists = run({ "tmux", "has-session", "-t", target })
+	if not exists then
+		return
+	end
+
+	if exists.code ~= 0 then
+		local args = { "tmux", "new-session", "-d", "-s", session_name, "-c", cwd }
+		local current_file = editable_file()
+		if current_file then
+			-- Start the editor directly instead of typing into an unknown shell.
+			vim.list_extend(args, nvim_args(current_file))
+		end
+		if not checked(args) then
+			return
+		end
+	end
+
+	if in_tmux() then
+		checked({ "tmux", "switch-client", "-t", target })
+	else
+		-- Do not quit the editor or write a shared shell-wrapper marker. Modified
+		-- buffers remain here; another Neovim process only sees files saved to disk.
+		vim.notify("Session ready. Attach from a shell with: tmux attach-session -t " .. session_name)
+	end
+end
+
+-- Window/pane navigation (formerly vim-tmux-navigator). Move between Neovim
+-- windows; at the edge, hand over to the multiplexer. It is started directly
+-- and not waited for: vim-tmux-navigator went through system(), which starts
+-- Neovim's 'shell' (fish, with its whole config) on every move.
+local TMUX_FLAG = { h = "-L", j = "-D", k = "-U", l = "-R", p = "-l" }
+local HERDR_DIRECTION = { h = "left", j = "down", k = "up", l = "right" }
+local last_was_tmux = false
+
+local function start(args, failure)
+	local ok, process = pcall(vim.system, args, { text = true }, function(result)
+		if result.code ~= 0 then
+			vim.schedule(function()
+				report(result, failure)
+			end)
+		end
+	end)
+	if not ok then
+		vim.notify(tostring(process), vim.log.levels.ERROR)
+		return nil
+	end
+	return process
+end
+
+function M.navigate(direction)
+	local window = vim.api.nvim_get_current_win()
+	if in_herdr() then
+		-- herdr has no "previous pane", so <C-\> stays inside Neovim.
+		pcall(vim.cmd.wincmd, direction)
+		local herdr_direction = HERDR_DIRECTION[direction]
+		if not herdr_direction or vim.api.nvim_get_current_win() ~= window then
+			return nil
+		end
+		return start(
+			{ herdr_bin(), "pane", "focus", "--direction", herdr_direction, "--current" },
+			"herdr pane focus failed"
+		)
+	end
+
+	local pane = in_tmux() and vim.env.TMUX_PANE
+	-- Like vim-tmux-navigator: "previous" returns to tmux's last pane if the
+	-- previous move left tmux, otherwise to Neovim's previous window.
+	local to_last_tmux_pane = direction == "p" and last_was_tmux
+	if not to_last_tmux_pane then
+		pcall(vim.cmd.wincmd, direction)
+	end
+	local at_edge = vim.api.nvim_get_current_win() == window
+	if not pane or not (to_last_tmux_pane or at_edge) then
+		last_was_tmux = false
+		return nil
+	end
+	last_was_tmux = true
+	return start(adapted({ "tmux", "select-pane", "-t", pane, TMUX_FLAG[direction] }), "tmux select-pane failed")
+end
+
+return M

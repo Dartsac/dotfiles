@@ -13,7 +13,11 @@ end
 local original_system = vim.system
 local original_notify = vim.notify
 local original_executable = vim.fn.executable
-local original_tmux = vim.env.TMUX
+-- The multiplexer is chosen from these; tests set them all (see reset).
+local original_env = {}
+for _, name in ipairs({ "TMUX", "HERDR_ENV", "HERDR_BIN_PATH", "DEFAULT_MULTIPLEXER" }) do
+	original_env[name] = vim.env[name]
+end
 local calls, notifications, responses
 vim.notify = function(message)
 	table.insert(notifications, message)
@@ -30,12 +34,18 @@ vim.system = function(args)
 		end,
 	}
 end
-local function reset(results, inside)
+-- inside: true for a tmux pane, "herdr" for a herdr pane, nil for neither.
+-- default: the Default multiplexer ($DEFAULT_MULTIPLEXER), unset by default.
+local function reset(results, inside, default)
 	calls, notifications, responses = {}, {}, results or {}
-	vim.env.TMUX = inside and "/tmp/test-tmux,123,0" or nil
+	vim.env.TMUX = inside == true and "/tmp/test-tmux,123,0" or nil
+	vim.env.HERDR_ENV = inside == "herdr" and "1" or nil
+	vim.env.HERDR_BIN_PATH = nil
+	vim.env.DEFAULT_MULTIPLEXER = default
 end
 
-local tmux = require("config.tmux")
+-- The tests up to the herdr ones exercise the module's tmux branch.
+local tmux = require("config.multiplexer")
 vim.api.nvim_buf_set_name(0, "/tmp/a file's $(literal).lua")
 vim.api.nvim_buf_set_lines(0, 0, -1, false, { "unsaved work" })
 
@@ -171,10 +181,101 @@ test("navigation moves between windows, then hands the edge to tmux without a sh
 	vim.env.TMUX_PANE = nil
 end)
 
+test("the pane's multiplexer wins, then the Default multiplexer, then tmux", function()
+	reset(nil, "herdr")
+	vim.env.TMUX = "/tmp/outer-tmux,1,0" -- herdr launched from a tmux pane
+	assert(tmux.current() == "herdr")
+	reset(nil, true, "herdr")
+	assert(tmux.current() == "tmux")
+	reset(nil, nil, "herdr")
+	assert(tmux.current() == "herdr")
+	reset()
+	assert(tmux.current() == "tmux")
+end)
+
+test("herdr splits type a literal, fish-quoted editor command into the new pane", function()
+	local split_ok = { code = 0, stdout = '{"result":{"pane":{"pane_id":"w1:p7"}}}' }
+	for direction, herdr_direction in pairs({ vertical = "right", horizontal = "down" }) do
+		reset({ split_ok }, "herdr")
+		assert(tmux.split("/tmp/x.lua", direction))
+		assert(vim.deep_equal(calls[1], {
+			"herdr", "pane", "split", "--current", "--direction", herdr_direction,
+			"--cwd", vim.fn.getcwd(), "--focus",
+		}), vim.inspect(calls[1]))
+		assert(vim.deep_equal(vim.list_slice(calls[2], 1, 4), { "herdr", "pane", "run", "w1:p7" }))
+	end
+	reset({ { code = 1, stderr = "split failed" } }, "herdr")
+	assert(not tmux.split("/tmp/x.lua", "vertical"))
+	assert(#calls == 1 and notifications[1] == "split failed")
+
+	-- Run the typed command in fish, with a stand-in for Neovim.
+	local executable = vim.fn.tempname() .. "-capture"
+	vim.fn.writefile({ "#!/bin/sh", "printf '%s\\0' \"$@\"" }, executable)
+	assert(vim.fn.setfperm(executable, "rwx------") == 1)
+	local ok, err = xpcall(function()
+		for _, path in ipairs({ "/tmp/a file.lua", "/tmp/file's.lua", "/tmp/a\\b.lua", "/tmp/x\\'y.lua", "/tmp/$(literal);file.lua" }) do
+			reset({ split_ok }, "herdr")
+			assert(tmux.split(path, "vertical"))
+			local typed = calls[2][5]
+			local editor = "'" .. vim.v.progpath .. "'"
+			assert(typed:sub(1, #editor) == editor, typed)
+			typed = "'" .. executable .. "'" .. typed:sub(#editor + 1)
+			local result = original_system({ "fish", "--no-config", "-c", typed }):wait()
+			assert(result.code == 0, result.stderr)
+			assert(result.stdout == "--\0" .. path .. "\0", vim.inspect(result.stdout))
+		end
+	end, debug.traceback)
+	vim.fn.delete(executable)
+	assert(ok, err)
+end)
+
+test("herdr navigation hands the edge to herdr; <C-\\> stays in Neovim", function()
+	reset(nil, "herdr")
+	vim.cmd("silent! only")
+	vim.cmd("vsplit")
+	vim.cmd("wincmd h")
+	tmux.navigate("l") -- inside Neovim: no herdr call
+	assert(#calls == 0)
+	tmux.navigate("l") -- right edge: herdr takes over
+	assert(vim.deep_equal(calls[1], { "herdr", "pane", "focus", "--direction", "right", "--current" }))
+	tmux.navigate("p") -- herdr has no previous pane
+	assert(#calls == 1)
+	vim.cmd("silent! only")
+end)
+
+test("herdr sessions go through the project picker; only new workspaces get the editor", function()
+	local picker = vim.fn.expand("~/.config/herdr/scripts/project-picker.py")
+	local file = vim.fn.expand("%:p")
+	reset({ { code = 0, stdout = "w3:p1\n" } }, "herdr")
+	tmux.create_session()
+	assert(vim.deep_equal(calls[1], { "python3", picker, "--print-pane", vim.fn.getcwd() }), vim.inspect(calls[1]))
+	assert(vim.deep_equal(vim.list_slice(calls[2], 1, 4), { "herdr", "pane", "run", "w3:p1" }))
+	assert(calls[2][5]:find(file:gsub("'", "\\'"), 1, true), calls[2][5])
+	assert(#notifications == 0)
+
+	reset({ { code = 0, stdout = "" } }, "herdr") -- existing workspace: focused only
+	tmux.create_session()
+	assert(#calls == 1)
+
+	reset({ { code = 0, stdout = "w1:p1\n" } }, nil, "herdr") -- outside: default session
+	tmux.create_session()
+	assert(vim.deep_equal(calls[1], { "python3", picker, "--print-pane", "--default-session", vim.fn.getcwd() }))
+	assert(notifications[1]:find("herdr", 1, true))
+
+	local buftype = vim.bo.buftype
+	vim.bo.buftype = "nofile"
+	reset({ { code = 0, stdout = "w4:p1\n" } }, "herdr")
+	tmux.create_session()
+	vim.bo.buftype = buftype
+	assert(#calls == 1)
+end)
+
 vim.system = original_system
 vim.notify = original_notify
 vim.fn.executable = original_executable
-vim.env.TMUX = original_tmux
+for name, value in pairs(original_env) do
+	vim.env[name] = value
+end
 
 -- Capture plugin setup without loading the editor's full plugin stack.
 test("Colorizer filetypes and CSS overrides reach setup", function()

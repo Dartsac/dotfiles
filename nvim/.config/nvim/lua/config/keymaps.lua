@@ -22,10 +22,10 @@ keymap("x", "J", ":move '>+1<CR>gv=gv", opts)
 keymap("x", "K", ":move '<-2<CR>gv=gv", opts)
 keymap("x", "<leader>p", '"_dP', opts)
 
--- Move between Neovim windows and tmux panes with the same keys
--- (tmux.conf passes Ctrl-h/j/k/l through to Neovim).
+-- Move between Neovim windows and tmux/herdr panes with the same keys
+-- (tmux.conf and herdr's navigate.sh pass Ctrl-h/j/k/l through to Neovim).
 for key, direction in pairs({ ["<C-h>"] = "h", ["<C-j>"] = "j", ["<C-k>"] = "k", ["<C-l>"] = "l", ["<C-\\>"] = "p" }) do
 	vim.keymap.set({ "n", "v", "i" }, key, function()
-		require("config.tmux").navigate(direction)
+		require("config.multiplexer").navigate(direction)
 	end, { silent = true, desc = "Navigate window/pane " .. direction })
 end

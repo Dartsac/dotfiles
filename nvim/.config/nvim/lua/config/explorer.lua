@@ -1,15 +1,15 @@
--- Snacks explorer integration: tmux split actions and the Harpoon delete hook.
+-- Snacks explorer integration: multiplexer split actions and the Harpoon delete hook.
 local M = {}
 
---- Open the item under the cursor in a new tmux pane. The explorer stays
---- open, as it does after opening a file normally.
+--- Open the item under the cursor in a new tmux or herdr pane. The explorer
+--- stays open, as it does after opening a file normally.
 ---@param direction "vertical"|"horizontal"
-function M.tmux_split(direction)
+function M.pane_split(direction)
 	return function(_, item)
 		if not item or not item.file then
 			return
 		end
-		require("config.tmux").split(item.file, direction)
+		require("config.multiplexer").split(item.file, direction)
 	end
 end
 
@@ -60,17 +60,17 @@ function M.source()
 		-- glyph (see M.highlights).
 		formatters = { file = { git_status_hl = false } },
 		actions = {
-			tmux_vertical = { action = M.tmux_split("vertical"), desc = "Vertical split in tmux" },
-			tmux_horizontal = { action = M.tmux_split("horizontal"), desc = "Horizontal split in tmux" },
+			pane_vertical = { action = M.pane_split("vertical"), desc = "Vertical pane split" },
+			pane_horizontal = { action = M.pane_split("horizontal"), desc = "Horizontal pane split" },
 		},
 		win = {
 			list = {
 				keys = {
-					-- | and _ open tmux splits, as in tmux itself; H and <a-h> (Snacks'
-					-- defaults) toggle hidden files.
-					["|"] = { "tmux_vertical", desc = "Vertical split in tmux" },
-					["_"] = { "tmux_horizontal", desc = "Horizontal split in tmux" },
-					-- Leave Ctrl-j/k to window/tmux pane navigation, as in every other window.
+					-- | and _ open multiplexer splits, as in tmux and herdr themselves;
+					-- H and <a-h> (Snacks' defaults) toggle hidden files.
+					["|"] = { "pane_vertical", desc = "Vertical pane split" },
+					["_"] = { "pane_horizontal", desc = "Horizontal pane split" },
+					-- Leave Ctrl-j/k to window/pane navigation, as in every other window.
 					["<c-j>"] = false,
 					["<c-k>"] = false,
 				},
