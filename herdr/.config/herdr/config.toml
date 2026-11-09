@@ -53,12 +53,12 @@ resize_mode = "prefix+shift+r"
 split_vertical = "prefix+|"
 split_horizontal = "prefix+_"
 
-# Deliberately capture these even in Neovim, per your preference.
-# Unlike vim-tmux-navigator, Herdr does not forward them to Vim splits.
-focus_pane_left = ["ctrl+h", "prefix+h"]
-focus_pane_down = ["ctrl+j", "prefix+j"]
-focus_pane_up = ["ctrl+k", "prefix+k"]
-focus_pane_right = ["ctrl+l", "prefix+l"]
+# Direct Ctrl-h/j/k/l are custom commands below: like vim-tmux-navigator,
+# they reach Neovim when it is focused and move herdr's focus otherwise.
+focus_pane_left = "prefix+h"
+focus_pane_down = "prefix+j"
+focus_pane_up = "prefix+k"
+focus_pane_right = "prefix+l"
 resize_pane_left = "prefix+ctrl+h"
 resize_pane_down = "prefix+ctrl+j"
 resize_pane_up = "prefix+ctrl+k"
@@ -73,8 +73,7 @@ rename_workspace = "prefix+$"
 goto = "prefix+f"
 open_notification_target = "prefix+shift+o"
 cycle_pane_next = "prefix+tab"
-# Do not repurpose your destructive tmux prefix+e as a different action.
-# Herdr has no built-in close-other-panes binding; use its pane menu instead.
+# prefix+e closes the other panes in the tab, as in tmux (command below).
 edit_scrollback = "prefix+shift+e"
 
 [[keys.command]]
@@ -106,6 +105,36 @@ key = "prefix+o"
 type = "shell"
 command = 'open "${HERDR_ACTIVE_PANE_CWD:-$PWD}"'
 description = "open the focused pane directory in Finder"
+
+[[keys.command]]
+key = "prefix+e"
+type = "shell"
+command = 'sh "$HOME/.config/herdr/scripts/close-other-panes.sh"'
+description = "close every other pane in this tab"
+
+[[keys.command]]
+key = "ctrl+h"
+type = "shell"
+command = 'sh "$HOME/.config/herdr/scripts/navigate.sh" left'
+description = "focus left, or pass to Neovim"
+
+[[keys.command]]
+key = "ctrl+j"
+type = "shell"
+command = 'sh "$HOME/.config/herdr/scripts/navigate.sh" down'
+description = "focus down, or pass to Neovim"
+
+[[keys.command]]
+key = "ctrl+k"
+type = "shell"
+command = 'sh "$HOME/.config/herdr/scripts/navigate.sh" up'
+description = "focus up, or pass to Neovim"
+
+[[keys.command]]
+key = "ctrl+l"
+type = "shell"
+command = 'sh "$HOME/.config/herdr/scripts/navigate.sh" right'
+description = "focus right, or pass to Neovim"
 
 [ui]
 # Match the 30-column Neovim tree; leave room for project and branch names.
