@@ -99,10 +99,11 @@ set -g fish_key_bindings fish_default_key_bindings
 # multiplexer.fish): the pane's own, else the Default multiplexer. A herdr
 # session corresponds to a tmux session per project, so ks closes the
 # workspace. `dev` lives in functions/dev.fish.
-function ke --description 'stop the multiplexer server and every pane in it'
+function ke --description 'stop the multiplexer server and every pane in it; start empty next time'
     switch (multiplexer)
         case herdr
-            herdr server stop
+            # herdr would restore the layout on its next start; this forgets it.
+            python3 ~/.config/herdr/scripts/stop-fresh.py
         case tmux
             tmux kill-server
     end
@@ -226,7 +227,7 @@ end
 
 # bun
 set --export BUN_INSTALL "$HOME/.bun"
-fish_add_path --path --append --move $BUN_INSTALL/bin  # same reason as Go
+fish_add_path --path --append --move $BUN_INSTALL/bin # same reason as Go
 
 # Only absolute PATH entries: a relative one (bin, node_modules/.bin) is a
 # different folder in every directory, so any project could stand in for a
