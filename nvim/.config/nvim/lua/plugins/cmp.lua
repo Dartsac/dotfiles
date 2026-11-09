@@ -1,7 +1,10 @@
 -- lua/plugins/cmp.lua
 return {
 	"hrsh7th/nvim-cmp",
-	event = "InsertEnter",
+	-- Loading cmp with LuaSnip and the filetype's snippets takes ~50 ms. Do it
+	-- once the cursor rests ('updatetime'), so the first insert doesn't stall;
+	-- InsertEnter still loads it if insert comes first.
+	event = { "InsertEnter", "CursorHold" },
 	dependencies = {
 		{ "hrsh7th/cmp-nvim-lsp" },
 		{ "hrsh7th/cmp-path" },

@@ -2,7 +2,8 @@
 return {
 	{
 		"windwp/nvim-autopairs",
-		event = "InsertEnter",
+		-- Loaded while idle, like nvim-cmp (plugins/cmp.lua).
+		event = { "InsertEnter", "CursorHold" },
 		dependencies = {
 			{
 				"windwp/nvim-ts-autotag",
