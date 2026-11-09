@@ -1,0 +1,10 @@
+id = "dotfiles.away-alert"
+name = "Away alert"
+version = "0.1.0"
+min_herdr_version = "0.9.5"
+description = "macOS notification when an agent is done or needs input, only while Ghostty is not frontmost"
+platforms = ["macos"]
+
+[[events]]
+on = "pane.agent_status_changed"
+command = ["sh", "away-alert.sh"]

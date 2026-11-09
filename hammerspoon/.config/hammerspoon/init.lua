@@ -2,3 +2,4 @@
 -- Location set via: defaults write org.hammerspoon.Hammerspoon MJConfigFile "~/.config/hammerspoon/init.lua"
 
 Dictation = require("dictation")
+HerdrAlert = require("herdr_alert")

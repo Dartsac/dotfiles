@@ -186,3 +186,7 @@ scrollback_limit_bytes = 10000000
 
 [ui.toast]
 delivery = "herdr"
+
+[ui.toast.herdr]
+# Top-right is the most noticeable spot; herdr 0.9.5 offers no size or style.
+position = "top-right"
