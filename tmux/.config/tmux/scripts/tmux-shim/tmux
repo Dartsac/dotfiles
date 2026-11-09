@@ -2,6 +2,11 @@
 # tmux for resurrect's save.sh and restore.sh (and their hooks), run by
 # resurrect_save.py in their own process group.
 real=$RESURRECT_SAVE_TMUX
+# new-session copies the client's environment into restored sessions. Keep
+# interception in the restore script, not in the interactive shells it creates.
+if [ -n "${RESURRECT_SAVE_PATH+x}" ]; then
+	export PATH=$RESURRECT_SAVE_PATH
+fi
 
 # Fixed for this run: the directory the wrapper locked, and no pruning of old
 # saves (the wrapper prunes once `last` is settled, never its target).

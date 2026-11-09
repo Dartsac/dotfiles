@@ -75,6 +75,35 @@ class ResurrectSaveTest(unittest.TestCase):
         self.assertTrue(last.is_symlink())
         self.assertTrue(last.exists(), f"last -> {os.readlink(last)} is dangling")
 
+    def test_shims_with_reordered_path(self):
+        # Fish prepends directories during startup: the shim need not be first.
+        env = {**os.environ, "PATH": f"/usr/bin:{resurrect_save.SHIM}:/bin"}
+        result = subprocess.run([str(Path(resurrect_save.SHIM) / "date"), "+%Y-%m-%d"],
+                                env=env, capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertRegex(result.stdout.strip(), r"^\d{4}-\d{2}-\d{2}$")
+        source, target = self.dir / "source", self.dir / "target"
+        source.touch()
+        result = subprocess.run([str(Path(resurrect_save.SHIM) / "ln"), "-s", str(source), str(target)],
+                                env=env, capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(target.resolve(), source.resolve())
+
+    def test_restored_session_does_not_inherit_shim_path(self):
+        t = Server(self, "restore-path", self.dir)
+        marker = "@resurrect-save-test-path"
+        t.tmux(["set-option", "-g", marker, "1"])
+        env = {**t.env, **resurrect_save.shimmed(str(self.dir), marker)}
+        env["TMUX"] = t.env["TMUX"]
+        path_file = self.dir / "pane-path"
+        command = f'/bin/sh -c \'printf "%s" "$PATH" > {shlex.quote(str(path_file))}; sleep 30\''
+        result = subprocess.run([str(Path(resurrect_save.SHIM) / "tmux"), "-L", t.name,
+                                 "new-session", "-d", "-s", "restored", command],
+                                env=env, capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.wait_until(path_file.exists)
+        self.assertNotIn(resurrect_save.SHIM, path_file.read_text())
+
     def test_reload_never_runs_resurrects_save_directly(self):
         # A reload re-runs resurrect.tmux, which resets the save and restore
         # routes; the config restores them only afterwards. Within that

@@ -180,6 +180,7 @@ def shimmed(directory, guard, **extra):
     or is replaced, before resurrect saves an empty environment or restores
     into another server. Its ln leaves `last` to us; its date names the save."""
     return {**os.environ, "PATH": SHIM + os.pathsep + os.environ.get("PATH", ""),
+            "RESURRECT_SAVE_PATH": os.environ.get("PATH", ""),
             "RESURRECT_SAVE_TMUX": shutil.which("tmux") or "tmux", "RESURRECT_SAVE_DIR": directory,
             "RESURRECT_SAVE_GUARD": guard, "RESURRECT_SAVE_SPINNER": SPINNER, **extra}
 

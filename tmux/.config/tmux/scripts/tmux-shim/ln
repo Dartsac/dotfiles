@@ -6,4 +6,5 @@ if [ "$#" -eq 3 ] && [ "$1" = -fs ] && [ "$3" = "$RESURRECT_SAVE_DIR/last" ] && 
 	printf '%s\n' "$2" >&"$RESURRECT_SAVE_LINK_FD"
 	exit
 fi
-PATH=${PATH#"${0%/*}:"} exec ln "$@"
+# Do not search an inherited/reordered PATH and find this shim again.
+exec /bin/ln "$@"
