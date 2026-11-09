@@ -13,12 +13,44 @@ function M.tmux_split(direction)
 	end
 end
 
+--- Keep Snacks' normal formatting, replacing only empty-directory icons.
+function M.format(item, picker)
+	local format = require("snacks.picker.format")
+	local ret = format.file(item, picker)
+	if not item.dir or not item.file or picker.opts.icons.files.enabled == false then
+		return ret
+	end
+
+	-- Check the filesystem, not the filtered tree: hidden/ignored children count.
+	-- Do not cache this result, so creating or deleting children updates the icon.
+	local scan = vim.uv.fs_scandir(item.file)
+	if not scan or vim.uv.fs_scandir_next(scan) then
+		return ret
+	end
+
+	local filename = format.filename(item, picker)
+	local original = filename[1]
+	if original then
+		for _, chunk in ipairs(ret) do
+			if chunk.virtual and chunk[1] == original[1] and chunk[2] == original[2] then
+				chunk[1] = Snacks.picker.util.align(
+					item.open and "" or "",
+					picker.opts.formatters.file.icon_width or 2
+				)
+				break
+			end
+		end
+	end
+	return ret
+end
+
 --- Explorer source options (merged into Snacks' `picker.sources.explorer`).
 function M.source()
 	return {
 		-- Right-hand sidebar, following the current file; previews off until
 		-- toggled with P (or <a-p>). The explorer stays open after a selection.
 		layout = { preset = "sidebar", preview = false, layout = { position = "right" } },
+		format = M.format,
 		follow_file = true,
 		git_status = true,
 		diagnostics = true,
