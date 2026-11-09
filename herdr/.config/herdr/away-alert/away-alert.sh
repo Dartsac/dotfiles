@@ -1,10 +1,10 @@
 #!/bin/sh
-# Away alert: a macOS notification when an agent is done or needs input, only
-# while Ghostty is not the frontmost app. With Ghostty in front, herdr's own
-# sound and toast are the only signal.
-# Hammerspoon posts it (hammerspoon/.config/hammerspoon/herdr_alert.lua), with
-# a sound and a click that returns to the agent. Runs as a herdr event hook;
-# decisions are logged to `herdr plugin log list`.
+# Away alert: a card when an agent is done or needs input, only while Ghostty
+# is not the frontmost app. With Ghostty in front, herdr's own sound and toast
+# are the only signal.
+# Hammerspoon shows it (hammerspoon/.config/hammerspoon/herdr_alert.lua), and
+# a click returns to the agent. Runs as a herdr event hook; decisions are
+# logged to `herdr plugin log list`.
 set -eu
 
 event=${HERDR_PLUGIN_EVENT_JSON:-'{}'}
@@ -18,6 +18,10 @@ done | idle) what="is done" ;;
 blocked) what="needs input" ;;
 *) exit 0 ;;
 esac
+
+# Appear with herdr's own alert: herdr waits ui.toast.delay_seconds (default 1)
+# and alerts only if the state still holds, so wait and recheck the same way.
+sleep 1
 
 if lsappinfo info -only bundleid "$(lsappinfo front)" | grep -q '"com.mitchellh.ghostty"'; then
 	echo "away-alert: Ghostty is frontmost; herdr's own alert applies" >&2
@@ -35,8 +39,13 @@ pane=$(field .data.pane_id)
 # state_change_seq); starting or restoring an agent goes idle without one.
 # Viewing a done agent turns it idle with the same completion_seq, so each
 # terminal's last alerted completion is remembered to alert once.
-if [ "$status" != blocked ]; then
-	info=$("$herdr" agent get "$pane" 2>/dev/null) || exit 0
+info=$("$herdr" agent get "$pane" 2>/dev/null) || exit 0
+if [ "$status" = blocked ]; then
+	if [ "$(printf '%s' "$info" | jq -r '.result.agent.agent_status')" != blocked ]; then
+		echo "away-alert: no longer blocked" >&2
+		exit 0
+	fi
+else
 	completion=$(printf '%s' "$info" | jq -r '.result.agent |
 		select(.agent_status == "idle" or .agent_status == "done") |
 		select(.completion_seq != null and .completion_seq == .state_change_seq) |
@@ -54,17 +63,24 @@ if [ "$status" != blocked ]; then
 	printf '%s\n' "${completion#* }" >"$ledger"
 fi
 
+# herdr plays its sound only for agents in background workspaces. The card
+# plays one only when herdr will not: the agent is in the workspace on screen.
 label=
+sound=0
 if [ -n "$workspace" ]; then
-	label=$("$herdr" workspace get "$workspace" | jq -r '.result.workspace.label // empty') || label=
+	ws=$("$herdr" workspace get "$workspace") || ws='{}'
+	label=$(printf '%s' "$ws" | jq -r '.result.workspace.label // empty')
+	if [ "$(printf '%s' "$ws" | jq -r '.result.workspace.focused // false')" = true ]; then
+		sound=1
+	fi
 fi
 
 url=$(jq -rn \
 	--arg title "${agent:-Agent} $what" --arg body "$label" --arg workspace "$workspace" \
-	--arg pane "$pane" --arg bin "$herdr" --arg socket "${HERDR_SOCKET_PATH:-}" \
+	--arg pane "$pane" --arg bin "$herdr" --arg socket "${HERDR_SOCKET_PATH:-}" --arg sound "$sound" \
 	'"hammerspoon://herdr-alert?" + ([
 		["title", $title], ["body", $body], ["workspace", $workspace],
-		["pane", $pane], ["bin", $bin], ["socket", $socket]
+		["pane", $pane], ["bin", $bin], ["socket", $socket], ["sound", $sound]
 	] | map("\(.[0])=\(.[1] | @uri)") | join("&"))')
 open -g "$url"
-echo "away-alert: sent: ${agent:-Agent} $what ($label)" >&2
+echo "away-alert: sent: ${agent:-Agent} $what ($label)$([ "$sound" = 1 ] && echo ', with sound' || echo ', herdr plays the sound')" >&2

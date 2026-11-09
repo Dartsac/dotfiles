@@ -3,10 +3,10 @@
 -- (~/.config/herdr/away-alert) decides when one is due and opens
 --   hammerspoon://herdr-alert?title=…&body=…&workspace=…&pane=…&bin=…&socket=…
 -- This shows a card in the dictation HUD's pixel style, top-right on the
--- screen in use, with a sound. Click the card to bring Ghostty forward and
--- focus that agent; click × to dismiss it. Cards stay until clicked, and all
--- clear when you switch to Ghostty yourself (herdr shows the state there).
--- Unused on machines without herdr.
+-- screen in use. It plays a sound only with sound=1: otherwise herdr's own
+-- sound accompanies it. Click the card to bring Ghostty forward and focus that
+-- agent; click × to dismiss it. Cards stay until clicked, and all clear when
+-- you switch to Ghostty yourself (herdr shows the state there).
 local M = {}
 
 local GHOSTTY = "com.mitchellh.ghostty"
@@ -28,7 +28,7 @@ local CARD = {
 	edgeOffset = 12, -- from the screen's top and right edges
 	gap = 8, -- between stacked cards
 	font = "Hack Nerd Font Mono",
-	sound = "Glass",
+	sound = "Glass", -- played only when herdr plays none (sound=1)
 	colors = { -- the dictation HUD's Sweetie-16-ish palette
 		bg = rgb("1a1c2c", 0.96),
 		border = rgb("f4f4f4"),
@@ -181,7 +181,7 @@ local function show(params)
 	table.insert(cards, 1, card)
 	placeAll()
 	card.canvas:show()
-	local sound = hs.sound.getByName(CARD.sound)
+	local sound = params.sound == "1" and hs.sound.getByName(CARD.sound)
 	if sound then
 		sound:play()
 	end
