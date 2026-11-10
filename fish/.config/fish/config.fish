@@ -105,7 +105,7 @@ function ke --description 'stop the multiplexer server and every pane in it; sta
             # herdr would restore the layout on its next start; this forgets it.
             python3 ~/.config/herdr/scripts/stop-fresh.py
         case tmux
-            tmux kill-server
+            tmux kill-server $argv
     end
 end
 function ks --description 'close the current session (herdr: workspace)'
@@ -117,7 +117,7 @@ function ks --description 'close the current session (herdr: workspace)'
             end
             herdr workspace close $HERDR_WORKSPACE_ID >/dev/null
         case tmux
-            tmux kill-session
+            tmux kill-session $argv
     end
 end
 # (not `ls`: that name is taken by the eza alias on macOS, and on Linux it
@@ -127,7 +127,7 @@ function tls --description 'list sessions (herdr: workspaces)'
         case herdr
             herdr workspace list | jq -r '.result.workspaces[].label'
         case tmux
-            tmux list-sessions -f '#s'
+            tmux list-sessions -f '#s' $argv
     end
 end
 function a --description 'attach to the multiplexer'
@@ -135,7 +135,7 @@ function a --description 'attach to the multiplexer'
         case herdr
             herdr
         case tmux
-            tmux a
+            tmux a $argv
     end
 end
 function d --description 'detach from the multiplexer'
@@ -145,7 +145,7 @@ function d --description 'detach from the multiplexer'
             echo "d: detach from herdr with Ctrl-t d" >&2
             return 1
         case tmux
-            tmux detach
+            tmux detach $argv
     end
 end
 
