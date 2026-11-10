@@ -158,6 +158,8 @@ tab_bar_right = [
 ]
 window_title = "{terminal_title}"
 # Accent is defined once in [theme.custom]; ui.accent is a legacy fallback.
+# Agent states as distinct shapes as well as colors (chosen in Settings).
+status_indicators = "symbols"
 
 # Names retain Herdr's active/inactive foreground and bold distinction.
 # Keep status icons and Git indicators semantic, not a single decorative color.
