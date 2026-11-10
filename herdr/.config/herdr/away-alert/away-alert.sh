@@ -38,7 +38,8 @@ pane=$(field .data.pane_id)
 # both as finished work with completion_seq (equal to the state change's
 # state_change_seq); starting or restoring an agent goes idle without one.
 # Viewing a done agent turns it idle with the same completion_seq, so each
-# terminal's last alerted completion is remembered to alert once.
+# terminal's last alerted completion is recorded, after delivery, to alert once.
+ledger=
 info=$("$herdr" agent get "$pane" 2>/dev/null) || exit 0
 if [ "$status" = blocked ]; then
 	if [ "$(printf '%s' "$info" | jq -r '.result.agent.agent_status')" != blocked ]; then
@@ -57,11 +58,27 @@ else
 	terminal=${completion% *}
 	completion_seq=${completion#* }
 	ledger="${HERDR_PLUGIN_STATE_DIR:?}/alerted-$terminal"
-	if [ "$(cat "$ledger" 2>/dev/null)" = "$completion_seq" ]; then
+	alerted() {
+		[ "$(cat "$ledger" 2>/dev/null)" = "$completion_seq" ]
+	}
+	if alerted; then
 		echo "away-alert: already alerted for this finish" >&2
 		exit 0
 	fi
-	printf '%s\n' "$completion_seq" >"$ledger"
+	# herdr can run two handlers for one finish at once (done, then idle).
+	# mkdir is atomic, so only one claims it; a claim left by a killed handler
+	# blocks only this finish, never later ones. Recheck after claiming: the
+	# other handler may have delivered and released its claim in between.
+	claim="$ledger.$completion_seq.sending"
+	if ! mkdir "$claim" 2>/dev/null; then
+		echo "away-alert: another handler is alerting for this finish" >&2
+		exit 0
+	fi
+	trap 'rmdir "$claim"' EXIT
+	if alerted; then
+		echo "away-alert: already alerted for this finish" >&2
+		exit 0
+	fi
 fi
 
 label=
@@ -77,4 +94,7 @@ url=$(jq -rn \
 		["pane", $pane], ["socket", $socket]
 	] | map("\(.[0])=\(.[1] | @uri)") | join("&"))')
 open -g "$url"
+if [ -n "$ledger" ]; then
+	printf '%s\n' "$completion_seq" >"$ledger"
+fi
 echo "away-alert: sent: ${agent:-Agent} $what ($label)" >&2
