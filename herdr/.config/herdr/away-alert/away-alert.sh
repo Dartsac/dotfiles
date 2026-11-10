@@ -63,24 +63,17 @@ else
 	printf '%s\n' "${completion#* }" >"$ledger"
 fi
 
-# herdr plays its sound only for agents in background workspaces. The card
-# plays one only when herdr will not: the agent is in the workspace on screen.
 label=
-sound=0
 if [ -n "$workspace" ]; then
-	ws=$("$herdr" workspace get "$workspace") || ws='{}'
-	label=$(printf '%s' "$ws" | jq -r '.result.workspace.label // empty')
-	if [ "$(printf '%s' "$ws" | jq -r '.result.workspace.focused // false')" = true ]; then
-		sound=1
-	fi
+	label=$("$herdr" workspace get "$workspace" | jq -r '.result.workspace.label // empty') || label=
 fi
 
 url=$(jq -rn \
 	--arg title "${agent:-Agent} $what" --arg body "$label" --arg workspace "$workspace" \
-	--arg pane "$pane" --arg bin "$herdr" --arg socket "${HERDR_SOCKET_PATH:-}" --arg sound "$sound" \
+	--arg pane "$pane" --arg bin "$herdr" --arg socket "${HERDR_SOCKET_PATH:-}" \
 	'"hammerspoon://herdr-alert?" + ([
 		["title", $title], ["body", $body], ["workspace", $workspace],
-		["pane", $pane], ["bin", $bin], ["socket", $socket], ["sound", $sound]
+		["pane", $pane], ["bin", $bin], ["socket", $socket]
 	] | map("\(.[0])=\(.[1] | @uri)") | join("&"))')
 open -g "$url"
-echo "away-alert: sent: ${agent:-Agent} $what ($label)$([ "$sound" = 1 ] && echo ', with sound' || echo ', herdr plays the sound')" >&2
+echo "away-alert: sent: ${agent:-Agent} $what ($label)" >&2
