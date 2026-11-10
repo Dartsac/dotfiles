@@ -53,6 +53,17 @@ return {
 			desc = "Find files in CWD",
 		},
 		{
+			"<leader>fa",
+			function()
+				require("telescope.builtin").find_files({
+					cwd = vim.fn.getcwd(),
+					no_ignore = true,
+					entry_maker = make_harpoon_entry({}),
+				})
+			end,
+			desc = "Find all files (including ignored)",
+		},
+		{
 			"<leader>fh",
 			function()
 				require("telescope.builtin").help_tags()
@@ -94,8 +105,11 @@ return {
 		local action_state = require("telescope.actions.state")
 
 		telescope.setup({
+			pickers = {
+				find_files = { hidden = true },
+			},
 			defaults = {
-				file_ignore_patterns = { "node_modules" },
+				file_ignore_patterns = { "node_modules", "%.git/" },
 				-- <leader>sl resumes the most recent picker. Keep the cache bounded
 				-- (Telescope's defaults, stated explicitly): one picker, 1000 entries.
 				cache_picker = { num_pickers = 1, limit_entries = 1000 },

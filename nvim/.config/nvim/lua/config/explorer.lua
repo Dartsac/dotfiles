@@ -52,6 +52,7 @@ function M.source()
 		layout = { preset = "sidebar", preview = false, layout = { position = "right" } },
 		format = M.format,
 		follow_file = true,
+		hidden = true,
 		git_status = true,
 		diagnostics = true,
 		auto_close = false,
