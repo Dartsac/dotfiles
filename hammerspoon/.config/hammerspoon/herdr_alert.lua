@@ -4,9 +4,10 @@
 --   hammerspoon://herdr-alert?title=…&body=…&workspace=…&pane=…&socket=…
 -- This shows a card in the dictation HUD's pixel style, top-right on the
 -- screen in use. It is silent: herdr plays its own sound for the same change
--- whenever Ghostty is not in front. Click the card to bring Ghostty forward
--- and focus that agent; click × to dismiss it. Cards stay until clicked, and
--- all clear when you switch to Ghostty yourself (herdr shows the state there).
+-- whenever Ghostty is not in front. Click the card to bring forward the Ghostty
+-- window attached to that agent's herdr session and focus the agent; click ×
+-- to dismiss it. Cards stay until clicked, and all clear when you switch to
+-- Ghostty yourself (herdr shows the state there).
 local M = {}
 
 local GHOSTTY = "com.mitchellh.ghostty"
@@ -107,12 +108,54 @@ local function herdr(binary, socket, commands)
 	task:start()
 end
 
+-- The herdr client attached to a session is the process whose Unix socket is
+-- connected to one of the endpoints `lsof -nP -U` lists under the session's
+-- herdr-client.sock. Columns: COMMAND PID USER FD TYPE DEVICE SIZE/OFF NAME.
+function M.clientPid(lsofOutput, clientSocket)
+	local endpoints, peers = {}, {}
+	for line in lsofOutput:gmatch("[^\n]+") do
+		local fields = {}
+		for field in line:gmatch("%S+") do
+			fields[#fields + 1] = field
+		end
+		local name = fields[#fields]
+		if name == clientSocket then
+			endpoints[fields[6]] = true
+		elseif fields[1] == "herdr" and name and name:sub(1, 2) == "->" then
+			table.insert(peers, { pid = tonumber(fields[2]), endpoint = name:sub(3) })
+		end
+	end
+	for _, peer in ipairs(peers) do
+		if endpoints[peer.endpoint] then
+			return peer.pid
+		end
+	end
+end
+
+-- Raise the Ghostty window (and tab) showing this session: its terminal's
+-- foreground process is the herdr client. If none is found, the Ghostty
+-- window already brought forward stays.
+local function focusSessionWindow(socket)
+	local clientSocket = socket:gsub("herdr%.sock$", "herdr-client.sock")
+	hs.task
+		.new("/usr/sbin/lsof", function(_, stdout)
+			local pid = M.clientPid(stdout or "", clientSocket)
+			if pid then
+				hs.osascript.applescript(
+					('tell application "Ghostty" to focus (first terminal whose pid is %d)'):format(pid)
+				)
+			end
+		end, { "-nP", "-U" })
+		:start()
+end
+
 local function focusAgent(params)
 	hs.application.launchOrFocusByBundleID(GHOSTTY)
 	local binary, socket = herdrBinary(), trustedSocket(params.socket)
 	if not binary or not socket then
 		return
 	end
+	focusSessionWindow(socket)
 	local commands = {}
 	local workspace, pane = herdrId(params.workspace), herdrId(params.pane)
 	if workspace then
