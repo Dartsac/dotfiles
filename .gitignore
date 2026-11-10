@@ -2,6 +2,9 @@
 fish/.config/fish/fish_variables
 fish/.config/fish/fish_greeting_last_run
 
+# Python bytecode (the herdr scripts import herdr_cli.py)
+__pycache__/
+
 #lazygit
 lazygit/Library/Application Support/lazygit/state.yml
 lazygit/Library/Application Support/lazygit/github_pull_requests.json

@@ -14,6 +14,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+from herdr_cli import herdr_binary
+
 
 def session(binary, name):
     listing = subprocess.run([binary, "session", "list", "--json"], check=True,
@@ -25,7 +27,7 @@ def session(binary, name):
 
 
 def main():
-    binary = os.environ.get("HERDR_BIN_PATH") or "herdr"
+    binary = herdr_binary()
     name = os.environ.get("HERDR_SESSION")
     target = session(binary, name)
     saved = Path(target["session_dir"]) / "session.json"

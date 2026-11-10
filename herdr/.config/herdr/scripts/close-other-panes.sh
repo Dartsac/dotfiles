@@ -3,7 +3,8 @@
 # focused tab except the focused one.
 set -eu
 
-herdr=${HERDR_BIN_PATH:-herdr}
+case $0 in */*) here=${0%/*} ;; *) here=. ;; esac # also when run as `sh close-other-panes.sh`
+. "$here/herdr-bin.sh" # sets $herdr
 
 "$herdr" pane list --workspace "$HERDR_ACTIVE_WORKSPACE_ID" |
 	jq -r --arg tab "$HERDR_ACTIVE_TAB_ID" --arg keep "$HERDR_ACTIVE_PANE_ID" \

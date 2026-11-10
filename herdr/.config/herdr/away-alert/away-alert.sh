@@ -28,7 +28,8 @@ if lsappinfo info -only bundleid "$(lsappinfo front)" | grep -q '"com.mitchellh.
 	exit 0
 fi
 
-herdr=${HERDR_BIN_PATH:-herdr}
+# The plugin runs from its own folder; the shared lookup is with the scripts.
+. "$HOME/.config/herdr/scripts/herdr-bin.sh" # sets $herdr
 
 # A finish is "done" when herdr thinks you have not seen it, but "idle" when
 # the pane was on screen, even with Ghostty behind another app. herdr marks

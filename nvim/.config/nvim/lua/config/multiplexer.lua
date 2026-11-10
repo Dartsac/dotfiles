@@ -36,7 +36,14 @@ function M.current()
 end
 
 local function herdr_bin()
-	return vim.env.HERDR_BIN_PATH or "herdr"
+	-- A running server can keep a stale binary path after an update. Same rule
+	-- as herdr's scripts/herdr-bin.sh and herdr_cli.py: only an executable
+	-- regular file counts (executable() rejects directories), else PATH.
+	local configured = vim.env.HERDR_BIN_PATH
+	if configured and configured ~= "" and vim.fn.executable(configured) == 1 then
+		return configured
+	end
+	return "herdr"
 end
 
 local function report(result, fallback)
@@ -254,8 +261,14 @@ function M.navigate(direction)
 		if not herdr_direction or vim.api.nvim_get_current_win() ~= window then
 			return nil
 		end
+		local pane = vim.env.HERDR_PANE_ID
+		if not pane or pane == "" then
+			vim.notify("Cannot navigate herdr panes: HERDR_PANE_ID is missing", vim.log.levels.ERROR)
+			return nil
+		end
+		-- Anchor the asynchronous move to this editor, not global client focus.
 		return start(
-			{ herdr_bin(), "pane", "focus", "--direction", herdr_direction, "--current" },
+			{ herdr_bin(), "pane", "focus", "--direction", herdr_direction, "--pane", pane },
 			"herdr pane focus failed"
 		)
 	end

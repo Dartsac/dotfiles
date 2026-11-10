@@ -16,6 +16,8 @@ import subprocess
 import sys
 import time
 
+from herdr_cli import herdr_binary
+
 
 def subdirectories(path):
     try:
@@ -145,7 +147,7 @@ def main():
     if args.list:
         print("\n".join(projects(Path.home())))
         return 0
-    binary = os.environ.get("HERDR_BIN_PATH") or "herdr"
+    binary = herdr_binary()
     # Herdr panes and custom commands receive their own server's socket. Never
     # silently target the default session from another terminal (e.g. tmux).
     inside = bool(os.environ.get("HERDR_SOCKET_PATH"))
