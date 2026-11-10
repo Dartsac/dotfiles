@@ -62,7 +62,7 @@ local CARD = {
 	},
 }
 
-local cards = {} -- shown cards, newest first: { canvas = …, pane = … }
+local cards = {} -- shown cards, newest first: { canvas = …, key = socket and pane }
 
 local function placeAll()
 	local f = hs.screen.mainScreen():frame()
@@ -177,14 +177,19 @@ end
 
 local function show(params)
 	local accent = (params.title or ""):find("needs input", 1, true) and CARD.colors.blocked or CARD.colors.done
-	-- A newer alert for the same agent replaces its card.
+	-- A newer alert for the same agent replaces its card. Pane IDs are only
+	-- unique within one herdr session, so the session's socket is part of the key.
+	local key
+	if params.pane and params.pane ~= "" then
+		key = (params.socket or "") .. "\n" .. params.pane
+	end
 	for _, card in ipairs(cards) do
-		if params.pane and params.pane ~= "" and card.pane == params.pane then
+		if key and card.key == key then
 			dismiss(card)
 			break
 		end
 	end
-	local card = { pane = params.pane, canvas = build(params, accent) }
+	local card = { key = key, canvas = build(params, accent) }
 	card.canvas:mouseCallback(function(canvas, message, id)
 		if message == "mouseEnter" or message == "mouseExit" then
 			local color = message == "mouseEnter" and CARD.colors.hover or CARD.colors.border
