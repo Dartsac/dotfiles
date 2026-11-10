@@ -115,25 +115,25 @@ description = "close every other pane in this tab"
 [[keys.command]]
 key = "ctrl+h"
 type = "shell"
-command = 'sh "$HOME/.config/herdr/scripts/navigate.sh" left'
+command = 'exec sh "$HOME/.config/herdr/scripts/navigate.sh" left'
 description = "focus left, or pass to Neovim"
 
 [[keys.command]]
 key = "ctrl+j"
 type = "shell"
-command = 'sh "$HOME/.config/herdr/scripts/navigate.sh" down'
+command = 'exec sh "$HOME/.config/herdr/scripts/navigate.sh" down'
 description = "focus down, or pass to Neovim"
 
 [[keys.command]]
 key = "ctrl+k"
 type = "shell"
-command = 'sh "$HOME/.config/herdr/scripts/navigate.sh" up'
+command = 'exec sh "$HOME/.config/herdr/scripts/navigate.sh" up'
 description = "focus up, or pass to Neovim"
 
 [[keys.command]]
 key = "ctrl+l"
 type = "shell"
-command = 'sh "$HOME/.config/herdr/scripts/navigate.sh" right'
+command = 'exec sh "$HOME/.config/herdr/scripts/navigate.sh" right'
 description = "focus right, or pass to Neovim"
 
 [ui]

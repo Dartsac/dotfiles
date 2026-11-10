@@ -1,8 +1,9 @@
 -- Splits, project sessions and window/pane navigation for the multiplexer that
 -- applies here, chosen as fish's functions/multiplexer.fish chooses it: the
 -- pane's own (herdr via $HERDR_ENV, tmux via $TMUX), otherwise the Default
--- multiplexer ($DEFAULT_MULTIPLEXER, tmux when unset). Commands are argument
--- lists, never shell strings, so paths with spaces and quotes stay literal.
+-- multiplexer ($DEFAULT_MULTIPLEXER, tmux when unset). External processes are
+-- started with argument lists; the only shell strings are the fixed /bin/sh
+-- script and the fish-quoted pane input below, so paths stay literal.
 local M = {}
 
 local function adapted(args)
@@ -82,8 +83,13 @@ local function nvim_command(filepath)
 	return fish_quote(vim.v.progpath) .. " -- " .. fish_quote(filepath)
 end
 
-local function herdr_type(pane, command)
+local function run_in_herdr_pane(pane, command)
 	return checked({ herdr_bin(), "pane", "run", pane, command }) ~= nil
+end
+
+local function json_field(result, ...)
+	local ok, response = pcall(vim.json.decode, result.stdout or "", { luanil = { object = true } })
+	return ok and type(response) == "table" and vim.tbl_get(response, ...) or nil
 end
 
 local function herdr_split(filepath, direction)
@@ -101,13 +107,12 @@ local function herdr_split(filepath, direction)
 	if not result then
 		return false
 	end
-	local ok, response = pcall(vim.json.decode, result.stdout)
-	local pane = ok and vim.tbl_get(response, "result", "pane", "pane_id")
+	local pane = json_field(result, "result", "pane", "pane_id")
 	if not pane then
 		vim.notify("herdr pane split returned no pane id", vim.log.levels.ERROR)
 		return false
 	end
-	return herdr_type(pane, nvim_command(filepath))
+	return run_in_herdr_pane(pane, nvim_command(filepath))
 end
 
 --- Open filepath in Neovim in a new pane: "vertical" splits side by side
@@ -138,11 +143,6 @@ local function editable_file()
 	end
 end
 
-local function json_field(result, ...)
-	local ok, response = pcall(vim.json.decode, result.stdout or "", { luanil = { object = true } })
-	return ok and type(response) == "table" and vim.tbl_get(response, ...) or nil
-end
-
 local function create_herdr_workspace()
 	-- The project picker owns workspace matching (project_path metadata), so
 	-- Ctrl-f and this command find each other's workspaces.
@@ -168,15 +168,16 @@ local function create_herdr_workspace()
 		local pane = json_field(result, "root_pane_id")
 		if not pane then
 			local tab = checked({ herdr_bin(), "tab", "create", "--workspace", workspace, "--cwd", cwd, "--focus" })
-			pane = tab and json_field(tab, "result", "root_pane", "pane_id")
+			if not tab then
+				return
+			end
+			pane = json_field(tab, "result", "root_pane", "pane_id")
 			if not pane then
-				if tab then
-					vim.notify("herdr tab create returned no pane id", vim.log.levels.ERROR)
-				end
+				vim.notify("herdr tab create returned no pane id", vim.log.levels.ERROR)
 				return
 			end
 		end
-		if not herdr_type(pane, nvim_command(file)) then
+		if not run_in_herdr_pane(pane, nvim_command(file)) then
 			return
 		end
 	end

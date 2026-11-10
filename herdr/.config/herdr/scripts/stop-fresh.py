@@ -13,14 +13,17 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-import time
 
 
 def session(binary, name):
     listing = subprocess.run([binary, "session", "list", "--json"], check=True,
                              capture_output=True, text=True).stdout
     for entry in json.loads(listing)["sessions"]:
-        if entry["name"] == name if name else entry["default"]:
+        if name:
+            matches = entry["name"] == name
+        else:
+            matches = entry["default"]
+        if matches:
             return entry
     raise RuntimeError(f"no herdr session named {name!r}")
 
@@ -39,12 +42,8 @@ def main():
         os.dup2(devnull, fd)
 
     if target["running"]:
-        subprocess.run([binary, "server", "stop"], check=False)
-        deadline = time.monotonic() + 15
-        while session(binary, name)["running"]:
-            if time.monotonic() > deadline:
-                return 1  # Still running: keep its layout rather than race it.
-            time.sleep(0.2)
+        # Returns once the server is down; fails (keeping the layout) otherwise.
+        subprocess.run([binary, "server", "stop"], check=True)
     saved.unlink(missing_ok=True)
     return 0
 

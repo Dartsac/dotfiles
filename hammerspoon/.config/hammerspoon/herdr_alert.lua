@@ -11,15 +11,6 @@ local M = {}
 
 local GHOSTTY = "com.mitchellh.ghostty"
 
-local function rgb(hex, alpha)
-	return {
-		red = tonumber(hex:sub(1, 2), 16) / 255,
-		green = tonumber(hex:sub(3, 4), 16) / 255,
-		blue = tonumber(hex:sub(5, 6), 16) / 255,
-		alpha = alpha or 1,
-	}
-end
-
 local CARD = {
 	w = 320,
 	h = 64,
@@ -29,13 +20,13 @@ local CARD = {
 	gap = 8, -- between stacked cards
 	font = "Hack Nerd Font Mono",
 	colors = { -- the dictation HUD's Sweetie-16-ish palette
-		bg = rgb("1a1c2c", 0.96),
-		border = rgb("f4f4f4"),
-		hover = rgb("ffcd75"),
-		text = rgb("f4f4f4"),
-		subtext = rgb("94b0c2"),
-		done = rgb("38b764"),
-		blocked = rgb("e43b44"),
+		bg = { hex = "#1a1c2c", alpha = 0.96 },
+		border = { hex = "#f4f4f4" },
+		hover = { hex = "#ffcd75" },
+		text = { hex = "#f4f4f4" },
+		subtext = { hex = "#94b0c2" },
+		done = { hex = "#38b764" },
+		blocked = { hex = "#e43b44" },
 	},
 }
 
@@ -162,12 +153,12 @@ local function show(params)
 		end
 	end
 	local card = { pane = params.pane, canvas = build(params, accent) }
-	card.canvas:mouseCallback(function(c, message, id)
+	card.canvas:mouseCallback(function(canvas, message, id)
 		if message == "mouseEnter" or message == "mouseExit" then
 			local color = message == "mouseEnter" and CARD.colors.hover or CARD.colors.border
-			for i = 1, #c do
-				if c[i].id == "frame" then
-					c[i].fillColor = color
+			for i = 1, #canvas do
+				if canvas[i].id == "frame" then
+					canvas[i].fillColor = color
 				end
 			end
 		elseif message == "mouseUp" then

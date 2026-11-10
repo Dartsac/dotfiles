@@ -11,10 +11,10 @@ function dev
                 # Open this directory's workspace, laying it out only if new
                 set -l opened (python3 ~/.config/herdr/scripts/project-picker.py --default-session --json (pwd))
                 or return
-                set -l pane (printf '%s' $opened | jq -r '.root_pane_id // empty')
-                if test -n "$pane"
-                    herdr pane run $pane v >/dev/null
-                    and herdr pane split $pane --direction down --ratio 0.8 --focus >/dev/null
+                set -l root_pane (printf '%s' $opened | jq -r '.root_pane_id // empty')
+                if test -n "$root_pane"
+                    herdr pane run $root_pane v >/dev/null
+                    and herdr pane split $root_pane --direction down --ratio 0.8 --focus >/dev/null
                 end
                 herdr
             end

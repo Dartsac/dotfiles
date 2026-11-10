@@ -97,7 +97,7 @@ set -g fish_key_bindings fish_default_key_bindings
 
 # Multiplexer shortcuts act on the multiplexer that applies here (functions/
 # multiplexer.fish): the pane's own, else the Default multiplexer. A herdr
-# session corresponds to a tmux session per project, so ks closes the
+# workspace corresponds to a per-project tmux session, so ks closes the
 # workspace. `dev` lives in functions/dev.fish.
 function ke --description 'stop the multiplexer server and every pane in it; start empty next time'
     switch (multiplexer)

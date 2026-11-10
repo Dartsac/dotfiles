@@ -55,12 +55,13 @@ else
 		exit 0
 	fi
 	terminal=${completion% *}
+	completion_seq=${completion#* }
 	ledger="${HERDR_PLUGIN_STATE_DIR:?}/alerted-$terminal"
-	if [ "$(cat "$ledger" 2>/dev/null)" = "${completion#* }" ]; then
+	if [ "$(cat "$ledger" 2>/dev/null)" = "$completion_seq" ]; then
 		echo "away-alert: already alerted for this finish" >&2
 		exit 0
 	fi
-	printf '%s\n' "${completion#* }" >"$ledger"
+	printf '%s\n' "$completion_seq" >"$ledger"
 fi
 
 label=
