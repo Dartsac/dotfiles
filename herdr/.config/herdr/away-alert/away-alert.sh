@@ -71,10 +71,10 @@ fi
 
 url=$(jq -rn \
 	--arg title "${agent:-Agent} $what" --arg body "$label" --arg workspace "$workspace" \
-	--arg pane "$pane" --arg bin "$herdr" --arg socket "${HERDR_SOCKET_PATH:-}" \
+	--arg pane "$pane" --arg socket "${HERDR_SOCKET_PATH:-}" \
 	'"hammerspoon://herdr-alert?" + ([
 		["title", $title], ["body", $body], ["workspace", $workspace],
-		["pane", $pane], ["bin", $bin], ["socket", $socket]
+		["pane", $pane], ["socket", $socket]
 	] | map("\(.[0])=\(.[1] | @uri)") | join("&"))')
 open -g "$url"
 echo "away-alert: sent: ${agent:-Agent} $what ($label)" >&2

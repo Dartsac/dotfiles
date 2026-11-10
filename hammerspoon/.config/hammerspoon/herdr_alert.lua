@@ -1,7 +1,7 @@
 -- Away alerts for herdr: an agent is done or needs input while Ghostty is not
 -- in front. herdr's away-alert plugin
 -- (~/.config/herdr/away-alert) decides when one is due and opens
---   hammerspoon://herdr-alert?title=…&body=…&workspace=…&pane=…&bin=…&socket=…
+--   hammerspoon://herdr-alert?title=…&body=…&workspace=…&pane=…&socket=…
 -- This shows a card in the dictation HUD's pixel style, top-right on the
 -- screen in use. It is silent: herdr plays its own sound for the same change
 -- whenever Ghostty is not in front. Click the card to bring Ghostty forward
@@ -10,6 +10,38 @@
 local M = {}
 
 local GHOSTTY = "com.mitchellh.ghostty"
+local HOME = os.getenv("HOME")
+
+-- Any program can open a hammerspoon:// link, so nothing in it chooses what
+-- runs: herdr is found here, the socket must be one of herdr's under
+-- ~/.config/herdr, and IDs must look like herdr IDs (w1, w1:p2).
+local HERDR_PATHS = { HOME .. "/.local/bin/herdr", "/opt/homebrew/bin/herdr", "/usr/local/bin/herdr" }
+local SOCKET_DIR = HOME .. "/.config/herdr/"
+
+local function herdrBinary()
+	for _, path in ipairs(HERDR_PATHS) do
+		local permissions = hs.fs.attributes(path, "permissions")
+		if permissions and permissions:sub(3, 3) == "x" then
+			return path
+		end
+	end
+end
+
+local function trustedSocket(path)
+	if not path or path:sub(1, #SOCKET_DIR) ~= SOCKET_DIR or path:find("..", 1, true) then
+		return nil
+	end
+	local rest = path:sub(#SOCKET_DIR + 1)
+	if rest == "herdr.sock" or rest:match("^sessions/[%w._-]+/herdr%.sock$") then
+		return path
+	end
+end
+
+local function herdrId(value)
+	if value and (value:match("^%w+$") or value:match("^%w+:%w+$")) then
+		return value
+	end
+end
 
 local CARD = {
 	w = 320,
@@ -61,35 +93,35 @@ local function dismissAll()
 end
 
 -- Run herdr commands one after another, against the server that sent the alert.
-local function herdr(params, commands)
+local function herdr(binary, socket, commands)
 	local args = table.remove(commands, 1)
 	if not args then
 		return
 	end
-	local task = hs.task.new(params.bin, function()
-		herdr(params, commands)
+	local task = hs.task.new(binary, function()
+		herdr(binary, socket, commands)
 	end, args)
-	if params.socket and params.socket ~= "" then
-		local env = task:environment()
-		env.HERDR_SOCKET_PATH = params.socket
-		task:setEnvironment(env)
-	end
+	local env = task:environment()
+	env.HERDR_SOCKET_PATH = socket
+	task:setEnvironment(env)
 	task:start()
 end
 
 local function focusAgent(params)
 	hs.application.launchOrFocusByBundleID(GHOSTTY)
-	if not params.bin or params.bin == "" then
+	local binary, socket = herdrBinary(), trustedSocket(params.socket)
+	if not binary or not socket then
 		return
 	end
 	local commands = {}
-	if params.workspace and params.workspace ~= "" then
-		table.insert(commands, { "workspace", "focus", params.workspace })
+	local workspace, pane = herdrId(params.workspace), herdrId(params.pane)
+	if workspace then
+		table.insert(commands, { "workspace", "focus", workspace })
 	end
-	if params.pane and params.pane ~= "" then
-		table.insert(commands, { "agent", "focus", params.pane })
+	if pane then
+		table.insert(commands, { "agent", "focus", pane })
 	end
-	herdr(params, commands)
+	herdr(binary, socket, commands)
 end
 
 local function build(params, accent)
