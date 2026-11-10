@@ -7,12 +7,12 @@
 # logged to `herdr plugin log list`.
 set -eu
 
+# status, agent, workspace and pane, read from the event in one jq call.
 event=${HERDR_PLUGIN_EVENT_JSON:-'{}'}
-field() {
-	printf '%s' "$event" | jq -r "$1 // empty"
-}
-
-status=$(field .data.agent_status)
+fields=$(printf '%s' "$event" | jq -r '.data | @sh "
+	status=\(.agent_status // "") agent=\(.display_agent // .agent // "")
+	workspace=\(.workspace_id // "") pane=\(.pane_id // "")"')
+eval "$fields"
 case $status in
 done | idle) what="is done" ;;
 blocked) what="needs input" ;;
@@ -28,10 +28,7 @@ if lsappinfo info -only bundleid "$(lsappinfo front)" | grep -q '"com.mitchellh.
 	exit 0
 fi
 
-herdr=${HERDR_BIN_PATH:-$(command -v herdr)}
-agent=$(field '.data.display_agent // .data.agent')
-workspace=$(field .data.workspace_id)
-pane=$(field .data.pane_id)
+herdr=${HERDR_BIN_PATH:-herdr}
 
 # A finish is "done" when herdr thinks you have not seen it, but "idle" when
 # the pane was on screen, even with Ghostty behind another app. herdr marks
@@ -58,24 +55,17 @@ else
 	terminal=${completion% *}
 	completion_seq=${completion#* }
 	ledger="${HERDR_PLUGIN_STATE_DIR:?}/alerted-$terminal"
-	alerted() {
-		[ "$(cat "$ledger" 2>/dev/null)" = "$completion_seq" ]
-	}
-	if alerted; then
-		echo "away-alert: already alerted for this finish" >&2
-		exit 0
-	fi
 	# herdr can run two handlers for one finish at once (done, then idle).
 	# mkdir is atomic, so only one claims it; a claim left by a killed handler
-	# blocks only this finish, never later ones. Recheck after claiming: the
-	# other handler may have delivered and released its claim in between.
+	# blocks only this finish, never later ones. Check the ledger after
+	# claiming: the other handler may have delivered and released its claim.
 	claim="$ledger.$completion_seq.sending"
 	if ! mkdir "$claim" 2>/dev/null; then
 		echo "away-alert: another handler is alerting for this finish" >&2
 		exit 0
 	fi
 	trap 'rmdir "$claim"' EXIT
-	if alerted; then
+	if [ "$(cat "$ledger" 2>/dev/null)" = "$completion_seq" ]; then
 		echo "away-alert: already alerted for this finish" >&2
 		exit 0
 	fi
@@ -87,10 +77,10 @@ if [ -n "$workspace" ]; then
 fi
 
 url=$(jq -rn \
-	--arg title "${agent:-Agent} $what" --arg body "$label" --arg workspace "$workspace" \
-	--arg pane "$pane" --arg socket "${HERDR_SOCKET_PATH:-}" \
+	--arg status "$status" --arg title "${agent:-Agent} $what" --arg body "$label" \
+	--arg workspace "$workspace" --arg pane "$pane" --arg socket "${HERDR_SOCKET_PATH:-}" \
 	'"hammerspoon://herdr-alert?" + ([
-		["title", $title], ["body", $body], ["workspace", $workspace],
+		["status", $status], ["title", $title], ["body", $body], ["workspace", $workspace],
 		["pane", $pane], ["socket", $socket]
 	] | map("\(.[0])=\(.[1] | @uri)") | join("&"))')
 open -g "$url"

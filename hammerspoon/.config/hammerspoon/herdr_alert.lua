@@ -1,7 +1,7 @@
 -- Away alerts for herdr: an agent is done or needs input while Ghostty is not
 -- in front. herdr's away-alert plugin
 -- (~/.config/herdr/away-alert) decides when one is due and opens
---   hammerspoon://herdr-alert?title=…&body=…&workspace=…&pane=…&socket=…
+--   hammerspoon://herdr-alert?status=…&title=…&body=…&workspace=…&pane=…&socket=…
 -- This shows a card in the dictation HUD's pixel style, top-right on the
 -- screen in use. It is silent: herdr plays its own sound for the same change
 -- whenever Ghostty is not in front. Click the card to bring forward the Ghostty
@@ -109,9 +109,9 @@ local function herdr(binary, socket, commands)
 end
 
 -- The herdr client attached to a session is the process whose Unix socket is
--- connected to one of the endpoints `lsof -nP -U` lists under the session's
--- herdr-client.sock. Columns: COMMAND PID USER FD TYPE DEVICE SIZE/OFF NAME.
-function M.clientPid(lsofOutput, clientSocket)
+-- connected to one of the endpoints lsof lists under the session's
+-- herdr-client.sock. Both ends are herdr processes, so lsof lists only those. Columns: COMMAND PID USER FD TYPE DEVICE SIZE/OFF NAME.
+local function clientPid(lsofOutput, clientSocket)
 	local endpoints, peers = {}, {}
 	for line in lsofOutput:gmatch("[^\n]+") do
 		local fields = {}
@@ -139,13 +139,13 @@ local function focusSessionWindow(socket)
 	local clientSocket = socket:gsub("herdr%.sock$", "herdr-client.sock")
 	hs.task
 		.new("/usr/sbin/lsof", function(_, stdout)
-			local pid = M.clientPid(stdout or "", clientSocket)
+			local pid = clientPid(stdout or "", clientSocket)
 			if pid then
 				hs.osascript.applescript(
 					('tell application "Ghostty" to focus (first terminal whose pid is %d)'):format(pid)
 				)
 			end
-		end, { "-nP", "-U" })
+		end, { "-nP", "-a", "-U", "-c", "herdr" })
 		:start()
 end
 
@@ -219,17 +219,17 @@ local function build(params, accent)
 end
 
 local function show(params)
-	local accent = (params.title or ""):find("needs input", 1, true) and CARD.colors.blocked or CARD.colors.done
+	local accent = params.status == "blocked" and CARD.colors.blocked or CARD.colors.done
 	-- A newer alert for the same agent replaces its card. Pane IDs are only
 	-- unique within one herdr session, so the session's socket is part of the key.
 	local key
 	if params.pane and params.pane ~= "" then
 		key = (params.socket or "") .. "\n" .. params.pane
-	end
-	for _, card in ipairs(cards) do
-		if key and card.key == key then
-			dismiss(card)
-			break
+		for _, card in ipairs(cards) do
+			if card.key == key then
+				dismiss(card)
+				break
+			end
 		end
 	end
 	local card = { key = key, canvas = build(params, accent) }

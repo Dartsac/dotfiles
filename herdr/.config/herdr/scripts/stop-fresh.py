@@ -19,11 +19,7 @@ def session(binary, name):
     listing = subprocess.run([binary, "session", "list", "--json"], check=True,
                              capture_output=True, text=True).stdout
     for entry in json.loads(listing)["sessions"]:
-        if name:
-            matches = entry["name"] == name
-        else:
-            matches = entry["default"]
-        if matches:
+        if entry["name"] == name if name else entry["default"]:
             return entry
     raise RuntimeError(f"no herdr session named {name!r}")
 

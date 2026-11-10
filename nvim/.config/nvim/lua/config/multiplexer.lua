@@ -43,16 +43,19 @@ local function report(result, fallback)
 	vim.notify(vim.trim(result.stderr or "") ~= "" and result.stderr or fallback, vim.log.levels.ERROR)
 end
 
-local function run(args)
-	args = adapted(args)
-	local ok, result = pcall(function()
-		return vim.system(args, { text = true }):wait()
-	end)
+-- Start a process, reporting a failure to start; on_exit makes it asynchronous.
+local function spawn(args, on_exit)
+	local ok, process = pcall(vim.system, args, { text = true }, on_exit)
 	if not ok then
-		vim.notify(tostring(result), vim.log.levels.ERROR)
+		vim.notify(tostring(process), vim.log.levels.ERROR)
 		return nil
 	end
-	return result
+	return process
+end
+
+local function run(args)
+	local process = spawn(adapted(args))
+	return process and process:wait()
 end
 
 local function checked(args)
@@ -92,8 +95,22 @@ local function json_field(result, ...)
 	return ok and type(response) == "table" and vim.tbl_get(response, ...) or nil
 end
 
+-- Run args and return the JSON field at the given keys (plus the result),
+-- reporting a failed command or a missing field as `<what> returned no …`.
+local function checked_field(args, what, ...)
+	local result = checked(args)
+	if not result then
+		return nil
+	end
+	local value = json_field(result, ...)
+	if not value then
+		vim.notify(what .. " returned no " .. select(select("#", ...), ...):gsub("_", " "), vim.log.levels.ERROR)
+	end
+	return value, result
+end
+
 local function herdr_split(filepath, direction)
-	local result = checked({
+	local pane = checked_field({
 		herdr_bin(),
 		"pane",
 		"split",
@@ -103,16 +120,8 @@ local function herdr_split(filepath, direction)
 		"--cwd",
 		vim.fn.getcwd(),
 		"--focus",
-	})
-	if not result then
-		return false
-	end
-	local pane = json_field(result, "result", "pane", "pane_id")
-	if not pane then
-		vim.notify("herdr pane split returned no pane id", vim.log.levels.ERROR)
-		return false
-	end
-	return run_in_herdr_pane(pane, nvim_command(filepath))
+	}, "herdr pane split", "result", "pane", "pane_id")
+	return pane ~= nil and run_in_herdr_pane(pane, nvim_command(filepath))
 end
 
 --- Open filepath in Neovim in a new pane: "vertical" splits side by side
@@ -152,13 +161,8 @@ local function create_herdr_workspace()
 		table.insert(args, "--default-session")
 	end
 	table.insert(args, cwd)
-	local result = checked(args)
-	if not result then
-		return
-	end
-	local workspace = json_field(result, "workspace_id")
+	local workspace, result = checked_field(args, "The herdr project picker", "workspace_id")
 	if not workspace then
-		vim.notify("The herdr project picker returned no workspace", vim.log.levels.ERROR)
 		return
 	end
 	local file = editable_file()
@@ -166,18 +170,14 @@ local function create_herdr_workspace()
 		-- A new workspace's first pane gets the editor; an existing workspace
 		-- gets it in a new tab.
 		local pane = json_field(result, "root_pane_id")
-		if not pane then
-			local tab = checked({ herdr_bin(), "tab", "create", "--workspace", workspace, "--cwd", cwd, "--focus" })
-			if not tab then
-				return
-			end
-			pane = json_field(tab, "result", "root_pane", "pane_id")
-			if not pane then
-				vim.notify("herdr tab create returned no pane id", vim.log.levels.ERROR)
-				return
-			end
-		end
-		if not run_in_herdr_pane(pane, nvim_command(file)) then
+			or checked_field(
+				{ herdr_bin(), "tab", "create", "--workspace", workspace, "--cwd", cwd, "--focus" },
+				"herdr tab create",
+				"result",
+				"root_pane",
+				"pane_id"
+			)
+		if not pane or not run_in_herdr_pane(pane, nvim_command(file)) then
 			return
 		end
 	end
@@ -236,18 +236,13 @@ local HERDR_DIRECTION = { h = "left", j = "down", k = "up", l = "right" }
 local last_was_tmux = false
 
 local function start(args, failure)
-	local ok, process = pcall(vim.system, args, { text = true }, function(result)
+	return spawn(args, function(result)
 		if result.code ~= 0 then
 			vim.schedule(function()
 				report(result, failure)
 			end)
 		end
 	end)
-	if not ok then
-		vim.notify(tostring(process), vim.log.levels.ERROR)
-		return nil
-	end
-	return process
 end
 
 function M.navigate(direction)

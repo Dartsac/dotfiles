@@ -88,7 +88,8 @@ def open_project(selected, binary):
     # duplicate workspaces. Full paths also distinguish same-named projects.
     match = next((workspace for workspace in workspaces
                   if same_directory(workspace.get("tokens", {}).get("project_path"), path)), None)
-    if match is None:
+    tagged = match is not None
+    if not tagged:
         # Adopt existing manually created workspaces using their pane directory.
         untagged = {workspace["workspace_id"]: workspace for workspace in workspaces
                     if not workspace.get("tokens", {}).get("project_path")}
@@ -105,8 +106,9 @@ def open_project(selected, binary):
                         "--label", path.name.replace(".", "_") or "root", "--focus")
         workspace_id = created["workspace"]["workspace_id"]
         root_pane = created["root_pane"]["pane_id"]
-    herdr(binary, "workspace", "report-metadata", workspace_id,
-          "--source", "project-picker", "--token", f"project_path={path}")
+    if not tagged:
+        herdr(binary, "workspace", "report-metadata", workspace_id,
+              "--source", "project-picker", "--token", f"project_path={path}")
     return workspace_id, root_pane
 
 
@@ -143,7 +145,7 @@ def main():
     if args.list:
         print("\n".join(projects(Path.home())))
         return 0
-    binary = os.environ.get("HERDR_BIN_PATH") or shutil.which("herdr") or "herdr"
+    binary = os.environ.get("HERDR_BIN_PATH") or "herdr"
     # Herdr panes and custom commands receive their own server's socket. Never
     # silently target the default session from another terminal (e.g. tmux).
     inside = bool(os.environ.get("HERDR_SOCKET_PATH"))
