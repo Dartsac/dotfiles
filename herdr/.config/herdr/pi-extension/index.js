@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Supervision, asyncRunsRoot, clean, hasChildIssue, pendingRequests, supervisorRoot } from "./supervision.mjs";
-import { ChildTabs, isLive, scanChildren } from "./children.mjs";
+import { ChildTabs, isLive, scanChildren, viewerSessionRoots } from "./children.mjs";
 import { request } from "./rpc.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -27,7 +27,27 @@ function viewerAuthority() {
   } catch { return { steer: true, stop: true }; }
 }
 
+// pi-subagents' configured session folder, if any (also readable by viewers).
+function defaultSessionDir() {
+  try {
+    const dir = JSON.parse(fs.readFileSync(path.join(agentDir(), "extensions/subagent/config.json"), "utf8")).defaultSessionDir;
+    return typeof dir === "string" && dir ? dir.replace(/^~(?=$|\/)/, os.homedir()) : undefined;
+  } catch { return undefined; }
+}
+
 // The node that runs pi-subagents' viewer in a child tab.
+// The pi-coding-agent package of the running Pi, so a child tab's viewer draws
+// with the same Pi version's components. Undefined falls back to the old viewer.
+export function piPackageRoot(entry = process.argv[1]) {
+  try {
+    for (let dir = path.dirname(fs.realpathSync(entry)); dir !== path.dirname(dir); dir = path.dirname(dir)) {
+      const manifest = path.join(dir, "package.json");
+      if (fs.existsSync(manifest) && JSON.parse(fs.readFileSync(manifest, "utf8")).name === "@earendil-works/pi-coding-agent") return dir;
+    }
+  } catch { /* not started from a Pi install */ }
+  return undefined;
+}
+
 function viewerNode() {
   const onPath = (process.env.PATH ?? "").split(path.delimiter).map(dir => path.join(dir, "node")).find(file => {
     try { fs.accessSync(file, fs.constants.X_OK); return true; } catch { return false; }
@@ -147,7 +167,9 @@ export default function (pi) {
     if (!fs.existsSync(runner)) return; // pi-subagents not installed here
     const self = await call("pane.get", { pane_id: pane });
     const node = viewerNode();
+    const piRoot = piPackageRoot();
     const authority = viewerAuthority();
+    const sessionDir = defaultSessionDir();
     tabs = new ChildTabs({
       cli: herdrCli, rpc: call, workspace: self.pane.workspace_id, parentPane: pane, cwd: context.cwd,
       viewer: {
@@ -156,9 +178,11 @@ export default function (pi) {
           PI_SUBAGENT_VIEW_NODE: node, PI_SUBAGENT_VIEW_RUNNER: runner,
           PI_SUBAGENT_VIEW_ASYNC_DIR: child.asyncDir, PI_SUBAGENT_VIEW_RUN_ID: child.runId,
           PI_SUBAGENT_VIEW_INDEX: child.key.includes("#") ? String(child.index) : "",
-          PI_SUBAGENT_VIEW_ROOTS: Buffer.from(JSON.stringify(child.roots)).toString("base64"),
+          PI_SUBAGENT_VIEW_ROOTS: Buffer.from(JSON.stringify(viewerSessionRoots(child, sessionFile, sessionDir))).toString("base64"),
           PI_SUBAGENT_VIEW_STEER: String(authority.steer), PI_SUBAGENT_VIEW_STOP: String(authority.stop),
           PI_SUBAGENT_VIEW_TITLE: child.title || child.name,
+          PI_SUBAGENT_VIEW_NAME: child.name,
+          PI_SUBAGENT_VIEW_PI_ROOT: piRoot ?? "",
         }),
       },
     });

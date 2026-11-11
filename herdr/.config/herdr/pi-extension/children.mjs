@@ -53,6 +53,20 @@ export function scanChildren(asyncRoot, sessionIds) {
 
 export const isLive = state => LIVE.has(state);
 
+// Folders a child's viewer may read session files from: pi-subagents' own rule
+// (extension/index.js trustedSessionRoots): the parent session file's folder
+// (`<session>.jsonl` -> `<session>/`), the configured defaultSessionDir, plus a
+// run's recorded sessionRoot. Single-step runs record none, so the parent-derived
+// folder is what makes their sessions readable.
+export function viewerSessionRoots(child, parentSessionFile, defaultSessionDir) {
+  const roots = [...(child.roots ?? [])];
+  if (typeof parentSessionFile === "string" && parentSessionFile.endsWith(".jsonl")) {
+    roots.push(path.join(path.dirname(parentSessionFile), path.basename(parentSessionFile, ".jsonl")));
+  }
+  if (typeof defaultSessionDir === "string" && defaultSessionDir) roots.push(path.resolve(defaultSessionDir));
+  return [...new Set(roots.map(root => path.resolve(root)))];
+}
+
 export function childActivity(child, waiting) {
   if (TERMINAL_TEXT[child.state]) return TERMINAL_TEXT[child.state];
   if (waiting) return "Waiting on parent";
