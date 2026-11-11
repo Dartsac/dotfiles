@@ -6,8 +6,8 @@
 -- screen in use. It is silent: herdr plays its own sound for the same change
 -- whenever Ghostty is not in front. Click the card to bring forward the Ghostty
 -- window attached to that agent's herdr session and focus the agent; click ×
--- to dismiss it. Cards stay until clicked, and all clear when you switch to
--- Ghostty yourself (herdr shows the state there).
+-- to dismiss it. Cards also clear when their request resolves or the agent
+-- starts new work, and all clear when you switch to Ghostty yourself.
 local M = {}
 
 local GHOSTTY = "com.mitchellh.ghostty"
@@ -81,6 +81,10 @@ local function dismiss(card)
 			table.remove(cards, i)
 			card.canvas:delete()
 			placeAll()
+			if #cards == 0 and M.poller then
+				M.poller:stop()
+				M.poller = nil
+			end
 			return
 		end
 	end
@@ -91,6 +95,73 @@ local function dismissAll()
 		card.canvas:delete()
 	end
 	cards = {}
+	if M.poller then
+		M.poller:stop()
+		M.poller = nil
+	end
+end
+
+-- A card stays while its agent still needs you. A question card stays even if
+-- a different question replaced it while the agent stayed blocked: Herdr
+-- sends no status change for that, so no new card arrives, and an outdated
+-- title beats no card. Done cards check identity (a new finish replaces
+-- them). No model turns, focus changes, or shared default-session queries.
+local function pollCards()
+	for _, card in ipairs(cards) do
+		local params = card.params
+		local binary, socket, pane = herdrBinary(), trustedSocket(params.socket), herdrId(params.pane)
+		if binary and socket and pane and not card.polling then
+			card.polling = true
+			local timeout
+			local task = hs.task.new(binary, function(code, stdout, stderr)
+				card.polling = false
+				if timeout then
+					timeout:stop()
+				end
+				local ok, response = pcall(hs.json.decode, code == 0 and stdout or stderr)
+				if not ok or type(response) ~= "table" then
+					return
+				end
+				local agent = response.result and response.result.agent
+				if not agent then
+					local err = response.error and response.error.code
+					if err == "agent_not_found" or err == "pane_not_found" then
+						dismiss(card)
+					end
+					return -- A transport failure is not proof of resolution.
+				end
+				local stale = params.terminal and params.terminal ~= "" and agent.terminal_id ~= params.terminal
+				if params.status == "blocked" then
+					stale = stale or agent.agent_status ~= "blocked"
+				else
+					stale = stale or (agent.agent_status ~= "idle" and agent.agent_status ~= "done")
+					if params.completion and params.completion ~= "" then
+						stale = stale or tostring(agent.completion_seq) ~= params.completion
+					end
+				end
+				if stale then
+					dismiss(card)
+				end
+			end, { "agent", "get", pane })
+			if task then
+				local env = task:environment()
+				env.HERDR_SOCKET_PATH = socket
+				task:setEnvironment(env)
+				if task:start() then
+					if card.polling then
+						timeout = hs.timer.doAfter(3, function()
+							task:terminate()
+							card.polling = false
+						end)
+					end
+				else
+					card.polling = false
+				end
+			else
+				card.polling = false
+			end
+		end
+	end
 end
 
 -- Run herdr commands one after another, against the server that sent the alert.
@@ -232,7 +303,7 @@ local function show(params)
 			end
 		end
 	end
-	local card = { key = key, canvas = build(params, accent) }
+	local card = { key = key, params = params, canvas = build(params, accent) }
 	card.canvas:mouseCallback(function(canvas, message, id)
 		if message == "mouseEnter" or message == "mouseExit" then
 			local color = message == "mouseEnter" and CARD.colors.hover or CARD.colors.border
@@ -251,6 +322,9 @@ local function show(params)
 	table.insert(cards, 1, card)
 	placeAll()
 	card.canvas:show()
+	if not M.poller then
+		M.poller = hs.timer.doEvery(1, pollCards)
+	end
 end
 
 hs.urlevent.bind("herdr-alert", function(_, params)
