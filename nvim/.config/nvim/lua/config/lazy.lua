@@ -36,6 +36,14 @@ require("lazy").setup({
 		enabled = true,
 		-- path = vim.fn.stdpath("cache") .. "/lazy/cache",
 	},
+	performance = {
+		rtp = {
+			-- lazy.nvim drops Neovim's site packages from the runtime path. Keep
+			-- the Dracula PRO theme that theme-sync installs there, so
+			-- :colorscheme and the Telescope picker find it after startup.
+			paths = { vim.fn.stdpath("data") .. "/site/pack/themes/start/dracula-pro" },
+		},
+	},
 	-- Normally lazy-lock.json beside this config. $NVIM_LAZY_LOCKFILE points it
 	-- at a copy, so a throwaway (test) session can never rewrite the real one.
 	lockfile = vim.env.NVIM_LAZY_LOCKFILE,
