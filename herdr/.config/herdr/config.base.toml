@@ -1,3 +1,7 @@
+# Source for config.toml. Herdr reads config.toml, which theme-sync (repository
+# root) writes from this file with each color name in double braces replaced by
+# that Dracula PRO color. Edit this file, then run theme-sync. Color values
+# do not belong here.
 onboarding = false
 
 # Standalone Herdr profile based on ~/.config/tmux/tmux.conf.
@@ -7,37 +11,38 @@ name = "dracula"
 auto_switch = false
 
 # Dracula Pro: Ghostty + Neovim surfaces, tmux's peach focus accent.
-# Static UI palette; no changes to the source apps or their theme scripts.
+# Names are palette.md's terminal colors plus the Vim theme's bg shades, for
+# the variant Ghostty uses.
 [theme.custom]
 # Recessed sidebar: Neovim's bgdark, in the same cool hue family as
-# Ghostty's {{removed}} canvas (not the tmux script's warm #222120).
-sidebar_bg = "{{removed}}"
+# Ghostty's canvas.
+sidebar_bg = "{{bgdark}}"
 # One step up for the active workspace; another for keyboard selection.
-active_row_bg = "{{removed}}"
-selection_bg = "{{removed}}"
+active_row_bg = "{{bglight}}"
+selection_bg = "{{selection}}"
 # tmux's status surface, Neovim's raised surface, and quiet dividers.
-panel_bg = "{{removed}}"
-surface0 = "{{removed}}"
-surface1 = "{{removed}}"
-surface_dim = "{{removed}}"
+panel_bg = "{{bglight}}"
+surface0 = "{{bglight}}"
+surface1 = "{{bglighter}}"
+surface_dim = "{{bglighter}}"
 # Cream primary text; Ghostty's softer selection foreground for inactive names.
-text = "#f8f8f2"
-subtext0 = "{{removed}}"
-overlay1 = "{{removed}}"
-# Dracula comment + 30% foreground: legible headers, controls and metadata.
+text = "{{foreground}}"
+subtext0 = "{{dim_white}}"
+overlay1 = "{{dim_white}}"
+# Headers, controls and metadata.
 # Do not reuse this text color as a row background.
-overlay0 = "#9f99bf"
-# Dracula purple + 40% foreground: cool branch labels, >=5:1 on selection.
-mauve = "#bdb0fa"
+overlay0 = "{{comment}}"
+# Cool branch labels.
+mauve = "{{bright_blue}}"
 # Warm focus against cool surfaces. Herdr shares this with focused borders.
-accent = "{{removed}}"
-peach = "{{removed}}"
+accent = "{{orange}}"
+peach = "{{orange}}"
 # Dracula Pro semantic colors, consistent with Ghostty and Neovim.
-green = "{{removed}}"
-yellow = "{{removed}}"
-red = "{{removed}}"
-blue = "{{removed}}"
-teal = "{{removed}}"
+green = "{{green}}"
+yellow = "{{yellow}}"
+red = "{{red}}"
+blue = "{{bright_blue}}"
+teal = "{{cyan}}"
 
 [terminal]
 default_shell = "/opt/homebrew/bin/fish"
@@ -189,8 +194,8 @@ row_gap = 1
 rows = [
   ["state_icon", "workspace"],
   # $changes ("3 changed") comes from the git-changes plugin in this directory.
-  [{ token = "branch", fg = "#bdb0fa", bold = false, dim = false }, "git_status",
-   { token = "$changes", fg = "{{removed}}" }],
+  [{ token = "branch", fg = "{{bright_blue}}", bold = false, dim = false }, "git_status",
+   { token = "$changes", fg = "{{yellow}}" }],
 ]
 
 [ui.sidebar.agents]
@@ -201,8 +206,8 @@ rows = [
   ["state_icon", "workspace", "tab"],
   ["terminal_title_stripped"],
   ["agent", { token = "$activity", rules = [
-    { equals = "Failed", fg = "{{removed}}" },
-    { equals = "Waiting on parent", fg = "{{removed}}" },
+    { equals = "Failed", fg = "{{red}}" },
+    { equals = "Waiting on parent", fg = "{{yellow}}" },
   ] }],
 ]
 
@@ -212,9 +217,9 @@ rows = [
 pi = [
   ["state_icon", "workspace", "tab"],
   [{ token = "$activity", rules = [
-    { starts_with = "Waiting for you", fg = "{{removed}}", bold = true },
-    { contains = "60s", fg = "{{removed}}", bold = true },
-    { contains = "not done", fg = "{{removed}}" },
+    { starts_with = "Waiting for you", fg = "{{red}}", bold = true },
+    { contains = "60s", fg = "{{red}}", bold = true },
+    { contains = "not done", fg = "{{red}}" },
   ] }],
 ]
 

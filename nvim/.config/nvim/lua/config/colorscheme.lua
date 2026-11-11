@@ -5,14 +5,16 @@ local M = {}
 
 local GHOSTTY_CONFIG = "~/.config/ghostty/config"
 
+-- Colorschemes come from the Dracula PRO package, installed by theme-sync
+-- (repository root) into Neovim's site pack directory.
 local THEMES = {
-	["Dracula-Pro"] = "dracula_pro",
-	["Dracula-Alucard"] = "dracula_pro_alucard",
-	["Dracula-Blade"] = "dracula_pro_blade",
-	["Dracula-Buffy"] = "dracula_pro_buffy",
-	["Dracula-Lincoln"] = "dracula_pro_lincoln",
-	["Dracula-Morbius"] = "dracula_pro_morbius",
-	["Dracula-Van-Helsing"] = "dracula_pro_van_helsing",
+	["Dracula-Pro"] = "dracula-pro",
+	["Dracula-Alucard"] = "dracula-pro-alucard",
+	["Dracula-Blade"] = "dracula-pro-blade",
+	["Dracula-Buffy"] = "dracula-pro-buffy",
+	["Dracula-Lincoln"] = "dracula-pro-lincoln",
+	["Dracula-Morbius"] = "dracula-pro-morbius",
+	["Dracula-Van-Helsing"] = "dracula-pro-van-helsing",
 }
 
 ---@return string?
@@ -33,7 +35,11 @@ end
 function M.setup()
 	-- Always load a Dracula palette, even outside Ghostty or with an
 	-- unrecognized terminal theme, before applying palette-based highlights.
-	vim.cmd.colorscheme(THEMES[ghostty_theme() or ""] or "dracula_pro")
+	local name = THEMES[ghostty_theme() or ""] or "dracula-pro"
+	if not pcall(vim.cmd.colorscheme, name) then
+		-- Packages before v2.2 name their files with underscores.
+		vim.cmd.colorscheme((name:gsub("-", "_")))
+	end
 
 	local p = vim.g["dracula_pro#palette"]
 	local c = {

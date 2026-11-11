@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+"""Install the Dracula PRO theme from the downloaded package into each app.
+
+Dracula PRO is a paid theme, so its colors are never stored in this
+repository. This script reads them from the package on this machine and writes
+files that git ignores or that live outside the repository:
+
+  ~/.local/share/theme-sync/palette.json   named colors for every variant
+  ~/.config/ghostty/themes/Dracula-*       the package's Ghostty themes
+  ~/.local/share/nvim/site/pack/themes/start/dracula-pro   the package's Vim theme
+  ~/.config/herdr/config.toml              herdr/.config/herdr/config.base.toml
+                                           (next to this script) with {{names}} filled in
+
+Run it after downloading a new package, on a new machine, after editing
+herdr's config.base.toml, or after switching the Ghostty theme variant.
+
+Package: $DRACULA_PRO_DIR, else the newest dracula-pro-v* directory under
+~/Documents/Resources/Themes/Dracula Packages. It must contain
+design/palette.md, themes/ghostty and themes/vim (v2.2 or newer). Without a
+package nothing is installed, and herdr gets stand-in colors.
+
+  theme-sync            install everything
+  theme-sync --check    report what would change; write nothing
+"""
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+HOME = Path.home()
+PACKAGES = HOME / "Documents/Resources/Themes/Dracula Packages"
+PALETTE_JSON = HOME / ".local/share/theme-sync/palette.json"
+GHOSTTY = HOME / ".config/ghostty"
+NVIM_THEME = HOME / ".local/share/nvim/site/pack/themes/start/dracula-pro"
+HERDR_CONFIG = HOME / ".config/herdr/config.toml"
+HERDR_BASE = Path(__file__).resolve().parent / "herdr/.config/herdr/config.base.toml"
+TOKEN = re.compile(r"\{\{([a-z_]+)\}\}")
+
+# herdr colors used when no package is installed (One Dark, a free palette).
+# Names missing here have no stand-in, so their `key = "{{name}}"` lines are
+# dropped and herdr's built-in theme supplies them.
+NAMED_FALLBACK = {
+    "foreground": "#abb2bf",
+    "red": "#e06c75",
+    "green": "#98c379",
+    "yellow": "#e5c07b",
+    "orange": "#d19a66",
+    "cyan": "#56b6c2",
+    "bright_blue": "#61afef",
+}
+
+
+def version_key(path):
+    return [int(n) for n in re.findall(r"\d+", path.name)]
+
+
+def find_package():
+    """The package directory, or (None, why)."""
+    override = os.environ.get("DRACULA_PRO_DIR")
+    if override:
+        candidates = [Path(override).expanduser()]
+    else:
+        candidates = sorted(PACKAGES.glob("dracula-pro-v*"), key=version_key, reverse=True)
+    if not candidates:
+        return None, f"no dracula-pro-v* directory in {PACKAGES}"
+    package = candidates[0]
+    missing = [p for p in ("design/palette.md", "themes/ghostty", "themes/vim/colors") if not (package / p).exists()]
+    if missing:
+        return None, f"{package} lacks {', '.join(missing)} (needs Dracula PRO v2.2 or newer)"
+    return package, None
+
+
+def snake(name):
+    """BrightBlue -> bright_blue."""
+    return re.sub(r"(?<=[a-z])(?=[A-Z])", "_", name.strip()).lower().replace(" ", "_")
+
+
+def read_palettes(package):
+    """{variant: {name: "#rrggbb"}} from palette.md and the Vim theme."""
+    text = (package / "design/palette.md").read_text()
+    _, _, terminal = text.partition("# Color Palette - Terminal Standard")
+    sections, variant = {}, None
+    for line in terminal.splitlines():
+        heading = re.match(r"##\s+(?:Dracula PRO - )?(.+?)\s*$", line)
+        if heading:
+            variant = heading.group(1).lower().replace(" ", "-")
+            variant = "pro" if variant == "base" else variant
+            sections[variant] = {}
+            continue
+        row = re.match(r"\|\s*([A-Za-z ]+?)\s*\|\s*`(#[0-9A-Fa-f]{6})`", line)
+        if row and variant:
+            sections[variant][snake(row.group(1))] = row.group(2).lower()
+    if "pro" not in sections:
+        raise SystemExit("theme-sync: palette.md has no 'Dracula PRO - Base' terminal section")
+    palettes = {}
+    for variant, colors in sections.items():
+        merged = {**sections["pro"], **colors}  # variants list only what differs
+        stem = "dracula-pro" if variant == "pro" else f"dracula-pro-{variant}"
+        vim = package / "themes/vim/colors" / f"{stem}.vim"
+        if vim.exists():  # background shades exist only in the Vim theme
+            for name, value in re.findall(r"palette\.(bg\w*)\s*=\s*\['(#[0-9A-Fa-f]{6})'", vim.read_text()):
+                merged[name] = value.lower()
+        palettes[variant] = merged
+    return palettes
+
+
+def ghostty_variant():
+    """Variant named by Ghostty's last `theme =` line: Dracula-Van-Helsing -> van-helsing."""
+    try:
+        lines = (GHOSTTY / "config").read_text().splitlines()
+    except OSError:
+        return "pro"
+    names = [m.group(1) for m in (re.match(r"\s*theme\s*=\s*(\S+)", line) for line in lines) if m]
+    if not names or "-" not in names[-1]:
+        return "pro"
+    return names[-1].split("-", 1)[1].lower()
+
+
+def render_herdr(base_text, colors):
+    """Fill {{name}} tokens. With colors=None, use the stand-in colors and drop
+    whole `key = "{{name}}"` lines that have none."""
+    unknown = set()
+    out = []
+    for line in base_text.splitlines(keepends=True):
+        names = TOKEN.findall(line)
+        table = colors if colors is not None else NAMED_FALLBACK
+        absent = [n for n in names if n not in table]
+        if absent:
+            if colors is None and re.fullmatch(r'\s*\w+\s*=\s*"\{\{[a-z_]+\}\}"\s*', line):
+                continue
+            unknown.update(absent)
+            continue
+        out.append(TOKEN.sub(lambda m: table[m.group(1)], line))
+    if unknown:
+        raise SystemExit(f"theme-sync: config.base.toml uses unknown color names: {', '.join(sorted(unknown))}")
+    header = "# GENERATED by theme-sync from config.base.toml. Edit that file, then run theme-sync.\n"
+    return header + "".join(out)
+
+
+class Installer:
+    def __init__(self, check):
+        self.check = check
+        self.changed = []
+
+    def write(self, path, text):
+        """Write a regular file, replacing a stale symlink if one is there."""
+        if path.exists() and not path.is_symlink() and path.read_text() == text:
+            return
+        self.changed.append(str(path))
+        if not self.check:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_name(path.name + ".tmp")
+            tmp.write_text(text)
+            tmp.replace(path)
+
+    def copy_tree(self, source, target):
+        def listing(root):
+            return {p.relative_to(root): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file() and p.name != ".DS_Store"}
+
+        if target.exists() and listing(source) == listing(target):
+            return
+        self.changed.append(str(target))
+        if not self.check:
+            if target.exists():
+                shutil.rmtree(target)
+            shutil.copytree(source, target, ignore=shutil.ignore_patterns(".DS_Store"))
+
+
+def main():
+    if sys.argv[1:] not in ([], ["--check"]):
+        raise SystemExit(__doc__)
+    install = Installer(check=sys.argv[1:] == ["--check"])
+    package, why = find_package()
+    colors = None
+    if package:
+        palettes = read_palettes(package)
+        variant = ghostty_variant()
+        if variant not in palettes:
+            print(f"theme-sync: Ghostty variant '{variant}' is not in the package; using 'pro'")
+            variant = "pro"
+        colors = palettes[variant]
+        install.write(PALETTE_JSON, json.dumps({"package": package.name, "variants": palettes}, indent=1, sort_keys=True) + "\n")
+        for theme in sorted((package / "themes/ghostty").iterdir()):
+            if theme.is_file() and "." not in theme.name:
+                name = "Dracula-" + "-".join(part.capitalize() for part in theme.name.split("-"))
+                install.write(GHOSTTY / "themes" / name, theme.read_text())
+        install.copy_tree(package / "themes/vim", NVIM_THEME)
+        print(f"theme-sync: {package.name}, variant '{variant}'")
+    else:
+        print(f"theme-sync: no Dracula PRO package ({why}); app themes left as they are")
+
+    before = len(install.changed)
+    install.write(HERDR_CONFIG, render_herdr(HERDR_BASE.read_text(), colors))
+    if len(install.changed) > before and not install.check and shutil.which("herdr"):
+        subprocess.run(["herdr", "server", "reload-config"], capture_output=True, timeout=10)
+
+    verb = "would update" if install.check else "updated"
+    for path in install.changed:
+        print(f"  {verb} {path}")
+    if not install.changed:
+        print("  everything is up to date")
+
+
+if __name__ == "__main__":
+    main()

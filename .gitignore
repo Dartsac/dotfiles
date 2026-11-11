@@ -56,13 +56,9 @@ nvim/.config/nvim/plugin
 nvim/.config/nvim/doc
 nvim/.config/nvim/colors
 nvim/.config/nvim/autoload
-ghostty/.config/ghostty/themes/Dracula-Buffy
-ghostty/.config/ghostty/themes/Dracula-Alucard
-ghostty/.config/ghostty/themes/Dracula-Blade
-ghostty/.config/ghostty/themes/Dracula-Lincoln
-ghostty/.config/ghostty/themes/Dracula-Morbius
-ghostty/.config/ghostty/themes/Dracula-Pro
-ghostty/.config/ghostty/themes/Dracula-Van-Helsing
+# Written by theme-sync from the Dracula PRO package (paid theme), keep local
+ghostty/.config/ghostty/themes/
+herdr/.config/herdr/config.toml
 # Karabiner rewrites these timestamped copies on its own; keep the real karabiner.json
 /karabiner/.config/karabiner/automatic_backups/
 

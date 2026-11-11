@@ -56,7 +56,7 @@ local HUD = {
 	outlinePad = 3, -- gap between the text field and its outline
 	outlineWidth = 2,
 	unlitAlpha = 0.18, -- how visible dark LED blocks are
-	colors = { -- Sweetie-16-ish palette
+	colors = { -- fallback palette (Sweetie 16); replaced by the theme palette below
 		bg = rgb("1a1c2c"),
 		border = rgb("f4f4f4"),
 		low = rgb("38b764"),
@@ -71,6 +71,37 @@ local HUD = {
 		outline = rgb("ffcd75"),
 	},
 }
+
+-- Card part -> color name in the theme palette (see dictation_theme.lua).
+local THEME_ROLES = {
+	bg = "background",
+	border = "foreground",
+	text = "foreground",
+	low = "green",
+	mid = "yellow",
+	high = "red",
+	connecting = "orange",
+	listening = "red",
+	finishing = "comment",
+	checking = "comment",
+	warn = "red",
+	outline = "orange",
+}
+
+do
+	local ok, palette = pcall(function()
+		return require("dictation_theme").palette()
+	end)
+	if ok and palette then
+		for role, name in pairs(THEME_ROLES) do
+			if palette[name] then
+				HUD.colors[role] = rgb(palette[name]:sub(2)) -- "#rrggbb"
+			end
+		end
+	elseif not ok then
+		print("[dictation] theme palette not loaded: " .. tostring(palette))
+	end
+end
 
 -- 3x5 pixel glyphs
 local GLYPHS = {
