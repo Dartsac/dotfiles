@@ -3,24 +3,30 @@
 
 Dracula PRO is a paid theme, so its colors are never stored in this
 repository. This script reads them from the package on this machine and writes
-files that git ignores or that live outside the repository:
+files outside the repository or ignored by git:
 
   ~/.local/share/theme-sync/palette.json   named colors for every variant
   ~/.config/ghostty/themes/Dracula-*       the package's Ghostty themes
   ~/.local/share/nvim/site/pack/themes/start/dracula-pro   the package's Vim theme
-  ~/.config/herdr/config.toml              herdr/.config/herdr/config.base.toml
-                                           (next to this script) with {{names}} filled in
+  each target in theme-templates.txt       its template with {{names}} filled in
 
-Run it after downloading a new package, on a new machine, after editing
-herdr's config.base.toml, or after switching the Ghostty theme variant.
+To theme another app, write its config in this repository with color names in
+double braces ({{orange}}, {{bgdark}}; `theme-sync --names` lists them), add a
+`template -> target` line to theme-templates.txt, and run theme-sync.
+
+Run it after downloading a new package, on a new machine, after editing a
+template, or after switching the Ghostty theme variant.
 
 Package: $DRACULA_PRO_DIR, else the newest dracula-pro-v* directory under
 ~/Documents/Resources/Themes/Dracula Packages. It must contain
 design/palette.md, themes/ghostty and themes/vim (v2.2 or newer). Without a
-package nothing is installed, and herdr gets stand-in colors.
+package only the templates are written, with stand-in colors.
 
-  theme-sync            install everything
-  theme-sync --check    report what would change; write nothing
+  theme-sync                 install everything
+  theme-sync --check         report what would change; write nothing
+  theme-sync --names         list the color names templates can use
+  theme-sync --check-staged  fail if staged changes contain a Dracula PRO
+                             color value (run by the git pre-commit hook)
 """
 
 import json
@@ -36,22 +42,43 @@ PACKAGES = HOME / "Documents/Resources/Themes/Dracula Packages"
 PALETTE_JSON = HOME / ".local/share/theme-sync/palette.json"
 GHOSTTY = HOME / ".config/ghostty"
 NVIM_THEME = HOME / ".local/share/nvim/site/pack/themes/start/dracula-pro"
-HERDR_CONFIG = HOME / ".config/herdr/config.toml"
-HERDR_BASE = Path(__file__).resolve().parent / "herdr/.config/herdr/config.base.toml"
+REPO = Path(__file__).resolve().parent
+TEMPLATES = REPO / "theme-templates.txt"
 TOKEN = re.compile(r"\{\{([a-z_]+)\}\}")
 
-# herdr colors used when no package is installed (One Dark, a free palette).
-# Names missing here have no stand-in, so their `key = "{{name}}"` lines are
-# dropped and herdr's built-in theme supplies them.
-NAMED_FALLBACK = {
+# Stand-in colors for templates when no package is installed (One Dark, a
+# free palette). Other names resolve by family: see stand_in().
+STAND_INS = {
+    "background": "#282c34",
     "foreground": "#abb2bf",
+    "comment": "#5c6370",
+    "selection": "#3e4451",
+    "cursor": "#528bff",
+    "black": "#282c34",
+    "white": "#abb2bf",
     "red": "#e06c75",
     "green": "#98c379",
     "yellow": "#e5c07b",
-    "orange": "#d19a66",
+    "blue": "#61afef",
+    "magenta": "#c678dd",
     "cyan": "#56b6c2",
-    "bright_blue": "#61afef",
+    "orange": "#d19a66",
+    "purple": "#61afef",
+    "pink": "#c678dd",
+    "bg": "#282c34",
+    "bgdark": "#21252b",
+    "bgdarker": "#21252b",
+    "bglight": "#2c313a",
+    "bglighter": "#2c313a",
 }
+# Target suffixes whose format takes a "#" comment, for the generated-file note.
+HASH_COMMENTS = {".toml", ".yml", ".yaml", ".conf", ".ini", ".fish", ".sh"}
+HOOK = """#!/bin/sh
+# Installed by theme-sync: refuse commits that add Dracula PRO color values.
+top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+[ -x "$top/theme-sync" ] || exit 0
+exec "$top/theme-sync" --check-staged
+"""
 
 
 def version_key(path):
@@ -104,6 +131,7 @@ def read_palettes(package):
         if vim.exists():  # background shades exist only in the Vim theme
             for name, value in re.findall(r"palette\.(bg\w*)\s*=\s*\['(#[0-9A-Fa-f]{6})'", vim.read_text()):
                 merged[name] = value.lower()
+        merged.update(purple=merged["blue"], pink=merged["magenta"])  # the theme's own names
         palettes[variant] = merged
     return palettes
 
@@ -120,25 +148,84 @@ def ghostty_variant():
     return names[-1].split("-", 1)[1].lower()
 
 
-def render_herdr(base_text, colors):
-    """Fill {{name}} tokens. With colors=None, use the stand-in colors and drop
-    whole `key = "{{name}}"` lines that have none."""
-    unknown = set()
-    out = []
-    for line in base_text.splitlines(keepends=True):
-        names = TOKEN.findall(line)
-        table = colors if colors is not None else NAMED_FALLBACK
-        absent = [n for n in names if n not in table]
-        if absent:
-            if colors is None and re.fullmatch(r'\s*\w+\s*=\s*"\{\{[a-z_]+\}\}"\s*', line):
-                continue
-            unknown.update(absent)
+def stand_in(name):
+    """Stand-in color for a name: bright_red and dim_red use red's."""
+    return STAND_INS.get(name) or STAND_INS.get(re.sub(r"^(bright|dim)_", "", name))
+
+
+def read_templates():
+    """[(template path, target path)] from theme-templates.txt."""
+    pairs = []
+    for number, line in enumerate(TEMPLATES.read_text().splitlines(), 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
             continue
-        out.append(TOKEN.sub(lambda m: table[m.group(1)], line))
+        source, arrow, target = (part.strip() for part in line.partition("->"))
+        if not arrow or not source or not target:
+            raise SystemExit(f"theme-sync: {TEMPLATES.name} line {number}: expected 'template -> target'")
+        pairs.append((REPO / source, Path(target).expanduser()))
+    return pairs
+
+
+def render(template, target, colors):
+    """Template text with each {{name}} replaced; colors=None uses stand-ins."""
+    lookup = colors.get if colors is not None else stand_in
+    text = template.read_text()
+    unknown = sorted({name for name in TOKEN.findall(text) if not lookup(name)})
     if unknown:
-        raise SystemExit(f"theme-sync: config.base.toml uses unknown color names: {', '.join(sorted(unknown))}")
-    header = "# GENERATED by theme-sync from config.base.toml. Edit that file, then run theme-sync.\n"
-    return header + "".join(out)
+        raise SystemExit(f"theme-sync: {template.relative_to(REPO)} uses unknown color names: {', '.join(unknown)}")
+    text = TOKEN.sub(lambda m: lookup(m.group(1)), text)
+    if target.suffix in HASH_COMMENTS:
+        text = f"# GENERATED by theme-sync from {template.relative_to(REPO)}. Edit that file, then run theme-sync.\n" + text
+    return text
+
+
+def install_hook(install):
+    """Put the pre-commit guard where this repository's git looks for hooks."""
+    def git(*args):
+        return subprocess.run(["git", "-C", str(REPO), *args], capture_output=True, text=True).stdout.strip()
+
+    hooks = git("config", "core.hooksPath")
+    hooks = Path(hooks).expanduser() if hooks else Path(git("rev-parse", "--git-common-dir")) / "hooks"
+    if not hooks.is_absolute():
+        hooks = REPO / hooks
+    hook = hooks / "pre-commit"
+    if hook.exists() and "theme-sync" not in hook.read_text():
+        print(f"theme-sync: {hook} is another hook; add `theme-sync --check-staged` to it yourself")
+        return
+    install.write(hook, HOOK, mode=0o755)
+
+
+def check_staged():
+    """Exit 1 if staged additions contain a color value from palette.json."""
+    try:
+        variants = json.loads(PALETTE_JSON.read_text())["variants"]
+    except (OSError, ValueError, KeyError):
+        return 0  # no package on this machine: nothing to compare against
+    names = {}
+    for palette in variants.values():
+        for name, value in palette.items():
+            names.setdefault(value[1:].lower(), name)
+    for plain in ("ffffff", "000000"):  # not specific to the theme
+        names.pop(plain, None)
+    diff = subprocess.run(["git", "diff", "--cached", "-U0", "--no-color"], capture_output=True, text=True).stdout
+    found, path, line_number = [], None, 0
+    for line in diff.splitlines():
+        if line.startswith("+++ "):
+            path = line[6:] if line.startswith("+++ b/") else None
+        elif line.startswith("@@"):
+            line_number = int(re.search(r"\+(\d+)", line).group(1)) - 1
+        elif line.startswith("+") and path:
+            line_number += 1
+            for value in re.findall(r"(?<![0-9A-Za-z])#?([0-9A-Fa-f]{6})(?![0-9A-Za-z])", line[1:]):
+                if value.lower() in names:
+                    found.append(f"  {path}:{line_number}: use {{{{{names[value.lower()]}}}}} in a template instead")
+    if found:
+        print("theme-sync: staged changes contain Dracula PRO color values (paid theme, keep out of git):")
+        print("\n".join(found))
+        print("See the theme-sync header for templates. To commit anyway: git commit --no-verify")
+        return 1
+    return 0
 
 
 class Installer:
@@ -146,7 +233,7 @@ class Installer:
         self.check = check
         self.changed = []
 
-    def write(self, path, text):
+    def write(self, path, text, mode=None):
         """Write a regular file, replacing a stale symlink if one is there."""
         if path.exists() and not path.is_symlink() and path.read_text() == text:
             return
@@ -155,6 +242,8 @@ class Installer:
             path.parent.mkdir(parents=True, exist_ok=True)
             tmp = path.with_name(path.name + ".tmp")
             tmp.write_text(text)
+            if mode:
+                tmp.chmod(mode)
             tmp.replace(path)
 
     def copy_tree(self, source, target):
@@ -171,11 +260,16 @@ class Installer:
 
 
 def main():
-    if sys.argv[1:] not in ([], ["--check"]):
+    if sys.argv[1:] == ["--check-staged"]:
+        raise SystemExit(check_staged())
+    if sys.argv[1:] not in ([], ["--check"], ["--names"]):
         raise SystemExit(__doc__)
     install = Installer(check=sys.argv[1:] == ["--check"])
     package, why = find_package()
     colors = None
+    if sys.argv[1:] == ["--names"]:
+        print("\n".join(sorted(read_palettes(package)["pro"] if package else STAND_INS)))
+        return
     if package:
         palettes = read_palettes(package)
         variant = ghostty_variant()
@@ -193,10 +287,12 @@ def main():
     else:
         print(f"theme-sync: no Dracula PRO package ({why}); app themes left as they are")
 
-    before = len(install.changed)
-    install.write(HERDR_CONFIG, render_herdr(HERDR_BASE.read_text(), colors))
-    if len(install.changed) > before and not install.check and shutil.which("herdr"):
-        subprocess.run(["herdr", "server", "reload-config"], capture_output=True, timeout=10)
+    for template, target in read_templates():
+        before = len(install.changed)
+        install.write(target, render(template, target, colors))
+        if target.parent.name == "herdr" and len(install.changed) > before and not install.check and shutil.which("herdr"):
+            subprocess.run(["herdr", "server", "reload-config"], capture_output=True, timeout=10)
+    install_hook(install)
 
     verb = "would update" if install.check else "updated"
     for path in install.changed:

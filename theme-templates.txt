@@ -1,0 +1,4 @@
+# Files theme-sync fills with Dracula PRO colors.
+#   template in this repository -> generated file
+# A template names colors in double braces; `theme-sync --names` lists them.
+herdr/.config/herdr/config.base.toml -> ~/.config/herdr/config.toml

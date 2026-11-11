@@ -31,7 +31,16 @@ downloaded package (v2.2 or newer) in
 ```
 
 It installs the package's Ghostty and Neovim themes, writes the palette the
-Hammerspoon dictation card reads, and writes herdr's `config.toml` from
-`herdr/.config/herdr/config.base.toml`. Run it again after downloading a new
-package, editing `config.base.toml`, or switching the Ghostty theme variant.
+Hammerspoon dictation card reads, fills in the templates listed in
+`theme-templates.txt`, and installs a git pre-commit hook that refuses commits
+containing the theme's color values. Run it again after downloading a new
+package, editing a template, or switching the Ghostty theme variant.
 `theme-sync --check` reports what would change without writing.
+
+To theme another app:
+
+1. Write its config in this repository with color names in double braces, such
+   as `{{orange}}` or `{{bgdark}}`. `theme-sync --names` lists the names.
+2. Add a `template -> target` line to `theme-templates.txt`. The target must be
+   outside this repository or ignored by git.
+3. Run `theme-sync`.
