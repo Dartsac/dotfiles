@@ -1,4 +1,4 @@
--- Deepgram streaming dictation for Hammerspoon
+-- Deepgram record-then-transcribe dictation for Hammerspoon
 -- Load from init.lua with:  dictation = require("dictation")
 
 local M = {}
@@ -58,7 +58,7 @@ local GLYPHS = {
 }
 local LABEL = "REC"
 
-local task, buffer, lastChar = nil, "", nil
+local task, buffer = nil, ""
 local hud, levels, lit, decayTimer, blinkTimer, hudState = nil, {}, {}, nil, nil, nil
 local dotIdx, textIdx, blockIdx, blockColor = nil, {}, {}, {}
 
@@ -216,7 +216,7 @@ local function setState(state)
 			hud[dotIdx].fillColor = on and color or HUD.colors.bg
 		end)
 	elseif state == "finishing" then
-		-- Let the meter drain while the last words are finalized.
+		-- Let the meter drain while the complete recording is transcribed.
 		decayTimer = hs.timer.doEvery(0.06, function()
 			pushLevel(0)
 		end)
@@ -231,23 +231,28 @@ local function hideHud()
 	end
 end
 
--- Type text into the focused app. Any newlines are sent as Shift+Return so
--- chat apps don't send the message.
-local function typeText(text)
-	if lastChar and not lastChar:match("%s") and not text:match("^%s") then
-		text = " " .. text
-	end
-	local first = true
-	for part in (text .. "\n"):gmatch("(.-)\n") do
-		if not first then
-			hs.eventtap.keyStroke({ "shift" }, "return", 0)
+-- Paste text into the focused app, then restore the previous clipboard.
+-- The transcript is marked transient so clipboard managers skip it.
+local PASTE_RESTORE_SECS = 0.5
+
+local function pasteText(text)
+	local saved = hs.pasteboard.readAllData()
+	hs.pasteboard.writeAllData({
+		["public.utf8-plain-text"] = text,
+		["org.nspasteboard.TransientType"] = "",
+	})
+	local ours = hs.pasteboard.changeCount()
+	hs.eventtap.keyStroke({ "cmd" }, "v", 0)
+	hs.timer.doAfter(PASTE_RESTORE_SECS, function()
+		if hs.pasteboard.changeCount() ~= ours then
+			return -- something else was copied meanwhile; leave it alone
 		end
-		if #part > 0 then
-			hs.eventtap.keyStrokes(part)
+		if saved and next(saved) then
+			hs.pasteboard.writeAllData(saved)
+		else
+			hs.pasteboard.clearContents()
 		end
-		first = false
-	end
-	lastChar = text:sub(-1)
+	end)
 end
 
 local function handle(msg)
@@ -256,7 +261,7 @@ local function handle(msg)
 			pushLevel(msg.level)
 		end
 	elseif msg.text then
-		typeText(msg.text)
+		pasteText(msg.text)
 	elseif msg.event == "ready" then
 		if hudState == "connecting" then
 			setState("listening")
@@ -303,7 +308,7 @@ function M.start()
 	if task and task:isRunning() then
 		return
 	end
-	buffer, lastChar = "", nil
+	buffer = ""
 	task = hs.task.new(CONFIG.python, onExit, onStream, { CONFIG.script })
 	task:setEnvironment({
 		HOME = HOME,
@@ -319,7 +324,7 @@ end
 function M.stop()
 	if task and task:isRunning() then
 		setState("finishing")
-		task:interrupt() -- SIGINT: helper flushes remaining audio, types last words, exits
+		task:interrupt() -- SIGINT: helper stops recording, transcribes everything, exits
 	end
 end
 
