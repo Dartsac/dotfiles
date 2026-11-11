@@ -133,7 +133,7 @@ end
 function a --description 'attach to the multiplexer'
     switch (multiplexer)
         case herdr
-            herdr
+            command herdr $argv
         case tmux
             tmux a $argv
     end
