@@ -1,0 +1,28 @@
+id = "dotfiles.git-changes"
+name = "Git changes"
+version = "0.1.0"
+min_herdr_version = "0.9.5"
+description = "Shows '<N> changed' on a workspace's sidebar row while its repo has uncommitted changes"
+platforms = ["macos", "linux"]
+
+# Count everything once when the server starts, then refresh one workspace
+# when you switch to it or an agent in it settles (git-changes.sh skips the
+# working/unknown transitions; edits have landed by idle/done/blocked).
+# No tab.focused hook: Herdr 0.9.5 sends workspace.focused (with the workspace
+# id) for every switch, between workspaces and between tabs of one workspace.
+[[startup]]
+command = ["sh", "git-changes.sh", "all"]
+
+[[events]]
+on = "workspace.focused"
+command = ["sh", "git-changes.sh"]
+
+[[events]]
+on = "pane.agent_status_changed"
+command = ["sh", "git-changes.sh"]
+
+[[actions]]
+id = "refresh"
+title = "Recount uncommitted changes in every workspace"
+contexts = ["global"]
+command = ["sh", "git-changes.sh", "all"]

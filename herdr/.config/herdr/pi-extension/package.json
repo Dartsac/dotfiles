@@ -1,0 +1,8 @@
+{
+  "name": "dotfiles-herdr-supervision",
+  "private": true,
+  "type": "module",
+  "pi": {
+    "extensions": ["./index.js"]
+  }
+}

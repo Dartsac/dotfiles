@@ -71,6 +71,9 @@ rename_workspace = "prefix+$"
 
 # Free g for lazygit and o for Finder; retain the displaced Herdr actions.
 goto = "prefix+f"
+# Step through the Agents sidebar, which is sorted with agents that need you first.
+next_agent = "prefix+a"
+previous_agent = "prefix+shift+a"
 open_notification_target = "prefix+shift+o"
 cycle_pane_next = "prefix+tab"
 # prefix+e closes the other panes in the tab, as in tmux (command below).
@@ -91,6 +94,27 @@ command = "lazygit"
 description = "lazygit in the focused pane directory"
 width = "100%"
 height = "100%"
+
+# herdr-reviewr (persiyanov/herdr-reviewr): review the agent's diff in a split
+# and send line comments back to it.
+[[keys.command]]
+key = "prefix+v"
+type = "plugin_action"
+command = "persiyanov.reviewr.toggle"
+description = "review pane on/off (agent's diff)"
+
+# herdr-pluck (rmarganti/herdr-pluck): tmux-fingers-style hints over the pane.
+[[keys.command]]
+key = "prefix+y"
+type = "plugin_action"
+command = "rmarganti.herdr-pluck.pluck"
+description = "copy something on screen (hash, path, URL...)"
+
+[[keys.command]]
+key = "prefix+u"
+type = "plugin_action"
+command = "rmarganti.herdr-pluck.open-url"
+description = "open a URL shown on screen"
 
 [[keys.command]]
 key = "prefix+o"
@@ -133,14 +157,19 @@ description = "focus right, or pass to Neovim"
 sidebar_width = 30
 sidebar_min_width = 24
 sidebar_max_width = 36
+# Agents panel as a queue: blocked agents first, then working, then idle.
+agent_panel_sort = "priority"
 mouse_capture = true
 copy_on_select = true
 prompt_new_tab_name = false
-pane_borders = "always"
+# Borders only in split view; a lone pane has none. The focused pane's frame
+# uses the peach accent. Herdr 0.9.5 can't hide unfocused frames separately.
+pane_borders = "auto"
 pane_outer_borders = true
 pane_gaps = true
 pane_scrollbars = false
-show_agent_labels_on_pane_borders = true
+# No titles on borders: the sidebar and tab names already say what runs where.
+show_agent_labels_on_pane_borders = false
 tab_bar_position = "bottom"
 # tmux's `#h` is the short hostname; Herdr's `hostname` entry is the full one.
 # The command runs on the server, so `herdr --remote` still shows that machine.
@@ -159,11 +188,35 @@ status_indicators = "symbols"
 row_gap = 1
 rows = [
   ["state_icon", "workspace"],
-  [{ token = "branch", fg = "#bdb0fa", bold = false, dim = false }, "git_status"],
+  # $changes ("3 changed") comes from the git-changes plugin in this directory.
+  [{ token = "branch", fg = "#bdb0fa", bold = false, dim = false }, "git_status",
+   { token = "$changes", fg = "{{removed}}" }],
 ]
 
 [ui.sidebar.agents]
-rows = [["state_icon", "workspace", "tab"], ["terminal_title"], ["agent"]]
+# Claude, Codex and subagent tabs. A subagent's terminal title is its task;
+# its activity (Working, Waiting on parent, Finished, Failed) comes from the
+# dotfiles Pi reporter. state_text is left out: pi-subagents puts an emoji in it.
+rows = [
+  ["state_icon", "workspace", "tab"],
+  ["terminal_title_stripped"],
+  ["agent", { token = "$activity", rules = [
+    { equals = "Failed", fg = "{{removed}}" },
+    { equals = "Waiting on parent", fg = "{{removed}}" },
+  ] }],
+]
+
+# Pi parents: two rows, plain activity such as "3 children working". Questions
+# for you and the 60-second unanswered-child case are red.
+[ui.sidebar.agents.rows_by_agent]
+pi = [
+  ["state_icon", "workspace", "tab"],
+  [{ token = "$activity", rules = [
+    { starts_with = "Waiting for you", fg = "{{removed}}", bold = true },
+    { contains = "60s", fg = "{{removed}}", bold = true },
+    { contains = "not done", fg = "{{removed}}" },
+  ] }],
+]
 
 [session]
 # Layout saving is built in; no tmux-resurrect/continuum scripts are needed.
