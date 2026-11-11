@@ -11,6 +11,11 @@ return {
 				return
 			end
 
+			-- Foreground of the active Dracula PRO variant (config.colorscheme
+			-- loads it before plugins); nil leaves lualine's own color.
+			local palette = vim.g["dracula_pro#palette"]
+			local fg = palette and palette.fg[1]
+
 			local hide_in_width = function()
 				return vim.fn.winwidth(0) > 80
 			end
@@ -46,7 +51,7 @@ return {
 							"branch",
 							color = function()
 								return {
-									fg = vim.fn.mode() == "n" and "#F8F8F2" or nil, -- White in normal mode
+									fg = vim.fn.mode() == "n" and fg or nil, -- White in normal mode
 									gui = "bold", -- Always bold
 								}
 							end,
@@ -61,7 +66,7 @@ return {
 								return str:sub(1, 1)
 							end,
 							color = function()
-								return { fg = vim.fn.mode() == "n" and "#F8F8F2" or nil } -- White in normal mode, default otherwise
+								return { fg = vim.fn.mode() == "n" and fg or nil } -- White in normal mode, default otherwise
 							end,
 						},
 					},
@@ -84,7 +89,7 @@ return {
 								unnamed = "[No Name]", -- Text to show for unnamed buffers.
 								newfile = "[New]", -- Text to show for newly created file before first write
 							},
-							color = { fg = "#F8F8F2" },
+							color = { fg = fg },
 						},
 					},
 					lualine_x = {
@@ -98,7 +103,7 @@ return {
 							colored = false,
 							symbols = { added = " ", modified = " ", removed = " " },
 							cond = hide_in_width,
-							color = { fg = "#F8F8F2" },
+							color = { fg = fg },
 						},
 						{
 							function()
@@ -123,7 +128,7 @@ return {
 								if hl and hl.fg then
 									return { fg = string.format("#%06x", hl.fg) }
 								end
-								return { fg = "#F8F8F2" } -- Fallback color if highlight group doesn't exist
+								return { fg = fg } -- Fallback color if highlight group doesn't exist
 							end,
 						},
 						{
@@ -137,12 +142,12 @@ return {
 							cond = function()
 								return require("config.tooling").summary_width(vim.api.nvim_win_get_width(0)) > 0
 							end,
-							color = { fg = "#F8F8F2" },
+							color = { fg = fg },
 						},
 						{
 							"filetype",
 							colored = true,
-							color = { fg = "#F8F8F2" },
+							color = { fg = fg },
 						},
 					},
 					lualine_y = {
@@ -150,7 +155,7 @@ return {
 							"location",
 							padding = 0,
 							color = function()
-								return { fg = vim.fn.mode() == "n" and "#F8F8F2" or nil }
+								return { fg = vim.fn.mode() == "n" and fg or nil }
 							end,
 						},
 					},
@@ -159,7 +164,7 @@ return {
 							progress,
 							cond = hide_in_width,
 							color = function()
-								return { fg = vim.fn.mode() == "n" and "#F8F8F2" or nil } -- White in normal mode, default otherwise
+								return { fg = vim.fn.mode() == "n" and fg or nil } -- White in normal mode, default otherwise
 							end,
 						},
 					},
