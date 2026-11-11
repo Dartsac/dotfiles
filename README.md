@@ -30,6 +30,17 @@ downloaded package (v2.2 or newer) in
 ~/dotfiles/theme-sync
 ```
 
+`theme-sync` finds the package this way:
+
+- If `DRACULA_PRO_DIR` is set, it uses that folder and looks nowhere else. To
+  set it permanently in fish, run `set -Ux DRACULA_PRO_DIR /path/to/package`.
+- Otherwise it uses the folder with the highest version number among the
+  `dracula-pro-v*` folders in `~/Documents/Resources/Themes/Dracula Packages`.
+- The folder must contain `design/palette.md`, `themes/ghostty` and
+  `themes/vim/colors`. If one is missing, `theme-sync` names it, leaves the
+  installed app themes alone, and fills templates with stand-in colors. It
+  does not try an older version.
+
 It installs the package's Ghostty and Neovim themes, writes the palette the
 Hammerspoon dictation card reads, fills in the templates listed in
 `theme-templates.txt`, and installs a git pre-commit hook that refuses commits
