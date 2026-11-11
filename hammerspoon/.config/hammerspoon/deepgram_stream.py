@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 """
-Record microphone audio, then transcribe the complete recording with Deepgram
-Nova-3 when stopped (SIGINT) by Hammerspoon. No text is emitted while recording.
+Record microphone audio until Hammerspoon stops it, then either transcribe the
+complete recording with Deepgram Nova-3 or keep it on disk without sending it.
+No text is emitted while recording.
+
+Usage:
+  deepgram_stream.py              record; SIGINT = transcribe, SIGTERM = keep
+  deepgram_stream.py --kept       transcribe the kept recording, then delete it
 
 Output lines:
   {"event": "ready"}                  recording
   {"level": 0.42}                     mic loudness 0..1, ~20x/sec (for the HUD meter)
-  {"text": "Some words."}             complete transcript to type after stopping
-  {"event": "idle_timeout"}           auto-stopped after silence
+  {"text": "Some words."}             complete transcript
+  {"event": "kept"}                   recording saved to KEPT_PATH, nothing sent
+  {"event": "idle_timeout"}           silence limit reached; Hammerspoon decides how to stop
   {"event": "error", "message": ...}  something went wrong
 """
 
@@ -43,6 +49,11 @@ KEYTERMS = [
     t.strip() for t in os.environ.get("DICTATION_KEYTERMS", "").split(",") if t.strip()
 ]
 LANGUAGE = os.environ.get("DICTATION_LANGUAGE", "en-US")
+KEPT_PATH = Path(
+    os.environ.get("DICTATION_KEPT_PATH")
+    or Path.home() / ".cache" / "dictation" / "kept.wav"
+)
+IDLE_GRACE_S = 5  # if Hammerspoon never answers idle_timeout, keep the audio and exit
 
 
 def emit(obj):
@@ -106,17 +117,21 @@ def shorten_pauses(chunks, levels):
     return b"".join(out)
 
 
-def transcribe(chunks, levels, key):
-    """Send one WAV so punctuation is based on the whole recording."""
+def build_wav(chunks, levels):
     audio = io.BytesIO()
     with wave.open(audio, "wb") as wav:
         wav.setnchannels(1)
         wav.setsampwidth(2)
         wav.setframerate(SAMPLE_RATE)
         wav.writeframes(shorten_pauses(chunks, levels))
+    return audio.getvalue()
+
+
+def transcribe(wav_bytes, key):
+    """Send one WAV so punctuation is based on the whole recording."""
     request = Request(
         build_url(),
-        data=audio.getvalue(),
+        data=wav_bytes,
         headers={"Authorization": f"Token {key}", "Content-Type": "audio/wav"},
         method="POST",
     )
@@ -125,12 +140,36 @@ def transcribe(chunks, levels, key):
     return data["results"]["channels"][0]["alternatives"][0]["transcript"]
 
 
+def keep(wav_bytes):
+    """Save audio that should not be sent now; replaces any older kept audio."""
+    KEPT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = KEPT_PATH.with_suffix(".tmp")
+    tmp.write_bytes(wav_bytes)
+    tmp.replace(KEPT_PATH)
+
+
+def transcribe_kept():
+    if not KEPT_PATH.exists():
+        emit({"event": "error", "message": "No kept recording"})
+        return
+    text = transcribe(KEPT_PATH.read_bytes(), load_api_key())
+    KEPT_PATH.unlink()  # sent once; do not pay for it again
+    emit({"text": text})
+
+
 async def main():
     key = load_api_key()
     loop = asyncio.get_running_loop()
     stop = asyncio.Event()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, stop.set)
+    mode = {"value": "send"}
+
+    def request_stop(value):
+        if not stop.is_set():  # the first stop request decides send or keep
+            mode["value"] = value
+            stop.set()
+
+    loop.add_signal_handler(signal.SIGINT, request_stop, "send")
+    loop.add_signal_handler(signal.SIGTERM, request_stop, "keep")
 
     chunks, levels = [], []
     last_speech = time.monotonic()
@@ -151,8 +190,12 @@ async def main():
         while not stop.is_set():
             await asyncio.sleep(1)
             if time.monotonic() - last_speech > IDLE_TIMEOUT_S:
+                # Hammerspoon checks the focused field and stops with SIGINT or
+                # SIGTERM; the grace period only matters if it never answers.
                 emit({"event": "idle_timeout"})
-                stop.set()
+                await asyncio.sleep(IDLE_GRACE_S)
+                request_stop("keep")
+                return
 
     with sd.RawInputStream(
         samplerate=SAMPLE_RATE,
@@ -169,15 +212,24 @@ async def main():
             wd_task.cancel()
     # Drain callbacks queued by the audio thread before taking the snapshot.
     await asyncio.sleep(0)
-    if chunks:
-        text = await asyncio.to_thread(transcribe, chunks, levels, key)
-        if text:
-            emit({"text": text})
+    if not chunks:
+        return
+    wav_bytes = build_wav(chunks, levels)
+    if mode["value"] == "keep":
+        keep(wav_bytes)
+        emit({"event": "kept"})
+        return
+    text = await asyncio.to_thread(transcribe, wav_bytes, key)
+    if text:
+        emit({"text": text})
 
 
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        if sys.argv[1:] == ["--kept"]:
+            transcribe_kept()
+        else:
+            asyncio.run(main())
     except Exception as e:  # surface errors to Hammerspoon instead of dying silently
         emit({"event": "error", "message": str(e)})
         sys.exit(1)
