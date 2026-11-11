@@ -27,13 +27,18 @@ local CONFIG = {
 }
 
 -- Floating 8-bit level meter shown only while dictating.
+
+-- Hammerspoon draws RGB components in the "generic RGB" color space (gamma
+-- 1.8), which shows hex colors lighter and washed out. Re-encode each sRGB
+-- component for that space so the card matches the same hex in other apps.
+local function channel(hex, i)
+	local v = tonumber(hex:sub(i, i + 1), 16) / 255
+	local linear = v <= 0.04045 and v / 12.92 or ((v + 0.055) / 1.055) ^ 2.4
+	return linear ^ (1 / 1.8)
+end
+
 local function rgb(hex, alpha)
-	return {
-		red = tonumber(hex:sub(1, 2), 16) / 255,
-		green = tonumber(hex:sub(3, 4), 16) / 255,
-		blue = tonumber(hex:sub(5, 6), 16) / 255,
-		alpha = alpha or 1,
-	}
+	return { red = channel(hex, 1), green = channel(hex, 3), blue = channel(hex, 5), alpha = alpha or 1 }
 end
 
 local HUD = {

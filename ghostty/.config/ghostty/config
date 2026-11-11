@@ -26,6 +26,9 @@ window-vsync = true
 
 # Cursor and Selection
 cursor-style = block
+# The Dracula PRO theme sets cursor-text to the cursor's own color, which hides
+# the character under a block cursor. Show it in the cell's background color.
+cursor-text = cell-background
 cursor-style-blink = true
 unfocused-split-opacity = 0.8
 selection-invert-fg-bg = true

@@ -208,8 +208,8 @@ def check_staged():
     for palette in variants.values():
         for name, value in palette.items():
             names.setdefault(value[1:].lower(), name)
-    for plain in ("ffffff", "000000"):  # not specific to the theme
-        names.pop(plain, None)
+    # Greys (white and black included) are not specific to the theme.
+    names = {value: name for value, name in names.items() if not value[0:2] == value[2:4] == value[4:6]}
     diff = subprocess.run(["git", "diff", "--cached", "-U0", "--no-color"], capture_output=True, text=True).stdout
     found, path, line_number = [], None, 0
     for line in diff.splitlines():
@@ -219,8 +219,9 @@ def check_staged():
             line_number = int(re.search(r"\+(\d+)", line).group(1)) - 1
         elif line.startswith("+") and path:
             line_number += 1
-            for value in re.findall(r"(?<![0-9A-Za-z])#?([0-9A-Fa-f]{6})(?![0-9A-Za-z])", line[1:]):
-                if value.lower() in names:
+            for mark, value in re.findall(r"(?<![0-9A-Za-z])(#?)([0-9A-Fa-f]{6})(?![0-9A-Za-z])", line[1:]):
+                # Six digits without "#" are far more often a number than a color.
+                if value.lower() in names and (mark or not value.isdigit()):
                     found.append(f"  {path}:{line_number}: use {{{{{names[value.lower()]}}}}} in a template instead")
     if found:
         print("theme-sync: staged changes contain Dracula PRO color values (paid theme, keep out of git):")
@@ -290,6 +291,9 @@ def main():
         print(f"theme-sync: no Dracula PRO package ({why}); app themes left as they are")
 
     for template, target in read_templates():
+        stray = template.with_name(target.name)
+        if stray.exists() and stray.resolve() != target.resolve():
+            print(f"theme-sync: {stray.relative_to(REPO)} is not read by anything; edit {template.name} instead and delete it")
         before = len(install.changed)
         install.write(target, render(template, target, colors))
         if target.parent.name == "herdr" and len(install.changed) > before and not install.check and shutil.which("herdr"):
