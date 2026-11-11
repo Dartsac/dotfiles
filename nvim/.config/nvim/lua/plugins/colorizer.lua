@@ -4,10 +4,10 @@ return {
 	-- Loaded only for files it colours (the filetypes below), before their
 	-- FileType; `ft` covers those buffers without a matching file name.
 	event = {
-		"BufReadPre *.css,*.scss,*.html,*.htm,*.js,*.mjs,*.cjs,*.ts,*.mts,*.cts,*.lua",
-		"BufNewFile *.css,*.scss,*.html,*.htm,*.js,*.mjs,*.cjs,*.ts,*.mts,*.cts,*.lua",
+		"BufReadPre *.css,*.scss,*.html,*.htm,*.js,*.mjs,*.cjs,*.ts,*.mts,*.cts,*.lua,*.md",
+		"BufNewFile *.css,*.scss,*.html,*.htm,*.js,*.mjs,*.cjs,*.ts,*.mts,*.cts,*.lua,*.md",
 	},
-	ft = { "css", "scss", "html", "javascript", "typescript", "lua" },
+	ft = { "css", "scss", "html", "javascript", "typescript", "lua", "markdown" },
 	config = function()
 		local status, colorizer = pcall(require, "colorizer")
 		if not status then
@@ -31,6 +31,7 @@ return {
 				"javascript",
 				"typescript",
 				"lua",
+				"markdown",
 				css = css,
 				scss = css,
 			},
