@@ -77,6 +77,8 @@ HOOK = """#!/bin/sh
 # Installed by theme-sync: refuse commits that add Dracula PRO color values.
 top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 [ -x "$top/theme-sync" ] || exit 0
+# Checkouts from before the guard existed have a theme-sync without it.
+grep -q -e --check-staged "$top/theme-sync" || exit 0
 exec "$top/theme-sync" --check-staged
 """
 
