@@ -9,6 +9,7 @@ require("config.options")
 require("config.autocommands")
 require("config.colorscheme").setup() -- before plugins, so they see its highlights
 require("config.lazy")
+require("config.lockfile").setup() -- commits lazy-lock.json after plugin updates
 require("config.attach")
 require("config.keymaps")
 
