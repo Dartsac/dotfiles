@@ -104,7 +104,10 @@ def open_project(selected, binary):
         workspace_id = match["workspace_id"]
         herdr(binary, "workspace", "focus", workspace_id)
     else:
+        # The server can retain a symlink in its inherited PWD. Fish keeps
+        # that logical path when it matches cwd, so set both explicitly.
         created = herdr(binary, "workspace", "create", "--cwd", str(path),
+                        "--env", f"PWD={path}",
                         "--label", path.name.replace(".", "_") or "root", "--focus")
         workspace_id = created["workspace"]["workspace_id"]
         root_pane = created["root_pane"]["pane_id"]
