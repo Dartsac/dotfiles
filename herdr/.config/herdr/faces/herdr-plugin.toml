@@ -1,0 +1,34 @@
+id = "dotfiles.faces"
+name = "Faces"
+version = "0.1.0"
+min_herdr_version = "0.9.5"
+description = "A little character beside every agent and workspace in the sidebar, showing its state"
+platforms = ["macos", "linux"]
+
+# `faces.py run` is one long-lived process per server: it reads the session
+# about once a second and keeps the `face` token on every agent pane and
+# workspace current, stepping the working animation. A second copy finds the
+# first one's lock and exits at once, so these hooks only ever replace a copy
+# that has died. It stops by itself when the server goes away.
+[[startup]]
+command = ["python3", "faces.py", "run"]
+
+[[events]]
+on = "pane.agent_detected"
+command = ["python3", "faces.py", "run"]
+
+[[events]]
+on = "pane.agent_status_changed"
+command = ["python3", "faces.py", "run"]
+
+[[events]]
+on = "workspace.focused"
+command = ["python3", "faces.py", "run"]
+
+# Start it by hand: after linking the plugin (Herdr runs startup hooks only
+# when a server starts), or if the faces ever stop changing.
+[[actions]]
+id = "start"
+title = "Start the sidebar characters"
+contexts = ["global"]
+command = ["python3", "faces.py", "run"]

@@ -9,6 +9,13 @@ theme = Dracula-Pro
 # Font Configuration
 font-family = Hack Nerd Font Mono
 font-size = 14
+# Pixel-aligned Byte/Wisp sprites keep state colors beside workspace labels.
+# theme-sync generates this font from Dracula PRO into ~/Library/Fonts.
+# Bitmap cell boundaries prevent the seams of the previous SVG color font.
+# The name ends in a tag that changes with the drawings (faces/color_font.py):
+# a running Ghostty does not read a changed font file again under an old name.
+# After changing the sprites, put the new name here and reload this config.
+font-codepoint-map = U+100000-U+10007F=Herdr Sprites Pixel f750
 
 # Window and UI
 window-padding-x = 10

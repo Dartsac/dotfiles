@@ -48,10 +48,23 @@ containing the theme's color values. Run it again after downloading a new
 package, editing a template, or switching the Ghostty theme variant.
 `theme-sync --check` reports what would change without writing.
 
+On macOS it also generates Herdr's state-colored character fonts into
+`~/Library/Fonts/HerdrSpritesPixel-*.ttf`. The source fonts in
+`herdr/.config/herdr/faces/fonts/` contain only outlines; the generated ones
+contain palette colors and never belong in git. This step needs Python
+`fonttools`, or `uv` to supply it. Ghostty maps the sprite codepoints to that
+font, so the pixel-aligned characters keep state colors beside text in the
+workspace's color: a space and its agents share one distinct Dracula PRO hue.
+The font's name ends in a tag that changes with the drawings, because a
+running Ghostty does not reload a changed font under a name it has loaded;
+see `herdr/.config/herdr/README.md` before changing a sprite.
+
 To theme another app:
 
 1. Write its config in this repository with color names in double braces, such
-   as `{{orange}}` or `{{bgdark}}`. `theme-sync --names` lists the names.
+   as `{{orange}}` or `{{bgdark}}`. `theme-sync --names` lists the names. For a
+   shade between two colors, `{{comment+foreground:40}}` is `comment` with 40%
+   `foreground` mixed in.
 2. Add a `template -> target` line to `theme-templates.txt`. The target must be
    outside this repository or ignored by git.
 3. Run `theme-sync`.

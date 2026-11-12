@@ -10,36 +10,49 @@ onboarding = false
 name = "dracula"
 auto_switch = false
 
-# Dracula Pro: Ghostty + Neovim surfaces, tmux's peach focus accent.
+# Dracula Pro, in three layers and three accents.
+#
+# Layers, each a clear step in lightness from the next:
+#   chrome   the sidebar and the tab bar, one near-black surface (bgdarker)
+#            that frames the work on two sides
+#   canvas   the panes, on Ghostty's own background
+#   active   the entry and tab you are on, lighter than the chrome
+# Accents, one job each: orange is where you are (active tab, focused pane
+# border), purple is structure (panel headers, controls, other panes'
+# borders), red is something that needs you.
+#
 # Names are palette.md's terminal colors plus the Vim theme's bg shades, for
 # the variant Ghostty uses.
 [theme.custom]
-# Recessed sidebar: Neovim's bgdark, in the same cool hue family as
-# Ghostty's canvas.
-sidebar_bg = "{{bgdark}}"
-# One step up for the active workspace; another for keyboard selection.
+sidebar_bg = "{{bgdarker}}"
+# The active entry stands well clear of the chrome; the keyboard cursor is
+# lighter again, so the two never look alike.
 active_row_bg = "{{bglight}}"
 selection_bg = "{{selection}}"
-# tmux's status surface, Neovim's raised surface, and quiet dividers.
-panel_bg = "{{bglight}}"
-surface0 = "{{bglight}}"
+# The tab bar is the same surface as the sidebar. Inactive tabs sit one step
+# up from it; dividers and the sidebar's edge are a quiet line.
+panel_bg = "{{bgdarker}}"
+surface0 = "{{bgdark}}"
 surface1 = "{{bglighter}}"
 surface_dim = "{{bglighter}}"
 # Cream primary text; Ghostty's softer selection foreground for inactive names.
 text = "{{foreground}}"
 subtext0 = "{{dim_white}}"
 overlay1 = "{{dim_white}}"
-# Headers, controls and metadata.
-# Do not reuse this text color as a row background.
-overlay0 = "{{comment}}"
+# Structure: the "spaces" and "agents" headers, new/menu, and the borders of
+# panes you are not in. Do not reuse it as a row background.
+overlay0 = "{{purple}}"
 # Cool branch labels.
 mauve = "{{bright_blue}}"
 # Warm focus against cool surfaces. Herdr shares this with focused borders.
 accent = "{{orange}}"
 peach = "{{orange}}"
-# Dracula Pro semantic colors, consistent with Ghostty and Neovim.
-green = "{{green}}"
-yellow = "{{yellow}}"
+# Status colors. Herdr draws idle in green, working in yellow, blocked in red
+# and done in teal. Idle and working are the everyday states, so they take the
+# palette's dim variants and stay in the background; blocked and done are the
+# ones to notice and keep the full colors.
+green = "{{dim_green}}"
+yellow = "{{dim_yellow}}"
 red = "{{red}}"
 blue = "{{bright_blue}}"
 teal = "{{cyan}}"
@@ -122,6 +135,14 @@ command = "rmarganti.herdr-pluck.open-url"
 description = "open a URL shown on screen"
 
 [[keys.command]]
+key = "prefix+i"
+type = "popup"
+command = 'python3 "$HOME/.config/herdr/faces/faces.py" pick'
+description = "choose the sidebar character (Byte, Wisp, Bit or mixed)"
+width = 100
+height = 11
+
+[[keys.command]]
 key = "prefix+o"
 type = "shell"
 command = 'open "${HERDR_ACTIVE_PANE_CWD:-$PWD}"'
@@ -184,53 +205,166 @@ tab_bar_right = [
 ]
 window_title = "{terminal_title}"
 # Accent is defined once in [theme.custom]; ui.accent is a legacy fallback.
-# Agent states as distinct shapes as well as colors (chosen in Settings).
+# Agent states as distinct shapes as well as colors (chosen in Settings). The
+# expanded sidebar shows the faces plugin's characters instead; these marks
+# remain in the collapsed sidebar.
 status_indicators = "symbols"
 
-# Names retain Herdr's active/inactive foreground and bold distinction.
-# Keep status icons and Git indicators semantic, not a single decorative color.
+# Both panels use one entry shape, so they read as one list:
+#   line 1  a little character showing the state, then the name you scan for
+#   line 2  where it is, at normal weight, starting under the name
+#   line 3  only for something to act on, also under the name
+# and one blank line between entries.
+#
+# All three lines are tokens that the faces plugin in this directory keeps
+# current for every agent pane and workspace ($face, $detail, $note or $alert). Herdr
+# cannot do it alone: it puts its " · " divider after every token except its
+# own status mark, so character and name must be one token; and it starts
+# lines 2 and 3 a fixed two cells in, so they carry their own blank cells to
+# reach the name. If the plugin is not running the entries are empty:
+# `herdr plugin action invoke dotfiles.faces.start`.
+#
+# Color means two separate things:
+#   The character alone shows the state, in the state's color:
+#     asleep gray   ready yellow   working cyan   needs you red   done green
+#     unknown violet
+#   Ready is the plugin's own state: idle in Herdr's terms, but at work within
+#   the last ten minutes (`faces.py awake <minutes>`). After that it sleeps.
+#   All the text of a space and of its agents has that workspace's color, so
+#   an agent is matched to its space at a glance.
+# Fifteen Dracula PRO colors and mixes identify workspaces, none of them a
+# state color. They are handed out in order: one per hue family first (violet,
+# blue, orange, green, pink, cream), then lighter versions, then look-alikes
+# and darker versions, so similar colors meet only when many spaces are open.
+# Duplicate labels are moved to unused slots while any are free.
+# An invisible zero-width prefix chooses the hue (faces/identity.py).
+# Byte and Wisp paint their own state colors via Herdr Sprites Pixel, beside
+# the differently colored text. Its integer bitmap grid avoids seams between
+# tiles. theme-sync generates this font outside git. Bit is ordinary text, so
+# it takes the workspace's color like the name beside it.
+# `faces.py rules` prints the token definitions; tests check they match.
+#
+# Nothing uses the terminal's dim attribute, which Ghostty draws at half
+# opacity. Line 1 is bold, the others are the same hue at normal weight.
 [ui.sidebar.spaces]
 row_gap = 1
 rows = [
-  ["state_icon", "workspace"],
-  # $changes ("3 changed") comes from the git-changes plugin in this directory.
-  [{ token = "branch", fg = "{{bright_blue}}", bold = false, dim = false }, "git_status",
-   { token = "$changes", fg = "{{yellow}}" }],
+  [{ token = "$face", fg = "{{foreground}}", bold = true, dim = false, rules = [
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{green+dim_black:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_blue+blue:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{dim_cyan+green:40}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{dim_blue+cyan:40}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{cyan+bgdark:25}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{foreground+orange:50}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_white+bright_blue:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_cyan+blue:25}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_magenta+bright_white:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{foreground}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060", fg = "{{magenta+foreground:15}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060", fg = "{{dim_green}}" },
+    { starts_with = "\u2060\u2060\u2060", fg = "{{orange}}" },
+    { starts_with = "\u2060\u2060", fg = "{{blue+cyan:50}}" },
+    { starts_with = "\u2060", fg = "{{blue+bright_white:33}}" },
+  ] }],
+  # "main ↑1 · 3 changed": the branch as the faces plugin reads it, and the
+  # count from the git-changes plugin in this directory.
+  [{ token = "$detail", fg = "{{comment+foreground:55}}", bold = false, dim = false, rules = [
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{green+dim_black:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_blue+blue:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{dim_cyan+green:40}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{dim_blue+cyan:40}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{cyan+bgdark:25}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{foreground+orange:50}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_white+bright_blue:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_cyan+blue:25}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_magenta+bright_white:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{foreground}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060", fg = "{{magenta+foreground:15}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060", fg = "{{dim_green}}" },
+    { starts_with = "\u2060\u2060\u2060", fg = "{{orange}}" },
+    { starts_with = "\u2060\u2060", fg = "{{blue+cyan:50}}" },
+    { starts_with = "\u2060", fg = "{{blue+bright_white:33}}" },
+  ] }],
 ]
 
 [ui.sidebar.agents]
-# Subagent tabs, and any agent without rows of its own below. A subagent's
-# terminal title is its task; its activity (Working, Waiting on parent, Finished, Failed) comes from the
-# dotfiles Pi reporter. state_text is left out: pi-subagents puts an emoji in it.
+row_gap = 1
+# One layout for every agent, whatever harness runs it. Line 3 is the activity
+# that the dotfiles Pi reporter sets, passed on by the faces plugin only when
+# it says more than the face does: as $alert, in bold, when it needs you, and
+# otherwise as $note. Only one of the two is ever set, and Herdr leaves out a
+# row with nothing in it. state_text is left out: pi-subagents puts an emoji
+# in it.
 rows = [
-  ["state_icon", "workspace", "tab"],
-  ["terminal_title_stripped"],
-  ["agent", { token = "$activity", rules = [
-    { equals = "Failed", fg = "{{red}}" },
-    { equals = "Waiting on parent", fg = "{{yellow}}" },
+  [{ token = "$face", fg = "{{foreground}}", bold = true, dim = false, rules = [
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{green+dim_black:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_blue+blue:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{dim_cyan+green:40}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{dim_blue+cyan:40}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{cyan+bgdark:25}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{foreground+orange:50}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_white+bright_blue:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_cyan+blue:25}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_magenta+bright_white:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{foreground}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060", fg = "{{magenta+foreground:15}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060", fg = "{{dim_green}}" },
+    { starts_with = "\u2060\u2060\u2060", fg = "{{orange}}" },
+    { starts_with = "\u2060\u2060", fg = "{{blue+cyan:50}}" },
+    { starts_with = "\u2060", fg = "{{blue+bright_white:33}}" },
+  ] }],
+  [{ token = "$detail", fg = "{{comment+foreground:55}}", bold = false, dim = false, rules = [
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{green+dim_black:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_blue+blue:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{dim_cyan+green:40}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{dim_blue+cyan:40}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{cyan+bgdark:25}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{foreground+orange:50}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_white+bright_blue:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_cyan+blue:25}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_magenta+bright_white:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{foreground}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060", fg = "{{magenta+foreground:15}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060", fg = "{{dim_green}}" },
+    { starts_with = "\u2060\u2060\u2060", fg = "{{orange}}" },
+    { starts_with = "\u2060\u2060", fg = "{{blue+cyan:50}}" },
+    { starts_with = "\u2060", fg = "{{blue+bright_white:33}}" },
+  ] }],
+  [{ token = "$note", fg = "{{comment+foreground:55}}", bold = false, dim = false, rules = [
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{green+dim_black:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_blue+blue:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{dim_cyan+green:40}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{dim_blue+cyan:40}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{cyan+bgdark:25}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{foreground+orange:50}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_white+bright_blue:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_cyan+blue:25}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_magenta+bright_white:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{foreground}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060", fg = "{{magenta+foreground:15}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060", fg = "{{dim_green}}" },
+    { starts_with = "\u2060\u2060\u2060", fg = "{{orange}}" },
+    { starts_with = "\u2060\u2060", fg = "{{blue+cyan:50}}" },
+    { starts_with = "\u2060", fg = "{{blue+bright_white:33}}" },
+  ] }],
+  [{ token = "$alert", fg = "{{foreground}}", bold = true, dim = false, rules = [
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{green+dim_black:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_blue+blue:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{dim_cyan+green:40}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{dim_blue+cyan:40}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{cyan+bgdark:25}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{foreground+orange:50}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_white+bright_blue:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_cyan+blue:25}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{bright_magenta+bright_white:33}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{foreground}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060\u2060", fg = "{{magenta+foreground:15}}" },
+    { starts_with = "\u2060\u2060\u2060\u2060", fg = "{{dim_green}}" },
+    { starts_with = "\u2060\u2060\u2060", fg = "{{orange}}" },
+    { starts_with = "\u2060\u2060", fg = "{{blue+cyan:50}}" },
+    { starts_with = "\u2060", fg = "{{blue+bright_white:33}}" },
   ] }],
 ]
-
-# Pi, Claude and Codex: the workspace, then the tab. herdr-automatic-rename
-# names the tab after the agent and its task ("[2] pi:sidebar-tab-naming"), so
-# that row says which agent and what it is doing.
-# Pi gets a third row only when its activity says more than the status icon:
-# "3 children working", a question for you, a failure. Questions for you and
-# the 60-second unanswered-child case are red.
-[ui.sidebar.agents.rows_by_agent]
-pi = [
-  ["state_icon", "workspace"],
-  ["tab"],
-  [{ token = "$activity", rules = [
-    { equals = "Ready", hide = true },
-    { equals = "Working", hide = true },
-    { starts_with = "Waiting for you", fg = "{{red}}", bold = true },
-    { contains = "60s", fg = "{{red}}", bold = true },
-    { contains = "not done", fg = "{{red}}" },
-  ] }],
-]
-claude = [["state_icon", "workspace"], ["tab"]]
-codex = [["state_icon", "workspace"], ["tab"]]
 
 [session]
 # Layout saving is built in; no tmux-resurrect/continuum scripts are needed.
