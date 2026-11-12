@@ -199,8 +199,8 @@ rows = [
 ]
 
 [ui.sidebar.agents]
-# Claude, Codex and subagent tabs. A subagent's terminal title is its task;
-# its activity (Working, Waiting on parent, Finished, Failed) comes from the
+# Subagent tabs, and any agent without rows of its own below. A subagent's
+# terminal title is its task; its activity (Working, Waiting on parent, Finished, Failed) comes from the
 # dotfiles Pi reporter. state_text is left out: pi-subagents puts an emoji in it.
 rows = [
   ["state_icon", "workspace", "tab"],
@@ -211,17 +211,26 @@ rows = [
   ] }],
 ]
 
-# Pi parents: two rows, plain activity such as "3 children working". Questions
-# for you and the 60-second unanswered-child case are red.
+# Pi, Claude and Codex: the workspace, then the tab. herdr-automatic-rename
+# names the tab after the agent and its task ("[2] pi:sidebar-tab-naming"), so
+# that row says which agent and what it is doing.
+# Pi gets a third row only when its activity says more than the status icon:
+# "3 children working", a question for you, a failure. Questions for you and
+# the 60-second unanswered-child case are red.
 [ui.sidebar.agents.rows_by_agent]
 pi = [
-  ["state_icon", "workspace", "tab"],
+  ["state_icon", "workspace"],
+  ["tab"],
   [{ token = "$activity", rules = [
+    { equals = "Ready", hide = true },
+    { equals = "Working", hide = true },
     { starts_with = "Waiting for you", fg = "{{red}}", bold = true },
     { contains = "60s", fg = "{{red}}", bold = true },
     { contains = "not done", fg = "{{red}}" },
   ] }],
 ]
+claude = [["state_icon", "workspace"], ["tab"]]
+codex = [["state_icon", "workspace"], ["tab"]]
 
 [session]
 # Layout saving is built in; no tmux-resurrect/continuum scripts are needed.

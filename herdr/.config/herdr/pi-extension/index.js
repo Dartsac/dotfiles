@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { Supervision, asyncRunsRoot, clean, hasChildIssue, pendingRequests, supervisorRoot } from "./supervision.mjs";
 import { ChildTabs, isLive, scanChildren, viewerSessionRoots } from "./children.mjs";
 import { request } from "./rpc.mjs";
+import { TOPIC_ATTEMPTS, generateTopic, messageText } from "./topic.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const agentDir = () => process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi/agent");
@@ -88,6 +89,13 @@ export default function (pi) {
     if (root) pi.appendEntry(ISSUES_ENTRY, { childIssues: value });
   }
   let sessionFile;
+  // Session label (topic.mjs): asked for on a prompt, at most TOPIC_ATTEMPTS times.
+  let topicTries = 0;
+  let topicPending = false;
+  let topicUnclear = false; // the last prompt didn't say what the work is: ask again with the reply
+  let lastPrompt = "";
+  let retitle = 0; // polls left that send the title again; the last one renames tabs
+  let renamer; // herdr-automatic-rename's engine, looked up once
   const call = (method, params) => request(socket, method, params);
   const metadata = (tokens) => call("pane.report_metadata", {
     pane_id: pane, source: "dotfiles:supervision", agent: "pi",
@@ -143,8 +151,51 @@ export default function (pi) {
     });
   }
 
+  // Pi titles a named session "π - name - folder". herdr-automatic-rename names
+  // the tab after the title, so send it without the folder: "pi:name".
+  function showTopic() {
+    const name = clean(pi.getSessionName(), 60);
+    if (root && name) ctx?.ui.setTitle(`π - ${name}`);
+  }
+  // The plugin renames tabs on Herdr events, and a new terminal title isn't
+  // one: the tab would keep its old name until you switched tabs or the agent
+  // changed state. Run the plugin's naming pass directly, as its shell hooks do.
+  async function renameTabs() {
+    renamer ??= herdrCli(["plugin", "list", "--json"]).then(result => {
+      const plugin = result?.plugins?.find(p => p.plugin_id === "herdr-automatic-rename" && p.enabled !== false);
+      const engine = plugin?.plugin_root && path.join(plugin.plugin_root, "automatic-rename.sh");
+      return engine && fs.existsSync(engine) ? engine : undefined;
+    }).catch(() => undefined);
+    const engine = await renamer;
+    if (engine && root) await pi.exec("bash", [engine, "pane.agent_status_changed"], { timeout: 10_000 }).catch(() => {});
+  }
+
+  // Name an unnamed session after its work. A name you set with /name is kept.
+  async function nameSession(context, reply) {
+    if (!root || topicPending || topicTries >= TOPIC_ATTEMPTS || pi.getSessionName()) return;
+    topicPending = true;
+    topicTries++;
+    const session = sessionId;
+    try {
+      const first = (context.sessionManager.getBranch?.() ?? []).find(e => e.type === "message" && e.message?.role === "user");
+      const topic = await generateTopic(context, {
+        folder: path.basename(context.cwd), first: messageText(first?.message) || lastPrompt, latest: lastPrompt, reply,
+      });
+      topicUnclear = !topic;
+      if (topic && root && session === sessionId && !pi.getSessionName()) pi.setSessionName(topic);
+    } catch {
+      topicUnclear = true; // offline or no credentials: the tab stays "pi"
+    } finally {
+      topicPending = false;
+    }
+  }
+
   function poll() {
     if (!root) return;
+    if (retitle > 0) {
+      showTopic();
+      if (--retitle === 0 && pi.getSessionName()) void renameTabs();
+    }
     policy.requests = pendingRequests(channels, sessionId, policy.requests);
     const children = scanChildren(asyncRoot, [sessionFile, sessionId]);
     policy.setChildren(children.filter(c => isLive(c.state)).length);
@@ -198,8 +249,19 @@ export default function (pi) {
       publish();
     }));
   }
-  pi.on("before_agent_start", event => {
+  pi.on("before_agent_start", (event, context) => {
     if (event.messageType === "user" && !policy.busy && !policy.wrappingUp()) setChildIssues(false);
+    if (event.messageType === "user" && typeof event.prompt === "string") {
+      lastPrompt = event.prompt;
+      void nameSession(context); // not awaited: never delays the turn
+    }
+  });
+  // Pi has rewritten its title by the time this arrives. The next poll sends
+  // ours once more and renames the tab.
+  pi.on("session_info_changed", () => {
+    if (!root) return;
+    showTopic();
+    retitle = 1;
   });
   // Deliberately do not map generic herdr:blocked notices to human attention:
   // pi-subagents uses those for parent-addressed coordination and slow tools.
@@ -253,6 +315,14 @@ export default function (pi) {
     await startChildTabs(context).catch(() => {
       context.ui.notify("Herdr child tabs unavailable this session", "warning");
     });
+    // Pi sets its own title once more after a session loads, at a moment no
+    // event marks: send ours on the next few polls.
+    retitle = 3;
+    // A reloaded or resumed session that already has a conversation is named
+    // from it now, rather than at its next prompt.
+    const messages = (context.sessionManager.getBranch?.() ?? []).filter(e => e.type === "message").map(e => e.message);
+    lastPrompt = messageText(messages.findLast(m => m?.role === "user"));
+    if (lastPrompt) void nameSession(context, messageText(messages.findLast(m => m?.role === "assistant")));
     poll();
     timer = setInterval(poll, 1000);
     timer.unref?.();
@@ -261,6 +331,7 @@ export default function (pi) {
     if (!root) return;
     parentError = false;
     policy.start();
+    showTopic();
     poll();
   });
   pi.on("message_end", event => {
@@ -269,6 +340,10 @@ export default function (pi) {
   pi.on("agent_settled", (event, context) => {
     if (!root || !context.isIdle()) return;
     policy.settled({ aborted: event.aborted, error: parentError, pending: context.hasPendingMessages() });
+    if (topicUnclear && !event.aborted && !parentError) {
+      const reply = (context.sessionManager.getBranch?.() ?? []).findLast(e => e.type === "message" && e.message?.role === "assistant");
+      void nameSession(context, messageText(reply?.message));
+    }
     poll();
   });
   pi.on("tool_execution_end", event => {

@@ -1,12 +1,23 @@
-# herdr-automatic-rename (qu8n): tmux-style tab names, "[1] nvim".
+# herdr-automatic-rename (qu8n): tmux-style tab names, "[1] nvim", and agent
+# tabs named after the agent and its task, "[2] pi:sidebar-tab-naming".
 # Every other setting is the plugin default; see config.example.sh in its
 # checkout (herdr plugin list --json | jq ... managed_path).
 
 # Name tabs after the program only: no directory, branch or ssh-host prefix.
 TAB_CONTEXT=0
-# Agent tabs show the agent ("pi", "claude"), not their task title. The task is
-# in the sidebar's terminal-title / activity rows instead.
-AGENT_TITLES=0
+# Agent tabs show the agent and its task, "claude:sidebar-layout". The task is
+# the agent's terminal title: Claude Code writes its own, and Pi's is the
+# session name, which the dotfiles Pi extension sets
+# (herdr/.config/herdr/pi-extension/topic.mjs). An agent with no task yet shows
+# its name alone. The sidebar's agent rows show this tab name.
+AGENT_TITLES=1
+TITLE_STYLE=name_and_task
+# Shorten a long title to whole keywords instead of cutting it mid-word.
+TITLE_CONDENSE=1
+# Agent name, colon and task together. 22 is what fits after "[N] " in the
+# 30-column sidebar. Pi's labels are written to fit (TOPIC_MAX in topic.mjs).
+MAX_TITLE_LEN=22
+# Don't read Claude Code's transcripts to title a session it hasn't titled.
 AGENT_TRANSCRIPT=0
 # No agent names on pane borders: borders carry no titles.
 NAME_PANES=0
