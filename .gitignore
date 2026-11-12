@@ -62,6 +62,16 @@ nvim/.config/nvim/autoload
 # Written by theme-sync from the Dracula PRO package (paid theme), keep local
 ghostty/.config/ghostty/themes/
 herdr/.config/herdr/config.toml
+# Local Herdr runtime state, retained when its config directory is symlinked.
+herdr/.config/herdr/.plugins.lock
+herdr/.config/herdr/plugins/
+herdr/.config/herdr/plugins.json
+herdr/.config/herdr/session.json
+herdr/.config/herdr/session-snapshots/
+herdr/.config/herdr/sessions/
+herdr/.config/herdr/*.log
+herdr/.config/herdr/*.sock
+herdr/.config/herdr/*.sock.agent
 # Karabiner rewrites these timestamped copies on its own; keep the real karabiner.json
 /karabiner/.config/karabiner/automatic_backups/
 
