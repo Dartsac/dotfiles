@@ -1,6 +1,9 @@
-# fish shell
+# Fish uses a whole-directory symlink; keep machine-local/generated files untracked.
+fish/.config/fish/config-local.fish
 fish/.config/fish/fish_variables
 fish/.config/fish/fish_greeting_last_run
+fish/.config/fish/completions/fabric.fish
+fish/.config/fish/completions/copilot.fish
 
 # Python bytecode (the herdr scripts import herdr_cli.py)
 __pycache__/
