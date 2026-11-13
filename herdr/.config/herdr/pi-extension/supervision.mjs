@@ -10,6 +10,9 @@ export const GRACE_MS = 60_000;
 // the parent within about a second; quiet scheduled runs and workflow steps
 // never do, and a child can end between polls just after the parent settled.
 export const WRAPUP_GRACE_MS = 30_000;
+// How long a turn that was already running when the last child ended waits for
+// pi-subagents' wake turn before it counts as the wrap-up itself.
+export const WRAPUP_CONFIRM_MS = 5_000;
 export const clean = (text, max = 160) => String(text ?? "").replace(/[\x00-\x1f\x7f-\x9f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
 
 export function subagentsRoot(env = process.env) {
@@ -84,32 +87,60 @@ export class Supervision {
   problem = "";
   childIssues = false;
   children = 0; // live background children found in lifecycle files
+  // pi-subagents' busy signal outlasts an async workflow by up to 45s (its
+  // completion doesn't clear it; only a refresh does). So once the scan has
+  // seen the last live child end (childrenDone) and the parent has wrapped up,
+  // busy no longer keeps the parent working. It counts again when the scan
+  // finds a live child, when it drops (the lag is over) or when it rises (work
+  // pi-subagents has just seen). The wrap-up is a turn that began after the
+  // children ended (pi-subagents' wake turn). A turn that was already running
+  // counts once no wake turn has followed it for WRAPUP_CONFIRM_MS: the
+  // results reached it while it ran.
+  childrenDone = false;
+  wakeTurn = false;
+  wrappedUp = false;
+  confirmAt = 0;
   question = 0;
   lastQuestion = "";
 
-  start() { this.parentActive = true; this.problem = ""; }
+  start() { this.parentActive = true; this.problem = ""; this.wakeTurn = this.childrenDone; this.confirmAt = 0; }
   settled({ aborted = false, pending = false, error = false } = {}, now = Date.now()) {
     this.parentActive = false;
     this.human.clear(); // No blocking tool prompt can outlive a settled run.
+    if (this.childrenDone && !pending) {
+      if (this.wakeTurn && !aborted && !error) this.wrappedUp = true;
+      else this.confirmAt = now + WRAPUP_CONFIRM_MS;
+    }
     if (aborted || error) {
       this.problem = aborted ? "Interrupted, not done" : "Error, not done";
       this.wrapupPending = false;
-    } else if (!this.busy && !this.children && !pending) this.wrapupPending = false;
+    } else if (!this.busyNow(now) && !this.children && !pending) this.wrapupPending = false;
     else if (this.wrapupPending) this.wrapupSince = now; // wait afresh for the queued turn
   }
   armWrapup(now) { this.wrapupPending = true; this.wrapupSince = now; }
+  // From here busy counts again. If it had gone stale, that wrap-up is over:
+  // it must not come back as a Finishing up when the late signal drops.
+  newWork(now = Date.now()) {
+    if (this.stale(now)) this.wrapupPending = false;
+    this.childrenDone = this.wakeTurn = this.wrappedUp = false;
+    this.confirmAt = 0;
+  }
+  stale(now = Date.now()) { return this.childrenDone && (this.wrappedUp || (this.confirmAt > 0 && now >= this.confirmAt)); }
+  busyNow(now = Date.now()) { return this.busy > 0 && !this.stale(now); }
   setBusy(active, now = Date.now()) {
-    const wasBusy = this.busy > 0;
+    const wasBusy = this.busy > 0, stale = this.stale(now);
     this.busy = Math.max(0, this.busy + (active ? 1 : -1));
-    if (wasBusy && !this.busy) this.armWrapup(now);
+    if (stale && (active || !this.busy)) this.newWork(now); // its wrap-up is done: nothing to arm
+    else if (!active && wasBusy && !this.busy) this.armWrapup(now);
   }
   setChildren(n, now = Date.now()) {
-    if (this.children > 0 && n === 0) this.armWrapup(now);
+    if (n > 0) this.newWork(now);
+    else if (this.children > 0) { this.armWrapup(now); this.childrenDone = true; this.wrappedUp = false; this.confirmAt = 0; }
     this.children = n;
   }
   // Waiting for the parent to wrap up: always while it runs, else for a grace period.
   wrappingUp(now = Date.now()) {
-    return this.wrapupPending && (this.parentActive || now - this.wrapupSince < WRAPUP_GRACE_MS);
+    return this.wrapupPending && !this.stale(now) && (this.parentActive || now - this.wrapupSince < WRAPUP_GRACE_MS);
   }
   setHuman(key, active) {
     const wasWaiting = this.human.size > 0;
@@ -124,12 +155,12 @@ export class Supervision {
       title: "60s unanswered: child → parent",
       activity: `${overdue[0].agent || "Child"} waited 60s for parent${overdue.length > 1 ? ` (+${overdue.length - 1})` : ""}`,
     };
-    const n = this.children;
-    if (this.parentActive || this.busy || n || this.wrappingUp(now)) return {
+    // Children are counted in the sidebar's tree under the parent, not here.
+    const busy = this.busyNow(now);
+    if (this.parentActive || busy || this.children || this.wrappingUp(now)) return {
       state: "working", attention: "", title: "",
-      activity: this.requests.length ? `${plural(Math.max(n, 1), "child")}, ${this.requests.length} asking parent`
-        : this.parentActive ? (n ? `Working, ${plural(n, "child")}` : "Working")
-        : n ? `${plural(n, "child")} working` : this.busy ? "Children working" : "Finishing up",
+      activity: this.requests.length ? `${plural(this.requests.length, "child")} asking parent`
+        : this.parentActive || busy || this.children ? "Working" : "Finishing up",
     };
     return { state: this.problem ? "unknown" : "idle", attention: "", title: "",
       completionTitle: this.childIssues ? "Pi finished with child issues" : "",

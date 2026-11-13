@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Supervision, asyncRunsRoot, clean, hasChildIssue, pendingRequests, supervisorRoot } from "./supervision.mjs";
-import { ChildTabs, isLive, scanChildren, viewerSessionRoots } from "./children.mjs";
+import { ChildTabs, isLive, readChild, scanChildren, treeTokens, viewerSessionRoots } from "./children.mjs";
 import { request } from "./rpc.mjs";
 import { TOPIC_ATTEMPTS, generateTopic, messageText } from "./topic.mjs";
 
@@ -34,6 +34,26 @@ function defaultSessionDir() {
     const dir = JSON.parse(fs.readFileSync(path.join(agentDir(), "extensions/subagent/config.json"), "utf8")).defaultSessionDir;
     return typeof dir === "string" && dir ? dir.replace(/^~(?=$|\/)/, os.homedir()) : undefined;
   } catch { return undefined; }
+}
+
+// A Pi started from inside another (a bash tool, or a tmux server that tool
+// starts) inherits HERDR_PANE_ID and would report into the outer Pi's pane.
+// Its later, larger seq made Herdr drop every report the outer Pi sent after,
+// so the pane kept whatever the inner Pi said last. Only the pane's own Pi
+// reports: the one Herdr lists in the pane's foreground process group (Herdr
+// lists the whole group, so a launcher that doesn't exec is fine; a Pi in tmux
+// or in a bash tool's shell is in another group). If Herdr can't say (an older
+// version, no answer), the first Pi to mark the pane's environment owns it:
+// Pis started from inside it inherit the mark with another pid.
+const OWNER_ENV = "DOTFILES_HERDR_PI_PID";
+export async function ownsPane(call, pane, env = process.env, pid = process.pid) {
+  let foreground = [];
+  try {
+    foreground = ((await call("pane.process_info", { pane_id: pane }))?.process_info?.foreground_processes ?? []).map(p => p.pid);
+  } catch { /* decided by the environment below */ }
+  const owner = foreground.length ? foreground.includes(pid) : !env[OWNER_ENV] || env[OWNER_ENV] === String(pid);
+  if (owner) env[OWNER_ENV] = String(pid);
+  return owner;
 }
 
 // The node that runs pi-subagents' viewer in a child tab.
@@ -71,13 +91,22 @@ export default function (pi) {
   let timer;
   let sessionId;
   let sessionRef = {};
+  // Herdr drops a report whose seq isn't above the last it took for the pane.
+  // Following the clock means the owner always wins its pane back on its next
+  // report, whatever another reporter sent before.
   let seq = Date.now() * 1000;
+  const nextSeq = () => (seq = Math.max(seq + 1, Date.now() * 1000));
   let signature = "";
   let lastState;
   let lastRefresh = 0;
   let queued;
   let draining;
   let parentError = false;
+  // When the current task began (the user's last new message): the sidebar
+  // tree lists children started since, and every live one.
+  let taskStart = 0;
+  let tree = treeTokens([]);
+  let known; // the children the last scan listed; unset until the first scan
   const channels = supervisorRoot();
   const asyncRoot = asyncRunsRoot();
   const runner = path.join(agentDir(), "local-packages/pi-subagents/inspector-runner.mjs");
@@ -99,13 +128,14 @@ export default function (pi) {
   const call = (method, params) => request(socket, method, params);
   const metadata = (tokens) => call("pane.report_metadata", {
     pane_id: pane, source: "dotfiles:supervision", agent: "pi",
-    applies_to_source: "herdr:pi", tokens, ttl_ms: 120_000, seq: ++seq,
+    applies_to_source: "herdr:pi", tokens, ttl_ms: 120_000, seq: nextSeq(),
   });
   const identity = d => d.attention ? `${instance}:${d.attention}` : "";
+  const projection = () => ({ ...policy.desired(), tree });
 
   function publish(force = false) {
     if (!root) return;
-    const d = policy.desired();
+    const d = projection();
     const next = JSON.stringify(d);
     if (!force && signature === next) return;
     signature = next;
@@ -117,9 +147,9 @@ export default function (pi) {
         queued = undefined;
         try {
           await metadata({ activity: clean(next.activity), "attention-id": identity(next) || null,
-            "attention-title": next.title || null, "completion-title": next.completionTitle || null });
+            "attention-title": next.title || null, "completion-title": next.completionTitle || null, ...next.tree });
           if (!root) break;
-          const latest = policy.desired();
+          const latest = projection();
           if (JSON.stringify(latest) !== JSON.stringify(next)) {
             queued = latest;
             continue; // Never announce a question answered during the API call.
@@ -129,7 +159,7 @@ export default function (pi) {
           if (stateKey !== lastState) {
             await call("pane.report_agent", {
               pane_id: pane, source: "herdr:pi", agent: "pi", state: next.state,
-              message: clean(next.activity), seq: ++seq, ...sessionRef,
+              message: clean(next.activity), seq: nextSeq(), ...sessionRef,
             });
             lastState = stateKey;
           }
@@ -190,19 +220,35 @@ export default function (pi) {
     }
   }
 
-  function poll() {
+  // Read pi-subagents' files into the policy and the tree. Also run just
+  // before a turn starts or settles, so the policy judges that moment by the
+  // children as they are then, not as the last poll left them.
+  function scan() {
+    policy.requests = pendingRequests(channels, sessionId, policy.requests);
+    const all = scanChildren(asyncRoot, [sessionFile, sessionId]);
+    // A foreground workflow's children run inside the parent's tool call: they
+    // are in the tree, but neither count as background work nor get tabs.
+    const children = all.filter(c => !c.foreground);
+    const live = children.filter(c => isLive(c.state)).length;
+    // A child that started and ended between two scans was never counted:
+    // count it for a moment, so that its end is seen like any other.
+    if (known && !live && children.some(c => !known.has(c.key))) policy.setChildren(1);
+    known = new Set(children.map(c => c.key));
+    policy.setChildren(live);
+    tree = treeTokens(all, taskStart);
+    return children;
+  }
+
+  function poll(children) {
     if (!root) return;
     if (retitle > 0) {
       showTopic();
       if (--retitle === 0 && pi.getSessionName()) void renameTabs();
     }
-    policy.requests = pendingRequests(channels, sessionId, policy.requests);
-    const children = scanChildren(asyncRoot, [sessionFile, sessionId]);
-    policy.setChildren(children.filter(c => isLive(c.state)).length);
+    children ??= scan();
     publish(Date.now() - lastRefresh >= 45_000);
     if (tabs && !syncing) {
-      const wrapUp = policy.desired().state === "idle";
-      syncing = tabs.sync(children, { waitingRunIds: new Set(policy.requests.flatMap(r => [r.runId, `${r.runId}#${r.childIndex}`])), wrapUp })
+      syncing = tabs.sync(children)
         .catch(() => {}).finally(() => { syncing = undefined; });
     }
   }
@@ -223,6 +269,7 @@ export default function (pi) {
     const sessionDir = defaultSessionDir();
     tabs = new ChildTabs({
       cli: herdrCli, rpc: call, workspace: self.pane.workspace_id, parentPane: pane, cwd: context.cwd,
+      lookup: key => readChild(asyncRoot, key),
       viewer: {
         launcher: path.join(HERE, "subagent-view.sh"),
         env: child => ({
@@ -250,7 +297,11 @@ export default function (pi) {
     }));
   }
   pi.on("before_agent_start", (event, context) => {
-    if (event.messageType === "user" && !policy.busy && !policy.wrappingUp()) setChildIssues(false);
+    // A new task: not a message sent while children run or the parent wraps up.
+    if (event.messageType === "user" && !policy.busyNow() && !policy.wrappingUp()) {
+      setChildIssues(false);
+      taskStart = Date.now();
+    }
     if (event.messageType === "user" && typeof event.prompt === "string") {
       lastPrompt = event.prompt;
       void nameSession(context); // not awaited: never delays the turn
@@ -293,8 +344,10 @@ export default function (pi) {
       context.ui.notify("Herdr supervision not enabled: run ~/.config/herdr/scripts/install-pi-supervision.py, then /reload", "warning");
       return;
     }
+    if (!(await ownsPane(call, pane))) return;
     ctx = context;
     sessionId = context.sessionManager.getSessionId();
+    known = undefined;
     const file = context.sessionManager.getSessionFile();
     sessionFile = file;
     sessionRef = file ? { agent_session_path: file } : { agent_session_id: sessionId };
@@ -309,7 +362,7 @@ export default function (pi) {
     // A unique attention identity prevents a reloaded runtime's first question
     // from colliding with a dismissed question in the same terminal.
     await call("pane.report_agent_session", {
-      pane_id: pane, source: "herdr:pi", agent: "pi", seq: ++seq,
+      pane_id: pane, source: "herdr:pi", agent: "pi", seq: nextSeq(),
       session_start_source: _event.reason, ...sessionRef,
     }).catch(() => {});
     await startChildTabs(context).catch(() => {
@@ -322,6 +375,8 @@ export default function (pi) {
     // from it now, rather than at its next prompt.
     const messages = (context.sessionManager.getBranch?.() ?? []).filter(e => e.type === "message").map(e => e.message);
     lastPrompt = messageText(messages.findLast(m => m?.role === "user"));
+    const lastUser = messages.findLast(m => m?.role === "user");
+    taskStart = Number.isFinite(lastUser?.timestamp) ? lastUser.timestamp : 0;
     if (lastPrompt) void nameSession(context, messageText(messages.findLast(m => m?.role === "assistant")));
     poll();
     timer = setInterval(poll, 1000);
@@ -330,21 +385,23 @@ export default function (pi) {
   pi.on("agent_start", () => {
     if (!root) return;
     parentError = false;
+    const children = scan();
     policy.start();
     showTopic();
-    poll();
+    poll(children);
   });
   pi.on("message_end", event => {
     if (root && event.message.role === "assistant") parentError = event.message.stopReason === "error";
   });
   pi.on("agent_settled", (event, context) => {
     if (!root || !context.isIdle()) return;
+    const children = scan();
     policy.settled({ aborted: event.aborted, error: parentError, pending: context.hasPendingMessages() });
     if (topicUnclear && !event.aborted && !parentError) {
       const reply = (context.sessionManager.getBranch?.() ?? []).findLast(e => e.type === "message" && e.message?.role === "assistant");
       void nameSession(context, messageText(reply?.message));
     }
-    poll();
+    poll(children);
   });
   pi.on("tool_execution_end", event => {
     humanTools.delete(event.toolCallId);
@@ -370,7 +427,8 @@ export default function (pi) {
     });
     await Promise.all([draining, tabStep]);
     closing?.halt();
-    await metadata({ activity: null, "attention-id": null, "attention-title": null, "completion-title": null }).catch(() => {});
+    await metadata({ activity: null, "attention-id": null, "attention-title": null, "completion-title": null,
+      ...Object.fromEntries(Object.keys(tree).map(token => [token, null])) }).catch(() => {});
   });
 
   pi.registerShortcut("ctrl+shift+a", {

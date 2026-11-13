@@ -29,6 +29,8 @@ sets these tokens, which the sidebar rows show:
                      ahead/behind counts and changed files
     note     line 3  the agent's activity, when it says more than the face
     alert    line 3  instead of note, in bold, when the activity needs you
+    tree1-6  then    a Pi parent's subagents, one per line, as a tree:
+                     `├── <face> reviewer`, from its child1-6 tokens
 
 Lines 2 and 3 are this plugin's work only so that they can start under the
 name: Herdr indents them by a fixed two cells, so each begins with blank cells
@@ -63,6 +65,12 @@ PLUGIN_ID = "dotfiles.faces"
 SOURCE = "dotfiles:faces"
 TOKEN = "face"
 DETAIL, NOTE, ALERT = "detail", "note", "alert"
+# The dotfiles Pi reporter's children of a parent ("<state> <name>", or
+# "more <n>"), and the tree lines drawn from them. pi-extension/children.mjs
+# TREE_ROWS and config.base.toml's rows match this count.
+CHILDREN = tuple("child%d" % n for n in range(1, 7))
+TREE = tuple("tree%d" % n for n in range(1, 7))
+BRANCH, LAST = "├── ", "└── "
 QUIET = ("Ready", "Working", "Finished")   # activities the face already shows
 NEEDS_YOU = ("Waiting for you", "60s", "Failed", "not done")   # activities shown in bold
 BUSY = ("working", "blocked")             # being given work, or in the middle of it
@@ -220,6 +228,35 @@ def described(snapshot, choice, git_line, awake=frozenset()):
         git = " · ".join(part for part in (git_line(folder) if folder else None, tokens.get("changes")) if part)
         out[("workspace", workspace["workspace_id"])] = lines(tokens, detail=under(character, git))
     return {key: value for key, value in out.items() if value}
+
+
+def trees(snapshot, choice, frame):
+    """({("pane", id): {"tree1": text or None, ...}}, is any child working): each parent's children.
+
+    Lines start under the parent's name, like line 2. A child wears the
+    character a subagent gets under the choice, in its own state; the rest of
+    the line has the parent's color. None clears a line that is set and no
+    longer wanted; a line that is neither is left out."""
+    out, working = {}, False
+    for pane in snapshot.get("panes") or []:
+        tokens = pane.get("tokens") or {}
+        rows = [tokens.get(name) for name in CHILDREN] if pane.get("agent") else []
+        rows = [row for row in rows if row]
+        character = character_for(choice, pane.get("agent") or "")
+        child = character_for(choice, "subagent")
+        lines = {}
+        for n, row in enumerate(rows):
+            state, _, name = row.partition(" ")
+            branch = LAST if n == len(rows) - 1 else BRANCH
+            shown = "+%s more" % name if state == "more" else face(child, state, frame) + " " + name
+            lines[TREE[n]] = (indent(character) + branch + shown)[:VALUE_LIMIT].rstrip()
+            working = working or state == "working"
+        for name in TREE:
+            if name not in lines and name in tokens:
+                lines[name] = None
+        if lines:
+            out[("pane", pane["pane_id"])] = lines
+    return out, working
 
 
 # ---- branches ---------------------------------------------------------------
@@ -411,7 +448,9 @@ def keep_current(socket_path, config, state_dir, sleep, clock, git, now=time.tim
         faces, working = wanted(snapshot, choice, frame, up)
         git.watch(filter(None, (folder_of(w, snapshot) for w in snapshot.get("workspaces") or [])))
         want = {key: {TOKEN: text} for key, text in faces.items()}
-        for key, lines in described(snapshot, choice, git.line, up).items():
+        branches, children_working = trees(snapshot, choice, frame)
+        working = working or children_working
+        for key, lines in list(described(snapshot, choice, git.line, up).items()) + list(branches.items()):
             want.setdefault(key, {}).update(lines)
         want = identity.apply(snapshot, want, colors.assign(snapshot.get("workspaces") or []))
         due = {kind for kind, since in renewed.items() if clock() - since >= REFRESH_SECONDS[kind]}   # renew before the deadline
@@ -496,7 +535,7 @@ def main(argv):
         return 0
     if command == "rules":
         # The same workspace color on every line; Spaces has the first two.
-        print("\n\n".join(identity.rules(token) for token in ("$face", "$detail", "$note", "$alert")))
+        print("\n\n".join(identity.rules(token) for token in ("$face", "$detail", "$note", "$alert") + tuple("$" + t for t in TREE)))
         return 0
     raise SystemExit(__doc__)
 
