@@ -1,0 +1,17 @@
+{
+	"name": "pi-agent-extensions-types",
+	"private": true,
+	"description": "Type declarations for ts_ls and tsc in ./extensions. Pi supplies these packages at run time; nothing here is loaded by pi. Not stowed (pi/.stow-local-ignore).",
+	"type": "module",
+	"scripts": {
+		"typecheck": "tsc --noEmit -p .",
+		"sync-pi-types": "v=$(cat \"$HOME/.pi/agent/install/current-version\") && npm install --save-exact --save-dev @earendil-works/pi-coding-agent@$v @earendil-works/pi-agent-core@$v @earendil-works/pi-ai@$v @earendil-works/pi-tui@$v"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-agent-core": "1.5.2",
+		"@earendil-works/pi-ai": "1.5.2",
+		"@earendil-works/pi-coding-agent": "1.5.2",
+		"@earendil-works/pi-tui": "1.5.2",
+		"@types/node": "^22.19.0"
+	}
+}

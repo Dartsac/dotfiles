@@ -1,0 +1,25 @@
+# Stow ignore list for the pi package. A local list replaces stow's built-in
+# defaults, so they are repeated first.
+RCS
+.+,v
+CVS
+\.\#.+
+\.cvsignore
+\.svn
+_darcs
+\.hg
+\.git
+\.gitignore
+\.gitmodules
+.+~
+\#.*\#
+^/README.*
+^/LICENSE.*
+^/COPYING
+
+# Type-checking setup for the extensions (editor/tsc only; pi never reads it).
+^/\.pi/agent/node_modules
+^/\.pi/agent/package\.json
+^/\.pi/agent/package-lock\.json
+^/\.pi/agent/tsconfig\.json
+^/\.pi/agent/\.npmrc

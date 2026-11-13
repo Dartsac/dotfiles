@@ -1,0 +1,24 @@
+// Editor (ts_ls) and `tsc -p` type-checking for the extensions in ./extensions.
+// Pi supplies @earendil-works/* and typebox at run time; the type-only copies come from
+// ./node_modules (see package.json, `npm install` here). Not stowed: see pi/.stow-local-ignore.
+// Options mirror the --types check in tests/pi-extensions.mjs.
+{
+	"compilerOptions": {
+		"target": "es2023",
+		"lib": ["es2023"],
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"allowImportingTsExtensions": true,
+		"noEmit": true,
+		"strict": true,
+		"skipLibCheck": true,
+		"types": ["node"],
+		"paths": {
+			// Inside pi, extensions get pi-ai's extension view (compat entry plus TypeBox's Type, Static, TSchema),
+			// not the published package root. See getAliases() in pi-coding-agent's dist/core/extensions/loader.js.
+			"@earendil-works/pi-ai": ["./node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/pi-ai-extension-view.d.ts"]
+		}
+	},
+	"include": ["extensions/**/*.ts"],
+	"exclude": ["**/node_modules"]
+}
