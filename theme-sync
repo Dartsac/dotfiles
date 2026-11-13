@@ -5,7 +5,8 @@ Dracula PRO is a paid theme, so its colors are never stored in this
 repository. This script reads them from the package on this machine and writes
 files outside the repository or ignored by git:
 
-  ~/.local/share/theme-sync/palette.json   named colors for every variant
+  ~/.local/share/theme-sync/palette.json   named colors for every variant, and
+                                            the package's other values (for the guards)
   ~/.config/ghostty/themes/Dracula-*       the package's Ghostty themes
   ~/.local/share/nvim/site/pack/themes/start/dracula-pro   the package's Vim theme
   each target in theme-templates.txt       its template with {{names}} filled in
@@ -31,6 +32,8 @@ package only the templates are written, with stand-in colors.
   theme-sync --names         list the color names templates can use
   theme-sync --check-staged  fail if staged changes contain a Dracula PRO
                              color value (run by the git pre-commit hook)
+  theme-sync --check-history fail if any commit reachable from any ref holds
+                             one; names commit and file, never the value
 """
 
 import importlib.util
@@ -51,6 +54,10 @@ REPO = Path(__file__).resolve().parent
 TEMPLATES = REPO / "theme-templates.txt"
 # {{name}}, or {{name+other:percent}} for a blend of two colors.
 TOKEN = re.compile(r"\{\{([a-z_]+)(?:\+([a-z_]+):(\d{1,2}))?\}\}")
+# A color value in text: ("#" or "", six hex digits).
+COLOR_VALUE = re.compile(r"(?<![0-9A-Za-z])(#?)([0-9A-Fa-f]{6})(?![0-9A-Za-z])")
+# The name the guards give a package value that no palette names.
+UNNAMED = "unnamed"
 
 # Stand-in colors for templates when no package is installed (One Dark, a
 # free palette). Other names resolve by family: see stand_in().
@@ -76,6 +83,13 @@ STAND_INS = {
     "bgdarker": "#21252b",
     "bglight": "#2c313a",
     "bglighter": "#2c313a",
+}
+# The free Dracula theme's published colors (draculatheme.com/spec: standard,
+# ANSI and UI palettes). Dracula PRO shares a few; those are public, not paid.
+FREE_DRACULA = {
+    "282a36", "6272a4", "44475a", "f8f8f2", "ff5555", "ffb86c", "f1fa8c", "50fa7b",
+    "8be9fd", "bd93f9", "ff79c6", "353747", "21222c", "ff6e6e", "69ff94", "ffffa5",
+    "d6acff", "ff92df", "a4ffff", "343746", "424450", "191a21",
 }
 # Target suffixes whose format takes a "#" comment, for the generated-file note.
 HASH_COMMENTS = {".toml", ".yml", ".yaml", ".conf", ".ini", ".fish", ".sh"}
@@ -220,18 +234,98 @@ def install_hook(install):
     install.write(hook, HOOK, mode=0o755)
 
 
-def check_staged():
-    """Exit 1 if staged additions contain a color value from palette.json."""
+def other_values(package, palettes):
+    """Sorted "#rrggbb" values in the package's text files that no palette names.
+
+    Its app themes (Emacs, for one) carry shades beyond palette.md."""
+    named = {value for palette in palettes.values() for value in palette.values()}
+    found = set()
+    for path in package.rglob("*"):
+        data = path.read_bytes() if path.is_file() else b"\0"
+        if b"\0" not in data:
+            found.update("#" + value.lower() for mark, value in COLOR_VALUE.findall(data.decode(errors="replace")) if mark)
+    return sorted(found - named)
+
+
+def package_colors():
+    """{"rrggbb": name} for the package's own values in palette.json, or None.
+
+    Values with no palette name are named UNNAMED."""
     try:
-        variants = json.loads(PALETTE_JSON.read_text())["variants"]
+        stored = json.loads(PALETTE_JSON.read_text())
+        variants = stored["variants"]
     except (OSError, ValueError, KeyError):
-        return 0  # no package on this machine: nothing to compare against
+        return None
     names = {}
     for palette in variants.values():
         for name, value in palette.items():
             names.setdefault(value[1:].lower(), name)
-    # Greys (white and black included) are not specific to the theme.
-    names = {value: name for value, name in names.items() if not value[0:2] == value[2:4] == value[4:6]}
+    for value in stored.get("other_values", []):
+        names.setdefault(value[1:].lower(), UNNAMED)
+    # Greys (white and black included) and free Dracula colors are not specific to the theme.
+    return {
+        value: name for value, name in names.items()
+        if value not in FREE_DRACULA and not value[0:2] == value[2:4] == value[4:6]
+    }
+
+
+def colors_in(text, names):
+    """Names of the package colors whose values appear in text."""
+    found = []
+    for mark, value in COLOR_VALUE.findall(text):
+        # Six digits without "#" are far more often a number than a color.
+        if value.lower() in names and (mark or not value.isdigit()):
+            found.append(names[value.lower()])
+    return found
+
+
+def check_history():
+    """Exit 1 if any commit reachable from any ref holds a package color value."""
+    names = package_colors()
+    if names is None:
+        raise SystemExit(f"theme-sync: cannot check history without {PALETTE_JSON}; run theme-sync with the package installed")
+
+    def git(*args):
+        return subprocess.run(["git", *args], capture_output=True, text=True, check=True).stdout
+
+    blobs = subprocess.Popen(["git", "cat-file", "--batch"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    colors_by_blob = {}
+
+    def blob_colors(blob):
+        if blob not in colors_by_blob:
+            blobs.stdin.write(blob.encode() + b"\n")
+            blobs.stdin.flush()
+            size = int(blobs.stdout.readline().split()[2])
+            data = blobs.stdout.read(size + 1)[:-1]
+            # Like git grep, skip binary files.
+            colors_by_blob[blob] = [] if b"\0" in data else colors_in(data.decode(errors="replace"), names)
+        return colors_by_blob[blob]
+
+    found = []
+    for commit in git("rev-list", "--all").split():
+        for entry in git("ls-tree", "-r", "-z", commit).split("\0"):
+            if not entry:
+                continue
+            meta, path = entry.split("\t", 1)
+            _, kind, blob = meta.split()
+            colors = blob_colors(blob) if kind == "blob" else []
+            if colors:
+                found.append(f"  {commit[:12]} {path}: {', '.join(sorted(set(colors)))}")
+    blobs.stdin.close()
+    blobs.wait()
+    if found:
+        print("theme-sync: commits contain Dracula PRO color values (paid theme, keep out of git):")
+        print("\n".join(found))
+        return 1
+    print("theme-sync: no commit contains a Dracula PRO color value")
+    return 0
+
+
+def check_staged():
+    """Exit 1 if staged additions contain a color value from palette.json."""
+    names = package_colors()
+    if names is None:
+        return 0  # no package on this machine: nothing to compare against
     diff = subprocess.run(["git", "diff", "--cached", "-U0", "--no-color"], capture_output=True, text=True).stdout
     found, path, line_number = [], None, 0
     for line in diff.splitlines():
@@ -241,10 +335,9 @@ def check_staged():
             line_number = int(re.search(r"\+(\d+)", line).group(1)) - 1
         elif line.startswith("+") and path:
             line_number += 1
-            for mark, value in re.findall(r"(?<![0-9A-Za-z])(#?)([0-9A-Fa-f]{6})(?![0-9A-Za-z])", line[1:]):
-                # Six digits without "#" are far more often a number than a color.
-                if value.lower() in names and (mark or not value.isdigit()):
-                    found.append(f"  {path}:{line_number}: use {{{{{names[value.lower()]}}}}} in a template instead")
+            for name in colors_in(line[1:], names):
+                hint = "remove it (no template name)" if name == UNNAMED else f"use {{{{{name}}}}} in a template instead"
+                found.append(f"  {path}:{line_number}: {hint}")
     if found:
         print("theme-sync: staged changes contain Dracula PRO color values (paid theme, keep out of git):")
         print("\n".join(found))
@@ -312,6 +405,8 @@ def install_herdr_fonts(install, colors):
 def main():
     if sys.argv[1:] == ["--check-staged"]:
         raise SystemExit(check_staged())
+    if sys.argv[1:] == ["--check-history"]:
+        raise SystemExit(check_history())
     if sys.argv[1:] not in ([], ["--check"], ["--names"]):
         raise SystemExit(__doc__)
     install = Installer(check=sys.argv[1:] == ["--check"])
@@ -327,7 +422,8 @@ def main():
             print(f"theme-sync: Ghostty variant '{variant}' is not in the package; using 'pro'")
             variant = "pro"
         colors = palettes[variant]
-        install.write(PALETTE_JSON, json.dumps({"package": package.name, "variants": palettes}, indent=1, sort_keys=True) + "\n")
+        stored = {"package": package.name, "variants": palettes, "other_values": other_values(package, palettes)}
+        install.write(PALETTE_JSON, json.dumps(stored, indent=1, sort_keys=True) + "\n")
         for theme in sorted((package / "themes/ghostty").iterdir()):
             if theme.is_file() and "." not in theme.name:
                 name = "Dracula-" + "-".join(part.capitalize() for part in theme.name.split("-"))
