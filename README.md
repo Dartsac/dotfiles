@@ -18,6 +18,33 @@
 | stow -D tmux                    | Removes the symlink ~/.config/tmux.                                               |
 | stow --target=/custom/path nvim | Creates symlinks for nvim package in /custom/path.                                |
 | stow --simulate tmux            | Simulates creating symlinks for the tmux package without actually making changes. |
+| stow --no-folding pi            | Links each file in pi/.pi/agent into ~/.pi/agent, keeping the directories real.   |
+
+## Pi
+
+`pi/` holds the Pi settings, extensions and theme template for the Personal
+machine. Stow it with `--no-folding`:
+
+```sh
+stow --no-folding pi
+```
+
+Without `--no-folding`, stow may link a whole directory such as
+`~/.pi/agent/extensions`, and Pi would then write runtime files into this
+repository. Run it again after adding a file to the package.
+
+On a new machine, also:
+
+- Run `theme-sync`. It writes `~/.pi/agent/themes/dracula-pro.json` from the
+  template beside it.
+- Copy `~/.pi/agent/local-packages/` from a machine that has it.
+  `settings.json` loads three customized packages from there. They are local
+  Git repositories and are not part of this one.
+- Log in to Pi. Credentials (`auth.json`), trusted folders (`trust.json`) and
+  sessions stay on each machine.
+
+Pi rewrites `settings.json` itself, for example when you change the model, so
+expect small diffs there.
 
 ## Dracula PRO theme
 

@@ -1,0 +1,44 @@
+{
+  "lastChangelogVersion": "1.5.2",
+  "theme": "dracula-pro",
+  "defaultProvider": "anthropic",
+  "defaultModel": "claude-opus-5-5",
+  "hideThinkingBlock": false,
+  "warnings": {
+    "anthropicExtraUsage": false
+  },
+  "packages": [
+    "npm:pi-mcp-adapter@2.36.0",
+    "./local-packages/pi-subagents",
+    {
+      "source": "./local-packages/rpiv-ask-user-question",
+      "extensions": [
+        "+index.ts"
+      ]
+    },
+    "./local-packages/pi-web-access",
+    {
+      "source": "npm:@mtrojnar/pi-usage",
+      "extensions": []
+    },
+    "npm:pi-rewind"
+  ],
+  "subagents": {
+    "watchdog": {
+      "enabled": true,
+      "main": {
+        "enabled": true
+      }
+    }
+  },
+  "extensions": [
+    "-builtin:mcp",
+    "-extensions/herdr-agent-state.ts"
+  ],
+  "extensionChangelogVersions": {
+    "{\"source\":\"npm:pi-mcp-adapter@2.36.0\",\"scope\":\"user\"}": "2.36.0",
+    "{\"source\":\"./local-packages/pi-subagents\",\"scope\":\"user\"}": "0.70.1",
+    "{\"source\":\"./local-packages/pi-web-access\",\"scope\":\"user\"}": "0.30.0"
+  },
+  "defaultThinkingLevel": "high"
+}

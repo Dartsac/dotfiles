@@ -1,0 +1,7 @@
+{
+  "allowBrowserCookies": true,
+  "fetchRouting": {
+    "providers": ["http", "jina", "gemini"],
+    "allowRemoteHostedProviders": true
+  }
+}
