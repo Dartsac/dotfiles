@@ -38,7 +38,8 @@ def projects(home):
     for group in subdirectories(home / "work/cross-application"):
         candidates.extend(subdirectories(group))
     candidates.extend(path for path in (home / "work", home / "work/shared/scripts",
-                                       home / "Documents/vault") if path.is_dir())
+                                       home / "Documents/vault", home / "dotfiles/pi")
+                      if path.is_dir())
     return sorted({str(path) for path in candidates})
 
 
