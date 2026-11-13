@@ -95,12 +95,17 @@ FREE_DRACULA = {
 HASH_COMMENTS = {".toml", ".yml", ".yaml", ".conf", ".ini", ".fish", ".sh"}
 HOOK = """#!/bin/sh
 # Installed by theme-sync: refuse commits that add Dracula PRO color values,
-# and commits of a pi extension whose tests fail.
+# and commits of a root script or pi extension whose tests fail.
 top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 [ -x "$top/theme-sync" ] || exit 0
 # Checkouts from before the guard existed have a theme-sync without it.
 grep -q -e --check-staged "$top/theme-sync" || exit 0
 "$top/theme-sync" --check-staged || exit 1
+# The root scripts' Python tests, when a script or a test is staged.
+if git diff --cached --name-only | grep -q -E '^(theme-sync|[^/]*\\.py|tests/.*\\.py)$' &&
+    ls "$top"/tests/test_*.py >/dev/null 2>&1; then
+    output=$(python3 -m unittest discover -s "$top/tests" -p 'test_*.py' 2>&1) || { echo "$output"; exit 1; }
+fi
 # Checkouts from before the extension tests existed have no runner.
 [ -f "$top/tests/pi-extensions.mjs" ] && command -v node >/dev/null 2>&1 || exit 0
 exec node "$top/tests/pi-extensions.mjs" --staged
@@ -247,15 +252,22 @@ def other_values(package, palettes):
     return sorted(found - named)
 
 
-def package_colors():
+def package_colors(proof=False):
     """{"rrggbb": name} for the package's own values in palette.json, or None.
 
-    Values with no palette name are named UNNAMED."""
+    Values with no palette name are named UNNAMED. A palette.json written
+    before those were recorded covers only the named ones: that is worth a
+    warning to a guard and is fatal to a proof."""
     try:
         stored = json.loads(PALETTE_JSON.read_text())
         variants = stored["variants"]
     except (OSError, ValueError, KeyError):
         return None
+    if "other_values" not in stored:
+        partial = f"theme-sync: {PALETTE_JSON} lists only part of the package's values; run theme-sync to complete it"
+        if proof:
+            raise SystemExit(partial)
+        print(partial, file=sys.stderr)
     names = {}
     for palette in variants.values():
         for name, value in palette.items():
@@ -281,7 +293,7 @@ def colors_in(text, names):
 
 def check_history():
     """Exit 1 if any commit reachable from any ref holds a package color value."""
-    names = package_colors()
+    names = package_colors(proof=True)
     if names is None:
         raise SystemExit(f"theme-sync: cannot check history without {PALETTE_JSON}; run theme-sync with the package installed")
 

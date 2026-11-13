@@ -123,5 +123,33 @@ class ThemeSyncGuardTest(unittest.TestCase):
         self.assertIn("lean.fish:1:", result.stdout)
 
 
+    def write_palette_from_before_other_values(self):
+        palette = self.home / ".local/share/theme-sync/palette.json"
+        palette.write_text(json.dumps({"package": "dracula-pro-test", "variants": PALETTE}))
+
+    def test_history_check_refuses_to_pass_on_a_palette_that_lacks_the_packages_other_values(self):
+        self.commit({"README.md": "hello\n"})
+        self.write_palette_from_before_other_values()
+
+        result = self.theme_sync("--check-history")
+
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("run theme-sync", result.stderr)
+
+    def test_staged_check_still_guards_on_such_a_palette_and_says_to_run_theme_sync(self):
+        self.commit({"README.md": "hello\n"})
+        self.write_palette_from_before_other_values()
+        (self.repo / "colors.conf").write_text("port = 123456\n")
+        self.git("add", "colors.conf")
+        clean = self.theme_sync("--check-staged")
+        self.assertEqual(clean.returncode, 0)
+        self.assertIn("run theme-sync", clean.stderr)
+
+        (self.repo / "colors.conf").write_text("accent = #c0ffee\n")
+        self.git("add", "colors.conf")
+
+        self.assertEqual(self.theme_sync("--check-staged").returncode, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

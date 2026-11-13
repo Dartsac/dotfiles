@@ -84,9 +84,11 @@ It installs the package's Ghostty and Neovim themes, writes the palette the
 Hammerspoon dictation card reads, fills in the templates listed in
 `theme-templates.txt`, and installs a git pre-commit hook that refuses commits
 containing the theme's color values (the same hook runs the Pi extension
-tests). Run it again after downloading a new
+tests and `theme-sync`'s own tests). Run it again after downloading a new
 package, editing a template, or switching the Ghostty theme variant.
 `theme-sync --check` reports what would change without writing.
+`theme-sync --check-history` fails if any commit holds one of the theme's
+color values.
 
 On macOS it also generates Herdr's state-colored character fonts into
 `~/Library/Fonts/HerdrSpritesPixel-*.ttf`. The source fonts in
