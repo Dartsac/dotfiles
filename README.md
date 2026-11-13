@@ -46,6 +46,18 @@ On a new machine, also:
 Pi rewrites `settings.json` itself, for example when you change the model, so
 expect small diffs there.
 
+Extension tests sit beside each extension as `*.test.ts`. Run them against the
+installed Pi with:
+
+```sh
+node tests/pi-extensions.mjs          # every test; add a name to narrow, e.g. focus
+node tests/pi-extensions.mjs --types  # type-check instead (needs tsc)
+```
+
+The pre-commit hook runs the tests of each extension directory with staged
+changes. An extension with tests needs its own directory (`name/index.ts`),
+because Pi loads every top-level `extensions/*.ts` file as an extension.
+
 ## Dracula PRO theme
 
 Dracula PRO is a paid theme, so its colors are not in this repository. Put the
@@ -71,7 +83,8 @@ downloaded package (v2.2 or newer) in
 It installs the package's Ghostty and Neovim themes, writes the palette the
 Hammerspoon dictation card reads, fills in the templates listed in
 `theme-templates.txt`, and installs a git pre-commit hook that refuses commits
-containing the theme's color values. Run it again after downloading a new
+containing the theme's color values (the same hook runs the Pi extension
+tests). Run it again after downloading a new
 package, editing a template, or switching the Ghostty theme variant.
 `theme-sync --check` reports what would change without writing.
 

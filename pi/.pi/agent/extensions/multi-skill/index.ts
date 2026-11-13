@@ -17,15 +17,12 @@
  */
 import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { type ExtensionAPI, getMarkdownTheme } from "@earendil-works/pi-coding-agent";
 import {
-  type AutocompleteItem,
-  type AutocompleteProvider,
-  type AutocompleteSuggestions,
-  Box,
-  Markdown,
-  Text,
-} from "@earendil-works/pi-tui";
+  type ExtensionAPI,
+  parseSkillBlock,
+  SkillInvocationMessageComponent,
+} from "@earendil-works/pi-coding-agent";
+import type { AutocompleteItem, AutocompleteProvider, AutocompleteSuggestions } from "@earendil-works/pi-tui";
 
 interface SkillInfo {
   name: string;
@@ -59,14 +56,19 @@ function listTemplateNames(commands: Commands): Set<string> {
   return new Set(commands.filter((c) => c.source === "prompt").map((c) => c.name));
 }
 
-function stripFrontmatter(content: string): string {
-  const match = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
-  return match ? content.slice(match[0].length) : content;
+/**
+ * A skill file's body without its frontmatter. Same result as pi's own stripFrontmatter (BOM dropped,
+ * newlines normalized), but without parsing the YAML, so a skill with a malformed header still loads.
+ */
+function skillBody(content: string): string {
+  const text = content.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
+  const end = text.startsWith("---") ? text.indexOf("\n---", 3) : -1;
+  return (end === -1 ? text : text.slice(end + 4)).trim();
 }
 
 /** One skill wrapped in `tag`, matching the body pi builds for a native `/skill:name`. */
 function skillSection(skill: SkillInfo, tag: string): string {
-  const body = stripFrontmatter(readFileSync(skill.filePath, "utf-8")).trim();
+  const body = skillBody(readFileSync(skill.filePath, "utf-8"));
   return `<${tag} name="${skill.name}" location="${skill.filePath}">\nReferences are relative to ${skill.baseDir}.\n\n${body}\n</${tag}>`;
 }
 
@@ -90,7 +92,7 @@ export type Expansion =
   /** Replace the prompt with this text. */
   | { kind: "inline"; text: string }
   /** Keep `text` as the prompt (a prompt template expands it) and attach `block` as a separate message. */
-  | { kind: "attach"; text: string; block: string; names: string[] };
+  | { kind: "attach"; text: string; block: string };
 
 export function expandSkills(
   text: string,
@@ -117,9 +119,7 @@ export function expandSkills(
   const block = buildSkillBlock(used);
   // A leading prompt template only expands if the prompt still starts with `/name`.
   const leading = text.match(/^\/([^\s]+)/)?.[1];
-  if (leading && templateNames.has(leading)) {
-    return { kind: "attach", text: userText, block, names: used.map((s) => s.name) };
-  }
+  if (leading && templateNames.has(leading)) return { kind: "attach", text: userText, block };
   return { kind: "inline", text: userText ? `${block}\n\n${userText}` : block };
 }
 
@@ -139,7 +139,8 @@ function skillItems(
   // Filter before capping at MAX_SUGGESTIONS, so every skill is reachable.
   const matches = [...skills.values()].filter((s) => isMatch(s.name, query));
   // Whole-name prefix matches first.
-  matches.sort((a, b) => Number(!a.name.startsWith(query)) - Number(!b.name.startsWith(query)));
+  const startsWithQuery = (s: SkillInfo) => s.name.toLowerCase().startsWith(query.toLowerCase());
+  matches.sort((a, b) => Number(!startsWithQuery(a)) - Number(!startsWithQuery(b)));
   return matches.slice(0, MAX_SUGGESTIONS).map((s) => ({
     value: `${valuePrefix}skill:${s.name}`,
     label: s.name,
@@ -203,22 +204,15 @@ function createProvider(current: AutocompleteProvider, getSkills: () => Map<stri
 
 export default function (pi: ExtensionAPI) {
   // Skills attached to a prompt-template run, waiting for before_agent_start.
-  let pending: { block: string; names: string[] } | undefined;
+  let pending: string | undefined;
 
-  pi.registerMessageRenderer(MESSAGE_TYPE, (message, { expanded, outputPad, keyHint }, theme) => {
-    const names = (message.details as { names?: string[] } | undefined)?.names ?? [];
-    const box = new Box(outputPad, 1, (t) => theme.bg("customMessageBg", t));
-    const label = theme.fg("customMessageLabel", "\x1b[1m[skill]\x1b[22m ");
-    if (!expanded) {
-      box.addChild(
-        new Text(label + theme.fg("customMessageText", names.join(", ")) + ` (${keyHint("app.tools.expand", "to expand")})`, 0, 0),
-      );
-      return box;
-    }
-    const content = typeof message.content === "string" ? message.content : "";
-    box.addChild(new Text(label, 0, 0));
-    box.addChild(new Markdown(content, 0, 0, getMarkdownTheme(), { color: (t: string) => theme.fg("customMessageText", t) }));
-    return box;
+  // Drawn with pi's own skill row, so attached skills look like a native `/skill:name`.
+  pi.registerMessageRenderer(MESSAGE_TYPE, (message, { expanded, outputPad }) => {
+    const block = typeof message.content === "string" ? parseSkillBlock(message.content) : null;
+    if (!block) return undefined;
+    const row = new SkillInvocationMessageComponent(block, undefined, outputPad);
+    row.setExpanded(expanded);
+    return row;
   });
 
   pi.on("session_start", (_event, ctx) => {
@@ -240,7 +234,7 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify("multi-skill: skills after a prompt template aren't loaded for queued messages", "warning");
         return { action: "continue" };
       }
-      pending = { block: expansion.block, names: expansion.names };
+      pending = expansion.block;
       return { action: "transform", text: expansion.text };
     } catch (err) {
       ctx.ui.notify(`multi-skill: ${err instanceof Error ? err.message : String(err)}`, "error");
@@ -250,8 +244,8 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("before_agent_start", (event) => {
     if (!pending || event.messageType !== "user") return;
-    const { block, names } = pending;
+    const block = pending;
     pending = undefined;
-    return { message: { customType: MESSAGE_TYPE, content: block, display: true, details: { names } } };
+    return { message: { customType: MESSAGE_TYPE, content: block, display: true } };
   });
 }

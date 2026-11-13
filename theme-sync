@@ -80,12 +80,16 @@ STAND_INS = {
 # Target suffixes whose format takes a "#" comment, for the generated-file note.
 HASH_COMMENTS = {".toml", ".yml", ".yaml", ".conf", ".ini", ".fish", ".sh"}
 HOOK = """#!/bin/sh
-# Installed by theme-sync: refuse commits that add Dracula PRO color values.
+# Installed by theme-sync: refuse commits that add Dracula PRO color values,
+# and commits of a pi extension whose tests fail.
 top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 [ -x "$top/theme-sync" ] || exit 0
 # Checkouts from before the guard existed have a theme-sync without it.
 grep -q -e --check-staged "$top/theme-sync" || exit 0
-exec "$top/theme-sync" --check-staged
+"$top/theme-sync" --check-staged || exit 1
+# Checkouts from before the extension tests existed have no runner.
+[ -f "$top/tests/pi-extensions.mjs" ] && command -v node >/dev/null 2>&1 || exit 0
+exec node "$top/tests/pi-extensions.mjs" --staged
 """
 
 
