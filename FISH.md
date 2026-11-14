@@ -19,12 +19,35 @@ variables in `fish_variables`; while there are none, `config.fish` applies
 name, the Default multiplexer, a pinned Python, Perl's `local::lib`) go in
 `config-local.fish`, which `config.fish` sources last.
 
-An older setup kept Homebrew, the pinned Python and other folders (such as
+## A machine that used this config before it had a local override
+
+`config.fish` no longer sets up Perl's `local::lib` or the pinned Python.
+After pulling, copy `config-local.example.fish` to `config-local.fish` (or
+add to the one that is there) and uncomment the lines that machine needs.
+Until then Perl modules in `~/perl5` are not found.
+
+That setup also kept Homebrew, the pinned Python and other folders (such as
 Homebrew's openjdk) in the universal variables `PATH` and `fish_user_paths`,
-where they outlive the config that put them there. To clear them, list them
-first (`set -S fish_user_paths; set -S -U PATH`), add each folder you still
-want to `config-local.fish` with `fish_add_path --path`, then run
-`set -e -U PATH; set -e -U fish_user_paths` once.
+where they outlive the config that put them there. Nothing needs them now,
+and clearing them is optional. To clear them:
+
+1. List them: `set -S fish_user_paths; set -S -U PATH`. Add each folder you
+   still want to `config-local.fish` with `fish_add_path --path`.
+2. Expect a new order: `~/bin` and `~/.local/bin` then come before Homebrew,
+   so a command in one of them wins over Homebrew's command of the same name.
+3. Run `set -e -U PATH; set -e -U fish_user_paths` once, then restart the
+   fish shells that are open: a shell started outside a multiplexer loses
+   those folders from its PATH the moment the variables go.
+
+## Plugins
+
+Fisher, Tide and nvm.fish are tracked in this package (`fish_plugins` lists
+them), so they need no install. Fisher keeps its record of what it installed
+in universal variables, which a new machine does not have. There,
+`fisher update` refuses to install over the tracked files, changes nothing in
+the prompt, and deletes `fish_plugins`; restore it with
+`git checkout fish/.config/fish/fish_plugins`. Update the plugins on a machine
+whose fisher installed them, and commit the result.
 
 ## Migrating an existing installation
 
