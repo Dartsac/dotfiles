@@ -1,11 +1,11 @@
 #!/bin/sh
 # Run CI's Ubuntu job on this machine, in Docker: the Ubuntu release the
 # workflow names, the same dependencies (.tests/ubuntu-deps.sh) and the same
-# two commands. Run it before pushing a change that could behave differently
+# commands. Run it before pushing a change that could behave differently
 # on Linux; tool versions there differ from Homebrew's.
 #
-#   .tests/linux.sh          ./install's tests, then every standalone check
-#   .tests/linux.sh eza      ./install's tests, then the named checks
+#   .tests/linux.sh          the tests, then every standalone check
+#   .tests/linux.sh eza      the tests, then the named checks
 #
 # Needs Docker running. The repository is mounted read-only.
 set -eu
@@ -27,5 +27,6 @@ docker run --rm -v "$repo":/dotfiles:ro "$image" sh -c '
     su runner -c "git config --global --add safe.directory /dotfiles &&
         cd /dotfiles &&
         python3 -B .tests/test_install.py &&
+        python3 -B .tests/test_standalone.py &&
         python3 -B .tests/standalone.py $*"
 ' sh "$@"

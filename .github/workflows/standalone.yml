@@ -34,5 +34,8 @@ jobs:
       - name: ./install
         run: ${{ matrix.python }} -B .tests/test_install.py -v
 
+      - name: The standalone check's machine
+        run: ${{ matrix.python }} -B .tests/test_standalone.py -v
+
       - name: Standalone check
         run: ${{ matrix.python }} -B .tests/standalone.py

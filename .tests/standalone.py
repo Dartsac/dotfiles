@@ -523,6 +523,15 @@ class Machine:
             # A tmux that a check reaches by mistake talks to a server of the
             # machine's own, never to this user's.
             "TMUX_TMPDIR": str(root / "tmp"),
+            # git clones only public repositories here, and never with the
+            # user's credentials: a credential helper set outside HOME (the
+            # macOS keychain, in Homebrew's or Xcode's gitconfig) would run
+            # for a URL that carries a name, and git would ask for one on the
+            # terminal. An empty helper, set last, clears every one before it.
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "credential.helper",
+            "GIT_CONFIG_VALUE_0": "",
+            "GIT_TERMINAL_PROMPT": "0",
         }
 
     def install(self, package):
