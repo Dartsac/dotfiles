@@ -147,6 +147,9 @@ export class Supervision {
     if (active) this.human.add(key); else this.human.delete(key);
     if (!wasWaiting && this.human.size) this.lastQuestion = `human-${++this.question}`;
   }
+  // The parent's whole job is finished: its completion (done, or ended with a
+  // problem), after delegated work and the wrap-up turn. Not while it waits for you.
+  finished(now = Date.now()) { return ["idle", "unknown"].includes(this.desired(now).state); }
   desired(now = Date.now()) {
     const overdue = this.requests.filter(r => now - r.createdAt >= GRACE_MS).sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
     if (this.human.size) return { state: "blocked", attention: this.lastQuestion, title: "Pi needs your answer", activity: "Waiting for you" };
