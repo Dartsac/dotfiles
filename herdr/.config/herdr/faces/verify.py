@@ -2,7 +2,7 @@
 import os, sys
 from fontTools.ttLib import TTFont
 from PIL import Image, ImageDraw, ImageFont
-from sprites import CHARACTERS, STATES, BASE, W, H
+from sprites import CHARACTERS, STATES, BASE, H
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 hack = TTFont(os.path.expanduser("~/Library/Fonts/HackNerdFontMono-Regular.ttf"))
 ADV = hack["hmtx"][hack.getBestCmap()[ord("a")]][0]; ASC, DESC, UPM = hack["hhea"].ascent, hack["hhea"].descent, hack["head"].unitsPerEm

@@ -1,0 +1,18 @@
+# The repository's Python passes ruff's checks (ruff.toml has the rules). The
+# pre-commit hook runs the same on staged files where ruff is installed.
+name: lint
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Pinned: a newer ruff may fault what this one passes.
+      - name: ruff check
+        run: pipx run ruff==0.17.5 check

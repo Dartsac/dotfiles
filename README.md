@@ -61,6 +61,14 @@ lazygit package lists that file under `overridden_by` in its manifest, so
 `./install lazygit` names it when it exists. Move it away then; lazygit keeps
 its state, such as `state.yml`, in that folder, so leave the rest.
 
+### Lint
+
+The repository's Python passes `ruff check`. `ruff.toml` has the rules: names
+that are unused or undefined, and syntax that Python 3.9, macOS's own, cannot
+read. GitHub Actions runs it on every push (`.github/workflows/lint.yml`). The
+pre-commit hook runs it on the staged files where ruff is installed
+(`brew install ruff`), and lets the commit through where it is not.
+
 ## gnu stow naming convention
 
     1.	Root Directory: Your dotfiles directory contains subdirectories for each package (e.g., nvim, tmux).
@@ -147,7 +155,7 @@ It installs the package's Ghostty and Neovim themes, writes the palette the
 Hammerspoon dictation card reads, fills in the templates listed in
 `theme-templates.txt`, and installs a git pre-commit hook that refuses commits
 containing the theme's color values (the same hook runs the Pi extension
-tests and `theme-sync`'s own tests). Run it again after downloading a new
+tests and `theme-sync`'s own tests, and lints staged Python: see Lint). Run it again after downloading a new
 package, editing a template, or switching the Ghostty theme variant.
 `theme-sync --check` reports what would change without writing.
 `theme-sync --check-history` fails if any commit holds one of the theme's

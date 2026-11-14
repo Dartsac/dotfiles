@@ -1,6 +1,6 @@
 """Every sprite pixel, as CoreText draws the glyphs, against the design. Also CoreText's metrics against Hack's."""
 import subprocess, sys, os, re, tempfile
-from sprites import CHARACTERS, STATES, BASE, W, H
+from sprites import CHARACTERS, STATES, BASE, H
 size = 128
 here = os.path.dirname(os.path.abspath(__file__)); os.chdir(here)
 tmp = tempfile.mkdtemp()

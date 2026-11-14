@@ -212,6 +212,49 @@ class PreCommitHookTest(ThrowawayRepo):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("broken on purpose", result.stdout + result.stderr)
 
+    def fake_ruff(self, exit_code):
+        """Put a stand-in `ruff` first on PATH: it records its arguments, reports a problem and ends as told."""
+        folder, seen = self.home / "bin", self.home / "ruff-arguments"
+        folder.mkdir()
+        ruff = folder / "ruff"
+        ruff.write_text(f'#!/bin/sh\necho "$@" > "{seen}"\necho "F401 imported but unused"\nexit {exit_code}\n')
+        ruff.chmod(0o755)
+        self.env["PATH"] = f"{folder}{os.pathsep}{self.env['PATH']}"
+        return seen
+
+    def test_hook_refuses_a_commit_of_python_that_ruff_faults(self):
+        seen = self.fake_ruff(1)
+
+        result = self.commit_with_hook({"alpha/tool.py": "import os\n", "install": "#!/usr/bin/env python3\n", "notes.txt": "x\n"})
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("F401 imported but unused", result.stdout + result.stderr)
+        self.assertEqual(seen.read_text().split(), ["check", "--quiet", "alpha/tool.py", "install"],
+                         "the staged Python, root scripts included, and nothing else")
+
+    def test_hook_lets_a_commit_of_python_through_when_ruff_passes_it(self):
+        self.fake_ruff(0)
+
+        result = self.commit_with_hook({"alpha/tool.py": "import os\n"})
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_hook_does_not_run_ruff_when_no_python_is_staged(self):
+        seen = self.fake_ruff(1)
+
+        result = self.commit_with_hook({"notes.txt": "x\n", "alpha/tool.py.md": "x\n"})
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse(seen.exists())
+
+    @unittest.skipIf(shutil.which("ruff", path="/usr/bin:/bin"), "needs a PATH without ruff")
+    def test_hook_lets_a_commit_of_python_through_where_ruff_is_not_installed(self):
+        self.env["PATH"] = "/usr/bin:/bin"
+
+        result = self.commit_with_hook({"alpha/tool.py": "import os\n"})
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_hook_runs_the_pi_extension_runner_from_the_hidden_test_directory(self):
         runner = "console.error('runner ran with ' + process.argv.slice(2).join(' '));\nprocess.exit(1);\n"
