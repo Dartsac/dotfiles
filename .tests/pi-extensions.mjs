@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // Checks the pi extensions in pi/.pi/agent/extensions against the installed pi release.
 //
-//   node tests/pi-extensions.mjs            run every *.test.ts
-//   node tests/pi-extensions.mjs focus      only files whose path contains "focus"
-//   node tests/pi-extensions.mjs --staged   only extension directories with staged changes (the pre-commit hook)
-//   node tests/pi-extensions.mjs --types    type-check instead of running tests (needs `tsc` on PATH)
+//   node .tests/pi-extensions.mjs            run every *.test.ts
+//   node .tests/pi-extensions.mjs focus      only files whose path contains "focus"
+//   node .tests/pi-extensions.mjs --staged   only extension directories with staged changes (the pre-commit hook)
+//   node .tests/pi-extensions.mjs --types    type-check instead of running tests (needs `tsc` on PATH)
 //
 // Tests run under `node --test`. They import pi's packages the way a loaded extension does: through
 // pi's bundled jiti, with the installed release aliased in. The alias map follows getAliases() in pi's

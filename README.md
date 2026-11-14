@@ -4,7 +4,8 @@
 
     1.	Root Directory: Your dotfiles directory contains subdirectories for each package (e.g., nvim, tmux).
     2.	Relative Paths: Files and directories within each package should mimic the structure of their intended target locations in the filesystem.
-    3.	Target: Symlinks are created in the parent directory of the specified --target or the default (~).
+    3.	Target: `.stowrc` sets the target to your home directory, so `stow <package>` links into `~` wherever you cloned the repository. Pass --target to link elsewhere.
+    4.	Only packages: everything else at the root is a file or a hidden directory (tests live in `.tests/`), so `stow */` links packages only.
 
 | dotfile                               | gnu stow                                    |
 | ------------------------------------- | ------------------------------------------- |
@@ -14,7 +15,7 @@
 
 | Command                         | Effect                                                                            |
 | ------------------------------- | --------------------------------------------------------------------------------- |
-| stow tmux                       | Creates ~/.config/tmux symlink pointing to ~/dotfiles/tmux/.config/tmux.          |
+| stow tmux                       | Creates ~/.config/tmux symlink pointing to tmux/.config/tmux in your clone.       |
 | stow -D tmux                    | Removes the symlink ~/.config/tmux.                                               |
 | stow --target=/custom/path nvim | Creates symlinks for nvim package in /custom/path.                                |
 | stow --simulate tmux            | Simulates creating symlinks for the tmux package without actually making changes. |
@@ -50,8 +51,8 @@ Extension tests sit beside each extension as `*.test.ts`. Run them against the
 installed Pi with:
 
 ```sh
-node tests/pi-extensions.mjs          # every test; add a name to narrow, e.g. focus
-node tests/pi-extensions.mjs --types  # type-check instead (needs tsc)
+node .tests/pi-extensions.mjs          # every test; add a name to narrow, e.g. focus
+node .tests/pi-extensions.mjs --types  # type-check instead (needs tsc)
 ```
 
 The pre-commit hook runs the tests of each extension directory with staged

@@ -102,13 +102,13 @@ top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 grep -q -e --check-staged "$top/theme-sync" || exit 0
 "$top/theme-sync" --check-staged || exit 1
 # The root scripts' Python tests, when a script or a test is staged.
-if git diff --cached --name-only | grep -q -E '^(theme-sync|[^/]*\\.py|tests/.*\\.py)$' &&
-    ls "$top"/tests/test_*.py >/dev/null 2>&1; then
-    output=$(python3 -m unittest discover -s "$top/tests" -p 'test_*.py' 2>&1) || { echo "$output"; exit 1; }
+if git diff --cached --name-only | grep -q -E '^(theme-sync|[^/]*\\.py|\\.tests/.*\\.py)$' &&
+    ls "$top"/.tests/test_*.py >/dev/null 2>&1; then
+    output=$(python3 -B -m unittest discover -s "$top/.tests" -p 'test_*.py' 2>&1) || { echo "$output"; exit 1; }
 fi
 # Checkouts from before the extension tests existed have no runner.
-[ -f "$top/tests/pi-extensions.mjs" ] && command -v node >/dev/null 2>&1 || exit 0
-exec node "$top/tests/pi-extensions.mjs" --staged
+[ -f "$top/.tests/pi-extensions.mjs" ] && command -v node >/dev/null 2>&1 || exit 0
+exec node "$top/.tests/pi-extensions.mjs" --staged
 """
 
 

@@ -1,8 +1,12 @@
-"""theme-sync's guards against theme package colors in git, run against
-throwaway repositories with a made-up palette (never the paid one)."""
+"""theme-sync's guards against theme package colors in git, and the pre-commit
+hook it installs, run against throwaway repositories with a made-up palette
+(never the paid one)."""
+from importlib.machinery import SourceFileLoader
+import importlib.util
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -14,7 +18,9 @@ PALETTE = {"pro": {"orange": "#c0ffee", "cyan": "#0a1b2c", "number": "#123456", 
 OTHER_VALUES = ["#beefed", "#444444", "#ff79c6"]
 
 
-class ThemeSyncGuardTest(unittest.TestCase):
+class ThrowawayRepo(unittest.TestCase):
+    """A git repository and home directory in a temporary directory, with a made-up palette installed."""
+
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
@@ -39,6 +45,12 @@ class ThemeSyncGuardTest(unittest.TestCase):
         return subprocess.run(["git", *args], cwd=self.repo, env=self.env, check=True, capture_output=True, text=True).stdout.strip()
 
     def commit(self, files, message="change"):
+        self.stage(files)
+        self.git("commit", "-q", "--no-verify", "-m", message)
+        return self.git("rev-parse", "HEAD")
+
+    def stage(self, files):
+        """Write and stage each file; a None text removes it."""
         for name, text in files.items():
             path = self.repo / name
             if text is None:
@@ -47,12 +59,12 @@ class ThemeSyncGuardTest(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text)
             self.git("add", name)
-        self.git("commit", "-q", "--no-verify", "-m", message)
-        return self.git("rev-parse", "HEAD")
 
     def theme_sync(self, *args):
         return subprocess.run([str(THEME_SYNC), *args], cwd=self.repo, env=self.env, capture_output=True, text=True)
 
+
+class ThemeSyncGuardTest(ThrowawayRepo):
     def test_history_check_names_each_commit_and_file_holding_a_package_color(self):
         leaked = self.commit({"herdr/config.toml": 'accent = "#C0FFEE"\n', "README.md": "hello\n"})
         removed = self.commit({"herdr/config.toml": None})
@@ -149,6 +161,49 @@ class ThemeSyncGuardTest(unittest.TestCase):
         self.git("add", "colors.conf")
 
         self.assertEqual(self.theme_sync("--check-staged").returncode, 1)
+
+
+class PreCommitHookTest(ThrowawayRepo):
+    """The hook theme-sync installs, run by a real commit in a copy of the repository layout."""
+
+    def setUp(self):
+        super().setUp()
+        shutil.copy2(THEME_SYNC, self.repo / "theme-sync")
+        loader = SourceFileLoader("theme_sync", str(THEME_SYNC))
+        module = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+        loader.exec_module(module)
+        hook = self.repo / ".git/hooks/pre-commit"
+        hook.write_text(module.HOOK)
+        hook.chmod(0o755)
+        self.commit({"README.md": "hello\n"})
+
+    def commit_with_hook(self, files):
+        self.stage(files)
+        return subprocess.run(["git", "commit", "-q", "-m", "change"], cwd=self.repo, env=self.env, capture_output=True, text=True)
+
+    def test_hook_refuses_a_commit_when_a_test_in_the_hidden_test_directory_fails(self):
+        failing = "import unittest\nclass T(unittest.TestCase):\n    def test_it(self):\n        self.fail('broken on purpose')\n"
+
+        result = self.commit_with_hook({".tests/test_example.py": failing})
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("broken on purpose", result.stdout + result.stderr)
+
+    def test_hook_lets_a_commit_through_when_the_hidden_test_directory_passes(self):
+        passing = "import unittest\nclass T(unittest.TestCase):\n    def test_it(self):\n        pass\n"
+
+        result = self.commit_with_hook({".tests/test_example.py": passing})
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_hook_runs_the_pi_extension_runner_from_the_hidden_test_directory(self):
+        runner = "console.error('runner ran with ' + process.argv.slice(2).join(' '));\nprocess.exit(1);\n"
+
+        result = self.commit_with_hook({".tests/pi-extensions.mjs": runner})
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("runner ran with --staged", result.stderr)
 
 
 if __name__ == "__main__":

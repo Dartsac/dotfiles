@@ -1,7 +1,7 @@
 // Editor (ts_ls) and `tsc -p` type-checking for the extensions in ./extensions.
 // Pi supplies @earendil-works/* and typebox at run time; the type-only copies come from
 // ./node_modules (see package.json, `npm install` here). Not stowed: see pi/.stow-local-ignore.
-// Options mirror the --types check in tests/pi-extensions.mjs.
+// Options mirror the --types check in .tests/pi-extensions.mjs.
 {
 	"compilerOptions": {
 		"target": "es2023",
