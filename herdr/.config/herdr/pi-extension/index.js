@@ -19,9 +19,16 @@ const ISSUES_ENTRY = "dotfiles-herdr-child-issues";
 // Session entry recording when a finished job cleared rows from the tree, so a
 // /reload while the next job goes on doesn't bring back earlier jobs' failures.
 const JOB_ENTRY = "dotfiles-herdr-job-finished";
+// Session entry naming a child this parent opened a tab for, so a /reload never
+// opens it again (ChildTabs' `opened`). It names the parent's pane too: a session
+// resumed in another pane can't adopt the old pane's tabs, so opens its own.
+const CHILD_TAB_ENTRY = "dotfiles-herdr-child-tab";
 // How long shutdown waits for a child-tab step in flight (tab create, viewer
 // launch, tag: up to 5s + 5s + 1.5s), so it can't land after the next runtime starts.
 const TAB_SHUTDOWN_MS = 12_000;
+// The data of the session branch's entries of one custom type, oldest first.
+const customData = (context, type) => (context.sessionManager.getBranch?.() ?? [])
+  .filter(e => e.type === "custom" && e.customType === type).map(e => e.data);
 
 // Steer/stop in a child tab follow pi-subagents' own authority policy.
 function viewerAuthority() {
@@ -142,9 +149,13 @@ export default function (pi) {
     const kept = JSON.stringify(treeTokens(treeChildren, doneAt));
     doneAt = now;
     if (kept === JSON.stringify(treeTokens(treeChildren, doneAt))) return;
-    // The poll timer gets here outside any Pi handler, where an error ends Pi.
     // Unsaved, these rows would only show once more after a /reload mid-job.
-    try { pi.appendEntry(JOB_ENTRY, { doneAt }); } catch { /* the session file can't be written */ }
+    tryAppend(JOB_ENTRY, { doneAt });
+  }
+  // A session write that can't fail: for the poll timer and the tab pass, which
+  // run outside any Pi handler, where an error ends Pi.
+  function tryAppend(type, data) {
+    try { pi.appendEntry(type, data); } catch { /* the session file can't be written */ }
   }
   // What to report now. The tree follows the policy's completion.
   function projection() {
@@ -289,9 +300,11 @@ export default function (pi) {
     const piRoot = piPackageRoot();
     const authority = viewerAuthority();
     const sessionDir = defaultSessionDir();
+    const opened = customData(context, CHILD_TAB_ENTRY).filter(d => d?.pane === pane && typeof d.key === "string").map(d => d.key);
     tabs = new ChildTabs({
       cli: herdrCli, rpc: call, workspace: self.pane.workspace_id, parentPane: pane, cwd: context.cwd,
       lookup: key => readChild(asyncRoot, key),
+      opened, record: key => tryAppend(CHILD_TAB_ENTRY, { key, pane }),
       viewer: {
         launcher: path.join(HERE, "subagent-view.sh"),
         env: child => ({
@@ -306,7 +319,6 @@ export default function (pi) {
         }),
       },
     });
-    tabs.adopt((await call("session.snapshot", {})).snapshot);
   }
 
   // Capture restored overlays even if pi-subagents' session_start handler runs
@@ -373,7 +385,7 @@ export default function (pi) {
     // Restore this task's child failures from the session, then record any that
     // arrived during startup (pi-subagents can deliver before this handler runs).
     const arrived = policy.childIssues;
-    const saved = type => (context.sessionManager.getBranch?.() ?? []).filter(e => e.type === "custom" && e.customType === type).at(-1)?.data;
+    const saved = type => customData(context, type).at(-1);
     policy.childIssues = saved(ISSUES_ENTRY)?.childIssues === true;
     const savedDoneAt = saved(JOB_ENTRY)?.doneAt;
     doneAt = Number.isFinite(savedDoneAt) ? savedDoneAt : 0;

@@ -127,20 +127,28 @@ export function viewerSessionRoots(child, parentSessionFile, defaultSessionDir) 
 export class ChildTabs {
   // deps: cli(args) -> parsed JSON result, rpc(method, params), viewer: { launcher, env(child) }
   // lookup(key): a tracked child the scan doesn't list (readChild), or undefined.
-  constructor({ cli, rpc, viewer, workspace, parentPane, cwd, max = MAX_TABS, lookup = () => undefined }) {
-    Object.assign(this, { cli, rpc, viewer, workspace, parentPane, cwd, max, lookup });
+  // opened: the children earlier runtimes of this parent opened a tab for (the
+  // session keeps them); record(key) is called once for each new tagged tab.
+  constructor({ cli, rpc, viewer, workspace, parentPane, cwd, max = MAX_TABS, lookup = () => undefined, opened = [], record = () => {} }) {
+    Object.assign(this, { cli, rpc, viewer, workspace, parentPane, cwd, max, lookup, record });
     this.tabs = new Map(); // key -> { pane, tab, release }
-    this.dismissed = new Set();
+    // The children this parent won't open a tab for (again). One whose tab was
+    // tagged is never opened again, even after /reload, whether it ended or the
+    // owner closed it. One whose tab failed to open is not retried by this
+    // runtime; the next one tries once more.
+    this.tried = new Set(opened);
     this.seq = Date.now() * 1000;
   }
 
-  // Re-attach to tabs a previous runtime of this parent opened (e.g. after /reload).
-  // One that runtime reported as a Herdr agent is released (see sync).
-  adopt(snapshot) {
-    for (const pane of snapshot.panes ?? []) {
-      const t = pane.tokens ?? {};
-      if (t["subagent-parent"] === this.parentPane && t["subagent-run"] && !this.tabs.has(t["subagent-run"])) {
-        this.tabs.set(t["subagent-run"], { pane: pane.pane_id, tab: pane.tab_id, release: !!pane.agent });
+  // Re-attach to tabs a previous runtime of this parent opened (e.g. after
+  // /reload), from Herdr's panes by id. One that runtime reported as a Herdr
+  // agent is released (see sync).
+  adopt(panes) {
+    for (const pane of panes.values()) {
+      const t = pane.tokens ?? {}, key = t["subagent-run"];
+      if (t["subagent-parent"] === this.parentPane && key && !this.tabs.has(key)) {
+        this.tabs.set(key, { pane: pane.pane_id, tab: pane.tab_id, release: !!pane.agent });
+        if (!this.tried.has(key)) { this.tried.add(key); this.record(key); }
       }
     }
   }
@@ -190,7 +198,7 @@ export class ChildTabs {
   // so without this a tab closed while its child runs would hold its slot.
   forgetClosed(panes) {
     for (const [key, entry] of [...this.tabs]) {
-      if (panes.get(entry.pane)?.tokens?.["subagent-run"] !== key) { this.tabs.delete(key); this.dismissed.add(key); }
+      if (panes.get(entry.pane)?.tokens?.["subagent-run"] !== key) this.tabs.delete(key);
     }
   }
 
@@ -212,13 +220,22 @@ export class ChildTabs {
     const byKey = new Map(children.map(c => [c.key, c]));
     let panes; // one snapshot per pass, fetched only when needed
     const live = () => (panes ??= this.livePanes());
-    const wanted = [...byKey.values()].filter(c => !c.foreground && !this.tabs.has(c.key) && !this.dismissed.has(c.key) && isLive(c.state));
+    // The first pass takes over the tabs an earlier runtime left before it opens
+    // or closes anything; until Herdr's layout has been read, it does nothing.
+    if (!this.adopted) {
+      try { this.adopt(await live()); } catch { return; }
+      this.adopted = true;
+    }
+    const wanted = [...byKey.values()].filter(c => !c.foreground && !this.tried.has(c.key) && isLive(c.state));
     if (wanted.length && this.tabs.size >= this.max) {
       try { this.forgetClosed(await live()); } catch { panes = undefined; }
     }
     for (const child of wanted) {
       if (this.tabs.size >= this.max || this.stopping) break;
-      try { await this.open(child); } catch { this.dismissed.add(child.key); }
+      // Tried once in this runtime whatever happens; recorded for later ones
+      // only when tagged, so a tab shutdown cuts short is opened again after.
+      this.tried.add(child.key);
+      if (await this.open(child).then(() => true, () => false)) this.record(child.key);
     }
     for (const [key, entry] of [...this.tabs]) {
       if (this.stopping) break;
@@ -232,10 +249,9 @@ export class ChildTabs {
         if (!child || isLive(child.state)) continue;
         await this.closeViewer(entry, await live());
         this.tabs.delete(key);
-        this.dismissed.add(key);
       } catch (error) {
-        // A tab the owner closed is gone for good; don't reopen it.
-        if (/not_found/.test(String(error?.message ?? error))) { this.tabs.delete(key); this.dismissed.add(key); }
+        // A tab the owner closed is gone for good.
+        if (/not_found/.test(String(error?.message ?? error))) this.tabs.delete(key);
         panes = undefined; // read the layout afresh for the next tab
       }
     }
