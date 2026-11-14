@@ -13,24 +13,48 @@ const SUCCEEDED = new Set(["complete", "completed"]);
 // "+N more" when there are more children. config.base.toml has a row per token.
 export const TREE_ROWS = 6;
 // Each child's state as the face it wears (faces/characters.py STATES).
-const TREE_STATE = { running: "working", queued: "idle", pending: "idle", failed: "blocked", paused: "unknown", stopped: "unknown" };
+// A succeeded child shows only to hold a subagent of its own that is still shown.
+const TREE_STATE = { running: "working", queued: "idle", pending: "idle", failed: "blocked", paused: "unknown", stopped: "unknown", complete: "done", completed: "done" };
 const RUN_ID = /^[A-Za-z0-9_-]+$/;
+// A subagent's own subagent's tree token starts with this (faces.py SUB).
+const SUB = "sub ";
+// The parent's own subagents; the rest are theirs, at depth 2.
+const topLevel = c => (c.depth ?? 1) === 1;
 
 function readStatus(dir) {
   try { return JSON.parse(fs.readFileSync(path.join(dir, "status.json"), "utf8")); } catch { return undefined; }
 }
 
-// Children of this parent session, read from pi-subagents' lifecycle files.
+const nonEmpty = value => typeof value === "string" && value ? value : undefined;
+
+// Children of this parent session, read from pi-subagents' lifecycle files,
+// each with its depth: 1 for the parent's own subagents, 2 for theirs, which
+// also name the subagent they belong to (`parent`, its key). A subagent's Pi
+// takes its session file as its session id (pi-subagents'
+// resolveCurrentSessionId), so its own runs name that file as their session.
+// Depth stops at 2, pi-subagents' default nesting limit.
+export function scanChildren(asyncRoot, sessionIds) {
+  let dirs;
+  try { dirs = fs.readdirSync(asyncRoot, { withFileTypes: true }).filter(d => d.isDirectory()); } catch { return []; }
+  const statuses = dirs.map(dir => [dir, readStatus(path.join(asyncRoot, dir.name))]).filter(([, s]) => s);
+  const owned = new Set(sessionIds.filter(Boolean));
+  const top = childrenOf(asyncRoot, statuses, owned).map(c => ({ ...c, depth: 1 }));
+  const keyBySessionFile = new Map(top.filter(c => c.sessionFile && !owned.has(c.sessionFile)).map(c => [c.sessionFile, c.key]));
+  const keys = new Set(top.map(c => c.key));
+  const nested = childrenOf(asyncRoot, statuses, new Set(keyBySessionFile.keys()))
+    .filter(c => !keys.has(c.key)).map(c => ({ ...c, depth: 2, parent: keyBySessionFile.get(c.session) }));
+  return [...top, ...nested].sort((a, b) => a.key.localeCompare(b.key));
+}
+
+// The children of runs whose session is in `owned`, each with `session`, the
+// session that started it, and `sessionFile`, its own session, when recorded.
 // Workflow roots are containers: their steps point at each child's own run.
 // Other roots (single/parallel/chain) contain their children as steps.
 // A foreground workflow has no root here, only its children's own runs, each
 // naming the workflow in parentWorkflowRunId: those come back marked
 // `foreground`, for the sidebar tree only (the parent is busy in that tool call).
-export function scanChildren(asyncRoot, sessionIds) {
-  const owned = new Set(sessionIds.filter(Boolean));
-  let dirs;
-  try { dirs = fs.readdirSync(asyncRoot, { withFileTypes: true }).filter(d => d.isDirectory()); } catch { return []; }
-  const statuses = dirs.map(dir => [dir, readStatus(path.join(asyncRoot, dir.name))]).filter(([, s]) => s && owned.has(s.sessionId));
+function childrenOf(asyncRoot, all, owned) {
+  const statuses = all.filter(([, s]) => owned.has(s.sessionId));
   // A workflow child's first status lacks parentWorkflowRunId, so for a
   // moment it also looks like a run of its own: list it once, by its workflow.
   const inWorkflow = new Set(statuses.flatMap(([, s]) => s.mode === "workflow" ? (s.steps ?? []).map(step => step.runId) : []));
@@ -48,7 +72,8 @@ export function scanChildren(asyncRoot, sessionIds) {
         const child = readStatus(asyncDir);
         const state = child?.state ?? step.status ?? "queued";
         children.push({
-          key: step.runId, runId: step.runId, asyncDir, roots,
+          key: step.runId, runId: step.runId, asyncDir, roots, session: root.sessionId,
+          sessionFile: nonEmpty(child?.steps?.[0]?.sessionFile) ?? nonEmpty(child?.sessionFile) ?? nonEmpty(step.sessionFile),
           name: clean(step.workflowKey || step.agent || "subagent", 40),
           agent: clean(step.agent || "subagent", 40), title: clean(step.label, 60),
           state, index: 0,
@@ -62,7 +87,8 @@ export function scanChildren(asyncRoot, sessionIds) {
         const state = several ? (step.status ?? root.state) : root.state;
         children.push({
           key: several ? `${root.runId}#${index}` : root.runId, runId: root.runId,
-          asyncDir: path.join(asyncRoot, dir.name), roots, index,
+          asyncDir: path.join(asyncRoot, dir.name), roots, index, session: root.sessionId,
+          sessionFile: nonEmpty(step.sessionFile) ?? (several ? undefined : nonEmpty(root.sessionFile)),
           name: clean((!several && root.workflowKey) || step.agent || "subagent", 40) + (several ? `-${index + 1}` : ""),
           agent: clean(step.agent || "subagent", 40), title: clean(step.label, 60),
           state,
@@ -72,8 +98,7 @@ export function scanChildren(asyncRoot, sessionIds) {
       }
     });
   }
-  const unique = new Map(children.map(c => [c.key, c]));
-  return [...unique.values()].sort((a, b) => a.key.localeCompare(b.key));
+  return [...new Map(children.map(c => [c.key, c])).values()];
 }
 
 export const isLive = state => LIVE.has(state);
@@ -81,17 +106,22 @@ export const isLive = state => LIVE.has(state);
 // Shown in the tree: a live child, and one that ended without success (failed,
 // paused, stopped) after `doneAt`, the last moment the parent's whole job was
 // seen finished (0: not yet). A succeeded child leaves as soon as it ends.
-// One with no end time is kept only until the first finished job.
+// One with no end time is kept only until the first finished job. The same at
+// depth 2; a subagent is also kept while one of its own is shown (treeTokens).
 const shownInTree = (c, doneAt) => isLive(c.state)
   || (!SUCCEEDED.has(c.state) && (c.endedAt === undefined ? doneAt === 0 : c.endedAt > doneAt));
 
 // The parent's tree tokens, child1..child<rows>: "<face state> <name>", or
-// "more <n>" in the last row, or null for an unused row. It lists the children
-// that still matter (shownInTree), in the order they started. faces.py draws them.
+// "sub <face state> <name>" for a subagent's own subagent, or "more <n>" in the
+// last row, or null for an unused row. It lists the children that still matter
+// (shownInTree), in the order they started, each subagent followed by its own.
+// faces.py draws them.
 export function treeTokens(children, doneAt = 0, rows = TREE_ROWS) {
-  const shown = children.filter(c => shownInTree(c, doneAt))
-    .sort((a, b) => (a.startedAt ?? Infinity) - (b.startedAt ?? Infinity) || a.key.localeCompare(b.key));
-  const line = c => `${TREE_STATE[c.state] ?? "unknown"} ${c.name}`;
+  const byStart = (a, b) => (a.startedAt ?? Infinity) - (b.startedAt ?? Infinity) || a.key.localeCompare(b.key);
+  const shownBelow = key => children.filter(c => !topLevel(c) && c.parent === key && shownInTree(c, doneAt)).sort(byStart);
+  const shown = children.filter(topLevel).sort(byStart)
+    .flatMap(c => { const below = shownBelow(c.key); return below.length || shownInTree(c, doneAt) ? [c, ...below] : []; });
+  const line = c => `${topLevel(c) ? "" : SUB}${TREE_STATE[c.state] ?? "unknown"} ${c.name}`;
   const lines = shown.length > rows ? [...shown.slice(0, rows - 1).map(line), `more ${shown.length - rows + 1}`] : shown.map(line);
   return Object.fromEntries(Array.from({ length: rows }, (_, i) => [`child${i + 1}`, lines[i] ?? null]));
 }
@@ -212,9 +242,9 @@ export class ChildTabs {
     await this.cli(shared ? ["pane", "close", entry.pane] : ["tab", "close", viewer.tab_id]);
   }
 
-  // One reconciliation pass: open a tab for each new live background child,
-  // close the tab of each child that ended, whatever the outcome. Errors for
-  // a single tab never block the others.
+  // One reconciliation pass: open a tab for each new live background subagent
+  // (none for a subagent's own subagents), close the tab of each child that
+  // ended, whatever the outcome. Errors for a single tab never block the others.
   async sync(children) {
     if (this.stopping) return;
     const byKey = new Map(children.map(c => [c.key, c]));
@@ -226,7 +256,7 @@ export class ChildTabs {
       try { this.adopt(await live()); } catch { return; }
       this.adopted = true;
     }
-    const wanted = [...byKey.values()].filter(c => !c.foreground && !this.tried.has(c.key) && isLive(c.state));
+    const wanted = [...byKey.values()].filter(c => !c.foreground && topLevel(c) && !this.tried.has(c.key) && isLive(c.state));
     if (wanted.length && this.tabs.size >= this.max) {
       try { this.forgetClosed(await live()); } catch { panes = undefined; }
     }

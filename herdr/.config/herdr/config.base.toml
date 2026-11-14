@@ -297,7 +297,8 @@ row_gap = 1
 # in it.
 # Then a Pi parent's subagents as a tree, one row each ($tree1-$tree6, the last
 # "+N more" when there are more): `├── <face> reviewer`, under the name like
-# line 2, in the same color; only each child's face has its state's color.
+# line 2, in the same color; only each child's face has its state's color. A
+# subagent's own subagents hang one level deeper: `│   └── <face> scout`.
 # Other agents have no tree rows, so Herdr leaves them out.
 rows = [
   [{ token = "$face", fg = "{{foreground}}", bold = true, dim = false, rules = [

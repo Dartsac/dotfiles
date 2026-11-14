@@ -260,7 +260,9 @@ export default function (pi) {
     policy.requests = pendingRequests(channels, sessionId, policy.requests);
     const all = scanChildren(asyncRoot, [sessionFile, sessionId]);
     // A foreground workflow's children run inside the parent's tool call: they
-    // are in the tree, but neither count as background work nor get tabs.
+    // are in the tree, but neither count as background work nor get tabs. A
+    // subagent's own subagents count, so the job waits for them; they get no
+    // tab (ChildTabs.sync).
     const children = all.filter(c => !c.foreground);
     const live = children.filter(c => isLive(c.state)).length;
     // A child that started and ended between two scans was never counted:

@@ -30,7 +30,8 @@ sets these tokens, which the sidebar rows show:
     note     line 3  the agent's activity, when it says more than the face
     alert    line 3  instead of note, in bold, when the activity needs you
     tree1-6  then    a Pi parent's subagents, one per line, as a tree:
-                     `├── <face> reviewer`, from its child1-6 tokens
+                     `├── <face> reviewer`, from its child1-6 tokens, and
+                     their own subagents one level deeper: `│   └── <face> scout`
 
 Lines 2 and 3 are this plugin's work only so that they can start under the
 name: Herdr indents them by a fixed two cells, so each begins with blank cells
@@ -65,12 +66,15 @@ PLUGIN_ID = "dotfiles.faces"
 SOURCE = "dotfiles:faces"
 TOKEN = "face"
 DETAIL, NOTE, ALERT = "detail", "note", "alert"
-# The dotfiles Pi reporter's children of a parent ("<state> <name>", or
-# "more <n>"), and the tree lines drawn from them. pi-extension/children.mjs
-# TREE_ROWS and config.base.toml's rows match this count.
+# The dotfiles Pi reporter's children of a parent ("<state> <name>", "sub
+# <state> <name>" for a subagent's own subagent, or "more <n>"), and the tree
+# lines drawn from them. pi-extension/children.mjs TREE_ROWS and
+# config.base.toml's rows match this count.
 CHILDREN = tuple("child%d" % n for n in range(1, 7))
 TREE = tuple("tree%d" % n for n in range(1, 7))
 BRANCH, LAST = "├── ", "└── "
+SUB = "sub "                 # a row one level deeper, under the subagent above it (children.mjs SUB)
+TRUNK, GAP = "│   ", "    "   # before a deeper row: its subagent has a row after it, or not
 QUIET = ("Ready", "Working", "Finished")   # activities the face already shows
 NEEDS_YOU = ("Waiting for you", "60s", "Failed", "not done")   # activities shown in bold
 BUSY = ("working", "blocked")             # being given work, or in the middle of it
@@ -230,24 +234,38 @@ def described(snapshot, choice, git_line, awake=frozenset()):
     return {key: value for key, value in out.items() if value}
 
 
+def depth_of(row):
+    """(is it a subagent's own subagent, the row without its depth mark)."""
+    return (True, row[len(SUB):]) if row.startswith(SUB) else (False, row)
+
+
 def trees(snapshot, choice, frame):
     """({("pane", id): {"tree1": text or None, ...}}, is any child working): each parent's children.
 
     Lines start under the parent's name, like line 2. A child wears the
     character a subagent gets under the choice, in its own state; the rest of
-    the line has the parent's color. None clears a line that is set and no
-    longer wanted; a line that is neither is left out."""
+    the line has the parent's color. A subagent's own subagents hang one level
+    deeper under it. None clears a line that is set and no longer wanted; a
+    line that is neither is left out."""
     out, working = {}, False
     for pane in snapshot.get("panes") or []:
         tokens = pane.get("tokens") or {}
         rows = [tokens.get(name) for name in CHILDREN] if pane.get("agent") else []
-        rows = [row for row in rows if row]
+        rows = [depth_of(row) for row in rows if row]
         character = character_for(choice, pane.get("agent") or "")
         child = character_for(choice, "subagent")
         lines = {}
-        for n, row in enumerate(rows):
+        for n, (deeper, row) in enumerate(rows):
             state, _, name = row.partition(" ")
-            branch = LAST if n == len(rows) - 1 else BRANCH
+            deeper_after = [d for d, _ in rows[n + 1:]]
+            subagent_after = False in deeper_after      # a subagent row, or `+N more`, is still to come
+            # A row is the last of its group when no row of its depth follows
+            # before one shallower. A deeper row carries its subagent's trunk
+            # down while a subagent row is still to come.
+            if deeper:
+                branch = (TRUNK if subagent_after else GAP) + (BRANCH if deeper_after[:1] == [True] else LAST)
+            else:
+                branch = BRANCH if subagent_after else LAST
             shown = "+%s more" % name if state == "more" else face(child, state, frame) + " " + name
             lines[TREE[n]] = (indent(character) + branch + shown)[:VALUE_LIMIT].rstrip()
             working = working or state == "working"
