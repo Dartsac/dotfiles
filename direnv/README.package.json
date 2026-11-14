@@ -1,0 +1,15 @@
+{
+  "description": "direnv's `use project_bins`: a project's own bin/ and node_modules/.bin on PATH",
+  "role": "core",
+  "platforms": ["macos", "linux"],
+  "dependencies": [
+    {
+      "command": "direnv",
+      "required": true,
+      "hint": {
+        "macos": "brew install direnv, then hook it into your shell: https://direnv.net/docs/hook.html",
+        "linux": "sudo apt install direnv, then hook it into your shell: https://direnv.net/docs/hook.html"
+      }
+    }
+  ]
+}

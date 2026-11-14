@@ -1,0 +1,6 @@
+{
+  "description": "Hammerspoon: the owner's dictation card and herdr away alerts",
+  "role": "owner",
+  "platforms": ["macos"],
+  "dependencies": []
+}

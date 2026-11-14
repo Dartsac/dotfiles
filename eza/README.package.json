@@ -1,0 +1,16 @@
+{
+  "description": "eza's theme: file icons, such as a document icon for PlantUML files",
+  "role": "core",
+  "platforms": ["macos", "linux"],
+  "platform_paths": {"Library": ["macos"]},
+  "dependencies": [
+    {
+      "command": "eza",
+      "required": true,
+      "hint": {
+        "macos": "brew install eza",
+        "linux": "eza 0.19.2 or newer (older ones ignore the theme): https://github.com/eza-community/eza/blob/main/INSTALL.md"
+      }
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "description": "herdr, the owner's agent-aware multiplexer",
+  "role": "owner",
+  "platforms": ["macos"],
+  "dependencies": []
+}

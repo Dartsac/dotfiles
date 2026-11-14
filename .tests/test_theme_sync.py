@@ -196,6 +196,15 @@ class PreCommitHookTest(ThrowawayRepo):
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_hook_runs_the_root_tests_when_the_install_script_is_staged(self):
+        failing = "import unittest\nclass T(unittest.TestCase):\n    def test_it(self):\n        self.fail('broken on purpose')\n"
+        self.commit({".tests/test_example.py": failing})
+
+        result = self.commit_with_hook({"install": "#!/usr/bin/env python3\n"})
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("broken on purpose", result.stdout + result.stderr)
+
     @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_hook_runs_the_pi_extension_runner_from_the_hidden_test_directory(self):
         runner = "console.error('runner ran with ' + process.argv.slice(2).join(' '));\nprocess.exit(1);\n"

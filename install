@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""Stow packages from this repository into your home directory.
+
+  ./install                     list the packages on offer
+  ./install <package>...        stow each package
+  ./install --force <package>   stow an owner package too
+
+For each package it creates the shared directories stow must not link whole
+(~/.config, ~/Library/Application Support, ...), stows the package with its
+flags, and names each dependency that is not installed, with a hint. It never
+installs software and never replaces a real file: when one is in the way,
+stow says so and ./install exits non-zero. Undo with `stow -D <package>`.
+
+Each package declares itself in <package>/README.package.json (stow never
+links a package's top-level README.*):
+
+  description     one line for the list
+  role            "core" (macOS and Linux), "optional", or "owner" (kept
+                  for the repository's owner, not offered)
+  platforms       ["macos", "linux"]
+  dependencies    [{"command", "required": true|false,
+                    "hint": {"macos": ..., "linux": ...}}]
+  stow_flags      extra stow options, such as ["--no-folding"] (optional)
+  platform_paths  top-level paths stowed only on some platforms, such as
+                  {"Library": ["macos"]} (optional)
+"""
+
+import json
+import platform
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent
+MANIFEST = "README.package.json"
+PLATFORM_NAMES = {"macos": "macOS", "linux": "Linux"}
+ROLES = ("core", "optional", "owner")
+OFFERED = ("core", "optional")
+# Directories many packages share. Stow would link a missing one whole into
+# the first package stowed, so they are created as real directories first.
+SHARED = {".config", ".local", ".local/share", ".local/state", ".local/bin", "Library", "Library/Application Support"}
+HOME = Path.home()
+THIS_PLATFORM = {"Darwin": "macos", "Linux": "linux"}.get(platform.system(), "")
+STOW_HINT = {"macos": "brew install stow", "linux": "sudo apt install stow, or your distribution's stow package"}
+
+
+def manifests():
+    """Each package's name and manifest, by name."""
+    found = {}
+    for path in sorted(REPO.glob(f"*/{MANIFEST}")):
+        manifest = json.loads(path.read_text())
+        if manifest.get("role") not in ROLES:
+            sys.exit(f"{path.relative_to(REPO)}: role {manifest.get('role')!r} is not one of {', '.join(ROLES)}")
+        found[path.parent.name] = manifest
+    return found
+
+
+def list_packages():
+    known = manifests()
+    offered = {name: m for name, m in known.items() if m["role"] in OFFERED}
+    owner = [name for name, m in known.items() if m["role"] not in OFFERED]
+    width = max((len(name) for name in offered), default=0)
+    print("Packages on offer (./install <package>...):")
+    for name, manifest in offered.items():
+        platforms = ", ".join(PLATFORM_NAMES[p] for p in manifest["platforms"])
+        optional = " (optional)" if manifest["role"] == "optional" else ""
+        print(f"  {name:<{width}}  {manifest['description']}{optional}  [{platforms}]")
+    if owner:
+        print(f"The owner's own, not offered: {', '.join(owner)}")
+    return 0
+
+
+def elsewhere(manifest):
+    """The package's paths that belong to other platforms only."""
+    paths = manifest.get("platform_paths", {})
+    return [path for path, platforms in paths.items() if THIS_PLATFORM not in platforms]
+
+
+def create_shared_directories(name, skipped):
+    for shared in sorted(SHARED):
+        if any(shared == s or shared.startswith(s + "/") for s in skipped):
+            continue
+        if (REPO / name / shared).is_dir() and not (REPO / name / shared).is_symlink():
+            (HOME / shared).mkdir(parents=True, exist_ok=True)
+
+
+def stow(name, manifest):
+    skipped = elsewhere(manifest)
+    create_shared_directories(name, skipped)
+    # stow matches --ignore against the end of each path inside the package.
+    # The manifest is named explicitly: a ~/.stow-global-ignore replaces the
+    # default list that skips README.*. Finder leaves .DS_Store files in any
+    # folder it has shown, and one in ~/.config would be a conflict.
+    ignored = [r"\.DS_Store", "^" + re.escape(MANIFEST), *("^" + re.escape(path) for path in skipped)]
+    flags = [f"--ignore={pattern}" for pattern in ignored] + manifest.get("stow_flags", [])
+    result = subprocess.run(["stow", f"--dir={REPO}", f"--target={HOME}", *flags, name], cwd=REPO)
+    return result.returncode == 0
+
+
+def refusal(name, manifest, force):
+    """Why name cannot be stowed, or None."""
+    if manifest is None:
+        if (REPO / name).is_dir():
+            return f"{name}: not offered by ./install yet (no {name}/{MANIFEST})"
+        return f"{name}: no such package"
+    if manifest["role"] not in OFFERED and not force:
+        return f"{name}: the owner's own package, not offered; use --force to stow it anyway"
+    return None
+
+
+def report_missing(name, manifest):
+    missing = [d for d in manifest["dependencies"] if not shutil.which(d["command"])]
+    if not missing:
+        return
+    print(f"{name}: not installed (stowed anyway; install them to use the package):")
+    for dep in missing:
+        need = "required" if dep["required"] else "optional"
+        hint = dep["hint"].get(THIS_PLATFORM, "")
+        print(f"  {dep['command']} ({need}): {hint}")
+
+
+def main(args):
+    if "-h" in args or "--help" in args:
+        print(__doc__.strip())
+        return 0
+    force = "--force" in args
+    # A trailing slash comes from tab completion.
+    names = [arg.rstrip("/") for arg in args if arg != "--force"]
+    if not names:
+        return list_packages()
+    known = manifests()
+    refusals = [r for r in (refusal(name, known.get(name), force) for name in names) if r]
+    if not shutil.which("stow"):
+        refusals.append(f"GNU Stow is not installed: {STOW_HINT.get(THIS_PLATFORM, 'install GNU Stow')}")
+    if refusals:
+        print("\n".join(refusals), file=sys.stderr)
+        return 2
+    failed = [name for name in names if not stow(name, known[name])]
+    for name in names:
+        report_missing(name, known[name])
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

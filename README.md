@@ -1,5 +1,41 @@
 # dotfiles
 
+## Install
+
+```sh
+./install                 # list the packages on offer
+./install direnv eza      # stow them into your home directory
+```
+
+`./install` creates shared directories such as `~/.config` first, so stow
+never links one whole into a package, stows each package with the flags it
+needs, and names each dependency you have not installed, with an install
+hint. It never installs software and never replaces a real file: when one is
+in the way, it stops with stow's message. Owner packages (herdr, pi,
+hammerspoon) need `--force`. Undo with `stow -D <package>`.
+
+Each package declares its description, role, platforms and dependencies in
+`<package>/README.package.json`; stow never links a package's top-level
+`README.*`. `./install --help` describes the fields.
+
+### Standalone check
+
+`.tests/standalone.py` proves each package works alone: it copies this
+working tree, runs `./install <package>` into an empty home directory with
+only the package's declared dependencies on PATH, starts the tool, and fails
+on any error. It also removes each dependency in turn and checks that
+`./install` names it with its hint. The dependencies must be installed where
+it runs.
+
+```sh
+python3 .tests/standalone.py        # every package it covers
+python3 .tests/standalone.py eza    # one package
+```
+
+GitHub Actions runs it on macOS and Ubuntu on every push
+(`.github/workflows/standalone.yml`), with `./install`'s own tests
+(`.tests/test_install.py`).
+
 ## gnu stow naming convention
 
     1.	Root Directory: Your dotfiles directory contains subdirectories for each package (e.g., nvim, tmux).
@@ -24,10 +60,11 @@
 ## Pi
 
 `pi/` holds the Pi settings, extensions and theme template for the Personal
-machine. Stow it with `--no-folding`:
+machine. Stow it with `--no-folding`, which `./install` passes for you (pi is
+an owner package, hence `--force`):
 
 ```sh
-stow --no-folding pi
+./install --force pi    # or: stow --no-folding pi
 ```
 
 Without `--no-folding`, stow may link a whole directory such as

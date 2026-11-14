@@ -1,0 +1,7 @@
+{
+  "description": "Pi, the owner's coding agent: settings, extensions and theme template",
+  "role": "owner",
+  "platforms": ["macos"],
+  "stow_flags": ["--no-folding"],
+  "dependencies": []
+}
