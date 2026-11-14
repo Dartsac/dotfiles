@@ -22,6 +22,7 @@ The dependencies must be installed where this runs: they are taken from PATH.
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -32,16 +33,24 @@ REPO = Path(__file__).resolve().parents[1]
 MANIFEST = "README.package.json"
 PLATFORM = {"Darwin": "macos", "Linux": "linux"}[platform.system()]
 SYSTEM_PATH = ["/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+COLOR_CODE = re.compile(r"\x1b\[[0-9;]*m")
+# direnv reports each file and `use` it loads as error output. Some versions
+# (2.37.1) print these even when DIRENV_LOG_FORMAT is empty, so they are
+# expected rather than silenced.
+DIRENV_REPORTS = re.compile(r"direnv: (loading|using|export) ")
 
 
 class Failed(Exception):
     pass
 
 
-def run(args, env, cwd, what):
-    """Run a command; fail on a non-zero exit or any error output."""
+def run(args, env, cwd, what, reports=None):
+    """Run a command; fail on a non-zero exit or any error output. A tool that
+    reports its normal progress as error output names those lines in `reports`."""
     result = subprocess.run(args, env=env, cwd=cwd, capture_output=True, text=True)
-    if result.returncode != 0 or result.stderr.strip():
+    lines = COLOR_CODE.sub("", result.stderr).splitlines()
+    errors = [line for line in lines if line.strip() and not (reports and reports.match(line))]
+    if result.returncode != 0 or errors:
         raise Failed(f"{what}: exit {result.returncode}\n{result.stdout}{result.stderr}".rstrip())
     return result.stdout
 
@@ -53,9 +62,9 @@ def check_direnv(machine):
     project = machine.home / "project"
     project.mkdir()
     (project / ".envrc").write_text("use project_bins\n")
-    env = dict(machine.env, DIRENV_LOG_FORMAT="")
-    run(["direnv", "allow", str(project)], env, machine.home, "direnv allow")
-    path = run(["direnv", "exec", str(project), "sh", "-c", 'printf %s "$PATH"'], env, machine.home, "direnv exec")
+    run(["direnv", "allow", str(project)], machine.env, machine.home, "direnv allow", DIRENV_REPORTS)
+    path = run(["direnv", "exec", str(project), "sh", "-c", 'printf %s "$PATH"'], machine.env, machine.home,
+               "direnv exec", DIRENV_REPORTS)
     tail = path.split(":")[-2:]
     if not (tail[0].endswith("/project/bin") and tail[1].endswith("/project/node_modules/.bin")):
         raise Failed(f"direnv did not load direnvrc's use_project_bins; PATH ends {tail}")

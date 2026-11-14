@@ -9,7 +9,7 @@
       "required": true,
       "hint": {
         "macos": "brew install eza",
-        "linux": "eza 0.19.2 or newer (older ones ignore the theme): https://github.com/eza-community/eza/blob/main/INSTALL.md"
+        "linux": "sudo apt install eza (the theme needs eza 0.19.2 or newer; where the packaged one is older, such as Ubuntu 24.04: https://github.com/eza-community/eza/blob/main/INSTALL.md)"
       }
     }
   ]
