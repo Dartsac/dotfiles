@@ -1,6 +1,7 @@
 -- Markdown: hybrid rendering, list/table assistance, and navigation-first
--- Obsidian support for the one configured vault. Buffer behaviour and keys
--- live in lua/config/markdown.lua (attached from after/ftplugin/markdown.lua).
+-- Obsidian support for the one configured vault, if any. Buffer behaviour and
+-- keys live in lua/config/markdown.lua (attached from
+-- after/ftplugin/markdown.lua).
 -- The browser preview stays in markdown-preview.lua; Harper and Marksman are
 -- configured with the other language servers.
 local vault = require("config.vault")
@@ -91,16 +92,25 @@ return {
 		version = "*",
 		dependencies = { "nvim-lua/plenary.nvim", "nvim-telescope/telescope.nvim" },
 		-- Loaded only for notes in the vault (see init) and by the vault-only
-		-- keys/commands below.
+		-- keys and the command.
 		lazy = true,
 		cmd = "Obsidian",
-		keys = {
-			{ "<leader>dn", "<cmd>Obsidian quick_switch<cr>", desc = "Find Vault Note" },
-			{ "<leader>dg", "<cmd>Obsidian search<cr>", desc = "Grep Vault Notes" },
-		},
 		init = function()
 			-- No <CR>/<C-a>/<C-x>/]o/[o buffer keys; config.markdown provides keys.
 			vim.g.obsidian_default_keymap = false
+			-- The vault-only keys, where a vault is configured. Asked at VeryLazy,
+			-- once the local override that names the vault has loaded.
+			vim.api.nvim_create_autocmd("User", {
+				pattern = "VeryLazy",
+				once = true,
+				callback = function()
+					if not vault.path() then
+						return
+					end
+					vim.keymap.set("n", "<leader>dn", "<cmd>Obsidian quick_switch<cr>", { desc = "Find Vault Note" })
+					vim.keymap.set("n", "<leader>dg", "<cmd>Obsidian search<cr>", { desc = "Grep Vault Notes" })
+				end,
+			})
 			-- Load for any Markdown file config.vault counts as a vault note,
 			-- including one reached through a symlink from outside the vault.
 			-- Marksman is excluded by the same test (lsp/settings/marksman.lua),
@@ -117,9 +127,14 @@ return {
 			})
 		end,
 		opts = function()
+			local path = vault.path()
+			if not path then
+				-- Only :Obsidian loads it without a vault.
+				error("No Obsidian vault: set vim.g.obsidian_vault in lua/config/local.lua", 0)
+			end
 			return {
 				legacy_commands = false,
-				workspaces = { { name = "vault", path = vault.path() } },
+				workspaces = { { name = "vault", path = path } },
 				picker = {
 					name = "telescope.nvim",
 					-- No note creation or tagging from pickers in this iteration.

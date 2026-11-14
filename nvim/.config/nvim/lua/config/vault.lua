@@ -1,22 +1,34 @@
--- The one Obsidian vault this config integrates with. Everything vault-specific
--- (obsidian.nvim loading, Marksman exclusion, vault-only keys) asks this module.
--- Override with vim.g.obsidian_vault or $OBSIDIAN_VAULT (tests point it at a
--- synthetic fixture so they never open the real vault).
+-- The one Obsidian vault this config integrates with, if any. Everything
+-- vault-specific (obsidian.nvim loading, Marksman exclusion, vault-only keys)
+-- asks this module. There is none unless this machine's local override
+-- (lua/config/local.lua) sets vim.g.obsidian_vault. $OBSIDIAN_VAULT comes
+-- first: tests point it at a synthetic fixture so they never open the real
+-- vault.
 local M = {}
 
 local function normalize(path)
 	return (vim.fs.normalize(vim.fn.fnamemodify(path, ":p")):gsub("/$", ""))
 end
 
----@return string
+---@return string? nil when no vault is configured
 function M.path()
-	return normalize(vim.g.obsidian_vault or vim.env.OBSIDIAN_VAULT or "~/Documents/vault")
+	-- An empty value, like a missing one, names no vault.
+	for _, configured in ipairs({ vim.env.OBSIDIAN_VAULT or "", vim.g.obsidian_vault or "" }) do
+		if configured ~= "" then
+			return normalize(configured)
+		end
+	end
+	return nil
 end
 
---- The vault root as configured and, if different, as resolved on disk.
+--- The vault root as configured and, if different, as resolved on disk; none
+--- without a vault.
 ---@return string[]
 function M.roots()
 	local root = M.path()
+	if not root then
+		return {}
+	end
 	local real = vim.uv.fs_realpath(root)
 	return (real and real ~= root) and { root, real } or { root }
 end

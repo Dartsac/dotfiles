@@ -1,0 +1,55 @@
+{
+  "description": "Neovim: plugins install on first start, free Dracula theme, LSP, Telescope search, Markdown and Obsidian notes",
+  "role": "core",
+  "platforms": ["macos", "linux"],
+  "dependencies": [
+    {
+      "command": "nvim",
+      "required": true,
+      "hint": {
+        "macos": "brew install neovim (0.12 or newer)",
+        "linux": "Neovim 0.12 or newer; where your distribution's neovim is older: https://github.com/neovim/neovim/blob/master/INSTALL.md"
+      }
+    },
+    {
+      "command": "git",
+      "required": true,
+      "hint": {
+        "macos": "xcode-select --install, or brew install git",
+        "linux": "sudo apt install git"
+      }
+    },
+    {
+      "command": "rg",
+      "required": false,
+      "hint": {
+        "macos": "brew install ripgrep (for Telescope's file and text search)",
+        "linux": "sudo apt install ripgrep (for Telescope's file and text search)"
+      }
+    },
+    {
+      "command": "curl",
+      "required": false,
+      "hint": {
+        "macos": "brew install curl (downloads Treesitter parsers and the Markdown preview)",
+        "linux": "sudo apt install curl (downloads Treesitter parsers and the Markdown preview)"
+      }
+    },
+    {
+      "command": "tree-sitter",
+      "required": false,
+      "hint": {
+        "macos": "brew install tree-sitter-cli (0.26.1 or newer; builds Treesitter parsers on first start)",
+        "linux": "tree-sitter 0.26.1 or newer, not from npm (builds Treesitter parsers on first start): https://github.com/tree-sitter/tree-sitter/releases"
+      }
+    },
+    {
+      "command": "cc",
+      "required": false,
+      "hint": {
+        "macos": "xcode-select --install (a C compiler, for tree-sitter to build parsers)",
+        "linux": "sudo apt install build-essential (a C compiler, for tree-sitter to build parsers)"
+      }
+    }
+  ]
+}

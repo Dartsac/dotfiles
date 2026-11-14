@@ -17,6 +17,9 @@ Then, for each declared dependency, it runs `./install <package>` again into
 another empty home without that dependency on PATH, and checks that ./install
 names it with its hint for this platform and still stows the package.
 
+A package with optional dependencies may also be started on a machine that
+has only its required ones: the tool must still start cleanly.
+
 The dependencies must be installed where this runs: they are taken from PATH.
 """
 
@@ -56,6 +59,83 @@ TERMINAL_CODE = re.compile(r"\x1b(\[[0-9;?]*[ -/]*[@-~]|\][^\x07]*\x07|[()][0-9A
 # and draws white text with the second.
 MOUSE_REPORTING_ON = "\x1b[?1000h"
 WHITE_TEXT = "\x1b[37m"
+# nvim-treesitter reports each step of a parser install as error output
+# ("[nvim-treesitter/install/lua]: Compiling parser"); its errors read
+# "[nvim-treesitter/install/lua] error: ..." and are not matched.
+TREESITTER_REPORTS = re.compile(r"\[nvim-treesitter(/install/[\w-]+)?\]: ")
+# vim-searchindex maps * and # with `silent! map <unique>`, which meets
+# Neovim's own visual * and # mappings. Nothing is shown and nothing is
+# broken, but v:errmsg keeps the message.
+SEARCHINDEX_MAPPING = re.compile(r"E227: Mapping already exists for [#*]$")
+# Neovim's first start clones every plugin and builds every parser; a later
+# start only loads them.
+NVIM_FIRST_START_TIMEOUT = 900
+NVIM_START_TIMEOUT = 60
+# Runs in Neovim once it has started (check_nvim). It finishes startup as a
+# terminal would (a headless Neovim has no UIEnter, so lazy.nvim's VeryLazy
+# plugins never load on their own), on a first start waits for
+# nvim-treesitter's summary of its parser install, opens the Markdown note
+# $NVIM_CHECK_NOTE, and writes what it finds to $NVIM_CHECK_REPORT.
+NVIM_PROBE = r"""
+local function probe()
+	local function messages()
+		return vim.fn.execute("messages")
+	end
+	local report = {}
+	vim.api.nvim_exec_autocmds("UIEnter", {})
+	report.very_lazy = vim.wait(30000, function()
+		return vim.g.did_very_lazy == true
+	end, 50)
+	-- The install starts as nvim-treesitter loads; wait for its summary only once
+	-- it has begun.
+	local started = vim.env.NVIM_CHECK_PARSERS_MS and report.very_lazy and vim.wait(tonumber(vim.env.NVIM_CHECK_START_MS), function()
+		return messages():find("[nvim-treesitter/install/", 1, true) ~= nil
+	end, 500)
+	if started then
+		vim.wait(tonumber(vim.env.NVIM_CHECK_PARSERS_MS), function()
+			return messages():find("Installed %d+/%d+ languages") ~= nil
+		end, 500)
+	end
+	local installed, total = messages():match("Installed (%d+)/(%d+) languages")
+	report.parsers_installed, report.parsers_total = tonumber(installed) or 0, tonumber(total) or 0
+	report.python_parser = vim.treesitter.language.add("python") == true
+	report.colors_name = vim.g.colors_name or vim.NIL
+
+	local plugins = require("lazy.core.config").plugins
+	local has_errors = require("lazy.core.plugin").has_errors
+	report.missing, report.failed, report.loaded = {}, {}, {}
+	for name, plugin in pairs(plugins) do
+		if not plugin._.installed then
+			table.insert(report.missing, name)
+		end
+		if has_errors(plugin) then
+			table.insert(report.failed, name)
+		end
+		if plugin._.loaded then
+			table.insert(report.loaded, name)
+		end
+	end
+
+	vim.cmd.edit(vim.fn.fnameescape(vim.env.NVIM_CHECK_NOTE))
+	vim.wait(2000) -- for anything opening the note starts later to report
+	report.obsidian_loaded = plugins["obsidian.nvim"]._.loaded ~= nil
+	report.vault_keys = vim.fn.maparg("<leader>dn", "n") ~= ""
+
+	report.errmsg = vim.v.errmsg
+	report.messages = messages()
+	local file = assert(io.open(vim.env.NVIM_CHECK_REPORT, "w"))
+	file:write(vim.json.encode(report))
+	file:close()
+end
+
+-- A probe that fails must still end Neovim, with a status the check sees.
+local ok, err = xpcall(probe, debug.traceback)
+if not ok then
+	io.stderr:write("probe: " .. err .. "\n")
+	vim.cmd("cquit! 3")
+end
+vim.cmd("qall!")
+"""
 
 
 class Failed(Exception):
@@ -71,10 +151,18 @@ def fail_unless_clean(what, status, output, error_output, reports=None):
         raise Failed(f"{what}: exit {status}\n{output}{error_output}".rstrip())
 
 
-def run(args, env, cwd, what, reports=None):
-    """Run a command; fail on a non-zero exit or any error output. A tool that
-    reports its normal progress as error output names those lines in `reports`."""
-    result = subprocess.run(args, env=env, cwd=cwd, capture_output=True, text=True)
+def run(args, env, cwd, what, reports=None, timeout=None):
+    """Run a command; fail on a non-zero exit or any error output, or when it
+    runs longer than `timeout` seconds. A tool that reports its normal
+    progress as error output names those lines in `reports`."""
+    try:
+        result = subprocess.run(args, env=env, cwd=cwd, stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                                timeout=timeout)
+    except subprocess.TimeoutExpired as expired:
+        # What it had written so far: text or bytes, depending on the Python.
+        written = [text if isinstance(text, str) else (text or b"").decode(errors="replace")
+                   for text in (expired.stdout, expired.stderr)]
+        raise Failed(f"{what}: still running after {timeout}s\n{''.join(w[-3000:] for w in written)}".rstrip())
     fail_unless_clean(what, result.returncode, result.stdout, result.stderr, reports)
     return result.stdout
 
@@ -180,7 +268,83 @@ def check_lazygit(machine):
         raise Failed(f"lazygit wrote into the clone: {[str(p.relative_to(machine.clone)) for p in written]}")
 
 
-CHECKS = {"direnv": check_direnv, "eza": check_eza, "lazygit": check_lazygit}
+def start_nvim(machine, what, note, first_start=False, builds_parsers=False):
+    """Start Neovim with NVIM_PROBE, which opens `note`; fail on any error it
+    reports. A first start installs every plugin, and where the machine can
+    build Treesitter parsers, the probe waits for them. Return the probe's
+    report."""
+    probe, report_file = machine.root / "probe.lua", machine.root / "report.json"
+    probe.write_text(NVIM_PROBE)
+    env = dict(machine.env, NVIM_CHECK_REPORT=str(report_file), NVIM_CHECK_NOTE=str(note))
+    timeout = NVIM_FIRST_START_TIMEOUT if first_start else NVIM_START_TIMEOUT
+    if builds_parsers:
+        env["NVIM_CHECK_START_MS"] = str(NVIM_START_TIMEOUT * 1000)
+        env["NVIM_CHECK_PARSERS_MS"] = str((NVIM_FIRST_START_TIMEOUT - NVIM_START_TIMEOUT) * 1000)
+    run(["nvim", "--headless", "-c", f"lua vim.schedule(function() dofile([[{probe}]]) end)"], env, machine.home,
+        what, TREESITTER_REPORTS, timeout=timeout)
+    report = json.loads(report_file.read_text())
+    errors = [line for line in report["messages"].splitlines() if re.search(r"\bE\d+:|[Ee]rror", line)]
+    errmsg = "" if SEARCHINDEX_MAPPING.match(report["errmsg"]) else report["errmsg"]
+    if errmsg or errors:
+        raise Failed(f"{what} reported errors:\n" + "\n".join([errmsg, *errors]).strip())
+    if report["colors_name"] != "dracula":
+        raise Failed(f"{what}: the colorscheme is {report['colors_name']}, not the free Dracula theme")
+    return report
+
+
+def fail_unless_plugins_ready(what, report):
+    if report["missing"] or report["failed"]:
+        raise Failed(f"{what} did not install {sorted(report['missing'])}; "
+                     f"failed to install or build {sorted(report['failed'])}")
+    lazy_loaded = {"which-key.nvim", "lualine.nvim", "gitsigns.nvim"}
+    if not report["very_lazy"] or not lazy_loaded <= set(report["loaded"]):
+        raise Failed(f"{what} did not load its plugins once started: loaded {sorted(report['loaded'])}")
+
+
+def check_nvim(machine):
+    lockfile = machine.clone / "nvim/.config/nvim/lazy-lock.json"
+    locked = lockfile.read_text()
+    note = machine.home / "note.md"
+    note.write_text("# A note\n\nSee [[Elsewhere]].\n")
+
+    report = start_nvim(machine, "nvim's first start", note, first_start=True, builds_parsers=True)
+    fail_unless_plugins_ready("nvim's first start", report)
+    installed, total = report["parsers_installed"], report["parsers_total"]
+    if not total or installed != total or not report["python_parser"]:
+        raise Failed(f"nvim's first start did not install every Treesitter parser: installed {installed} of {total}")
+    if report["obsidian_loaded"] or report["vault_keys"]:
+        raise Failed("nvim set up Obsidian (obsidian.nvim or the vault keys) with no vault configured")
+    if lockfile.read_text() != locked:
+        raise Failed("nvim's first start changed lazy-lock.json in the clone")
+
+    # A local override that names a vault: a note in it gets obsidian.nvim.
+    vault = machine.home / "notes"
+    (vault / ".obsidian").mkdir(parents=True)
+    (vault / "Note.md").write_text("# Note\n")
+    override = machine.clone / "nvim/.config/nvim/lua/config/local.lua"
+    override.write_text(f"vim.g.obsidian_vault = [[{vault}]]\n")
+    try:
+        report = start_nvim(machine, "nvim with a local override naming a vault", vault / "Note.md")
+    finally:
+        override.unlink()
+    if not (report["obsidian_loaded"] and report["vault_keys"]):
+        raise Failed("nvim ignored the vault the local override names: no obsidian.nvim or vault keys for its note")
+
+
+def check_nvim_with_required_only(machine):
+    """Without ripgrep, curl, the tree-sitter CLI or a C compiler: plugins
+    still install, no parser is built, and nothing reports an error."""
+    what = "nvim's first start with only its required dependencies"
+    note = machine.home / "note.md"
+    note.write_text("# A note\n")
+    report = start_nvim(machine, what, note, first_start=True)
+    fail_unless_plugins_ready(what, report)
+
+
+CHECKS = {"direnv": check_direnv, "eza": check_eza, "lazygit": check_lazygit, "nvim": check_nvim}
+# For a package with optional dependencies: its tool on a machine that has
+# only the required ones.
+REQUIRED_ONLY_CHECKS = {"nvim": check_nvim_with_required_only}
 
 
 def manifests():
@@ -232,6 +396,7 @@ class Machine:
     home, and a PATH of the system tools, stow, and the given commands."""
 
     def __init__(self, root, clone, commands, hidden):
+        self.root = root
         self.home = root / "home"
         self.home.mkdir()
         (root / "tmp").mkdir()
@@ -266,6 +431,16 @@ def check(package, manifest, clone, hidden):
             if (machine.home / shared).is_symlink():
                 raise Failed(f"./install {package} linked ~/{shared} into the clone")
         CHECKS[package](machine)
+
+    if package in REQUIRED_ONLY_CHECKS:
+        required = [d["command"] for d in manifest["dependencies"] if d["required"]]
+        with tempfile.TemporaryDirectory() as temp:
+            machine = Machine(Path(temp).resolve(), clone, required, hidden)
+            result = machine.install(package)
+            if result.returncode != 0:
+                raise Failed(f"./install {package} with only its required dependencies: exit {result.returncode}\n"
+                             f"{result.stdout}{result.stderr}".rstrip())
+            REQUIRED_ONLY_CHECKS[package](machine)
 
     for dependency in manifest["dependencies"]:
         missing = dependency["command"]

@@ -4,6 +4,8 @@ fish/.config/fish/fish_variables
 fish/.config/fish/fish_greeting_last_run
 fish/.config/fish/completions/fabric.fish
 fish/.config/fish/completions/copilot.fish
+# Neovim's local override (example: lua/config/local.example.lua)
+nvim/.config/nvim/lua/config/local.lua
 
 # Python bytecode (the herdr scripts import herdr_cli.py)
 __pycache__/

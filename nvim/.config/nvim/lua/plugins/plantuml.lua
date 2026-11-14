@@ -1,7 +1,7 @@
--- Dependencies:
--- Java
--- Graphviz
--- brew install graphviz
+-- Dependencies: Java and Graphviz (brew install openjdk graphviz). The preview
+-- runs `java` from PATH with the PlantUML jar bundled with
+-- plantuml-previewer.vim; lua/config/local.lua can name others
+-- (g:plantuml_previewer#java_path, g:plantuml_previewer#plantuml_jar_path).
 return {
 	{
 		"weirongxu/plantuml-previewer.vim",
@@ -10,9 +10,5 @@ return {
 			"aklt/plantuml-syntax",
 			"tyru/open-browser.vim",
 		},
-		init = function()
-			vim.g["plantuml_previewer#java_path"] = "/opt/homebrew/opt/openjdk/bin/java"
-			vim.g["plantuml_previewer#plantuml_jar_path"] = vim.fn.expand("~/tools/plantuml/plantuml.jar")
-		end,
 	},
 }

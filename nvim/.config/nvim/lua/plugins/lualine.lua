@@ -11,9 +11,9 @@ return {
 				return
 			end
 
-			-- Foreground of the active Dracula PRO variant (config.colorscheme
-			-- loads it before plugins); nil leaves lualine's own color.
-			local palette = vim.g["dracula_pro#palette"]
+			-- Foreground of the active Dracula theme (config.colorscheme loads it
+			-- before other plugins); nil leaves lualine's own color.
+			local palette = require("config.colorscheme").palette()
 			local fg = palette and palette.fg[1]
 
 			local hide_in_width = function()

@@ -25,8 +25,9 @@ Each package declares its description, role, platforms and dependencies in
 working tree, runs `./install <package>` into an empty home directory with
 only the package's declared dependencies on PATH, starts the tool, and fails
 on any error. It also removes each dependency in turn and checks that
-`./install` names it with its hint. The dependencies must be installed where
-it runs.
+`./install` names it with its hint, and starts a tool that has optional
+dependencies (Neovim) once more with only the required ones. The dependencies
+must be installed where it runs.
 
 ```sh
 python3 .tests/standalone.py        # every package it covers

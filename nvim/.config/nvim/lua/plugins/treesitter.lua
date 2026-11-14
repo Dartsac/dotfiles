@@ -22,6 +22,15 @@ return {
 		})
 	end,
 	config = function()
+		-- Parsers are built on this machine, which needs the tree-sitter CLI, a C
+		-- compiler and curl. Without them, none are installed and Neovim's own
+		-- parsers (C, Lua, Markdown, Vim script, Vim help, queries) still work.
+		local can_build = vim.fn.executable("tree-sitter") == 1
+			and vim.fn.executable(vim.env.CC or "cc") == 1
+			and vim.fn.executable("curl") == 1
+		if not can_build then
+			return
+		end
 		local ensure_installed = {
 			"bash",
 			"c",
@@ -50,7 +59,9 @@ return {
 			end)
 			:totable()
 		if #to_install > 0 then
-			require("nvim-treesitter").install(to_install)
+			-- The summary ("Installed 19/19 languages") says when a first start's
+			-- parsers are ready.
+			require("nvim-treesitter").install(to_install, { summary = true })
 		end
 	end,
 }

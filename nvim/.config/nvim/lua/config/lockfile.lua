@@ -1,5 +1,7 @@
 -- Commit lazy-lock.json by itself after lazy.nvim changes it, so plugin
--- updates never leave it modified. The commit is not pushed.
+-- updates never leave it modified. The commit is not pushed. Off unless this
+-- machine's local override (lua/config/local.lua) sets
+-- vim.g.commit_lazy_lockfile = true: an adopter's clone gets no commits.
 local M = {}
 
 local MESSAGE = "[NVIM] Update plugin lockfile"
@@ -46,14 +48,15 @@ function M.commit(path)
 end
 
 function M.setup()
-	-- Test sessions point lazy.nvim at a throwaway lockfile; leave git alone.
-	if vim.env.NVIM_LAZY_LOCKFILE then
-		return
-	end
 	vim.api.nvim_create_autocmd("User", {
 		pattern = EVENTS,
 		group = vim.api.nvim_create_augroup("lockfile_commit", { clear = true }),
 		callback = function()
+			-- Asked when lazy.nvim fires, as the local override loads after this.
+			-- Test sessions point lazy.nvim at a throwaway lockfile; leave git alone.
+			if vim.g.commit_lazy_lockfile ~= true or vim.env.NVIM_LAZY_LOCKFILE then
+				return
+			end
 			vim.defer_fn(function()
 				M.commit(require("lazy.core.config").options.lockfile)
 			end, WRITE_DELAY_MS)

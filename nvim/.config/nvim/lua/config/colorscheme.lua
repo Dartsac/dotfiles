@@ -1,13 +1,18 @@
--- Dracula Pro, following Ghostty's active theme, plus this config's highlight
--- overrides. Plain nvim_set_hl (formerly Colorbuddy, which cost ~5 ms on every
--- start for the same result: it also clears each group and sets fg/bg/style).
+-- The colorscheme, plus this config's highlight overrides. Plain nvim_set_hl
+-- (formerly Colorbuddy, which cost ~5 ms on every start for the same result:
+-- it also clears each group and sets fg/bg/style).
+--
+-- Dracula PRO when its package is installed (theme-sync puts it in Neovim's
+-- site pack directory), in the variant Ghostty's active theme names;
+-- otherwise the free Dracula theme (plugins/colorscheme.lua); otherwise
+-- Neovim's default. Never stops startup. The overrides need the theme's
+-- palette, so they apply only with one of the two Dracula themes.
 local M = {}
 
 local GHOSTTY_CONFIG = "~/.config/ghostty/config"
 
--- Colorschemes come from the Dracula PRO package, installed by theme-sync
--- (repository root) into Neovim's site pack directory.
-local THEMES = {
+-- Ghostty theme name -> Dracula PRO colorscheme.
+local PRO_THEMES = {
 	["Dracula-Pro"] = "dracula-pro",
 	["Dracula-Alucard"] = "dracula-pro-alucard",
 	["Dracula-Blade"] = "dracula-pro-blade",
@@ -16,6 +21,7 @@ local THEMES = {
 	["Dracula-Morbius"] = "dracula-pro-morbius",
 	["Dracula-Van-Helsing"] = "dracula-pro-van-helsing",
 }
+local FREE_THEME = "dracula"
 
 ---@return string?
 local function ghostty_theme()
@@ -23,8 +29,7 @@ local function ghostty_theme()
 	if not ok then
 		return
 	end
-	-- The last `theme =` line, the one Ghostty uses (as does tmux's
-	-- update-tmux-colors.sh).
+	-- The last `theme =` line, the one Ghostty uses.
 	local found
 	for _, line in ipairs(lines) do
 		found = line:match("^theme%s*=%s*(.+)$") or found
@@ -32,16 +37,33 @@ local function ghostty_theme()
 	return found and vim.trim(found)
 end
 
-function M.setup()
-	-- Always load a Dracula palette, even outside Ghostty or with an
-	-- unrecognized terminal theme, before applying palette-based highlights.
-	local name = THEMES[ghostty_theme() or ""] or "dracula-pro"
-	if not pcall(vim.cmd.colorscheme, name) then
-		-- Packages before v2.2 name their files with underscores.
-		vim.cmd.colorscheme((name:gsub("-", "_")))
-	end
+--- Whether :colorscheme can find `name` (on 'runtimepath' or 'packpath'),
+--- asked without trying it: a failed :colorscheme leaves an error message.
+local function available(name)
+	return vim.tbl_contains(vim.fn.getcompletion(name, "color"), name)
+end
 
-	local p = vim.g["dracula_pro#palette"]
+--- The colorschemes to try, best first.
+local function candidates()
+	local pro = PRO_THEMES[ghostty_theme() or ""] or "dracula-pro"
+	-- Packages before v2.2 name their files with underscores.
+	return { pro, (pro:gsub("-", "_")), FREE_THEME }
+end
+
+--- The palette of the active colorscheme, when it is a Dracula theme. Both
+--- themes give it the same shape: name -> { "#rrggbb", cterm }, and color_N
+--- -> "#rrggbb".
+---@return table?
+function M.palette()
+	local name = vim.g.colors_name or ""
+	if name:find("^dracula[-_]pro") then
+		return vim.g["dracula_pro#palette"]
+	elseif name == FREE_THEME then
+		return vim.g["dracula#palette"]
+	end
+end
+
+local function apply_overrides(p)
 	local c = {
 		fg = p.fg[1],
 		bg_dark = p.bgdark[1],
@@ -95,6 +117,30 @@ function M.setup()
 			vim.api.nvim_set_hl(0, "Visual", visual)
 		end,
 	})
+end
+
+local applied = false
+
+function M.setup()
+	applied = true
+	for _, name in ipairs(candidates()) do
+		if available(name) and pcall(vim.cmd.colorscheme, name) then
+			break
+		end
+	end
+	local palette = M.palette()
+	if palette then
+		apply_overrides(palette)
+	end
+end
+
+--- setup(), unless the free theme's plugin has already run it as it loaded.
+--- Where that plugin is missing (its install failed), Dracula PRO may still
+--- be installed.
+function M.ensure()
+	if not applied then
+		M.setup()
+	end
 end
 
 return M

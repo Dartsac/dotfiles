@@ -7,12 +7,19 @@ vim.g.loaded_matchparen = 1
 
 require("config.options")
 require("config.autocommands")
-require("config.colorscheme").setup() -- before plugins, so they see its highlights
-require("config.lazy")
-require("config.lockfile").setup() -- commits lazy-lock.json after plugin updates
+require("config.lazy") -- also applies the colorscheme (plugins/colorscheme.lua)
+require("config.colorscheme").ensure()
+require("config.lockfile").setup() -- commits lazy-lock.json after plugin updates, where lua/config/local.lua asks
 require("config.attach")
 require("config.keymaps")
 
-vim.g.python3_host_prog = "~/.venvs/nvim/bin/python3"
+-- Python plugins use python3 from PATH, unless lua/config/local.lua names one.
 vim.g.loaded_perl_provider = 0
 vim.g.loaded_ruby_provider = 0
+
+-- This machine's own values: lua/config/local.lua, which git ignores, shaped
+-- like lua/config/local.example.lua. Loaded last, so it wins over the tracked
+-- config (environment variables such as $OBSIDIAN_VAULT still come first).
+if vim.uv.fs_stat(vim.fn.stdpath("config") .. "/lua/config/local.lua") then
+	require("config.local")
+end
