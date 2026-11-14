@@ -86,10 +86,15 @@ move_tab_previous = "ctrl+shift+left"
 move_tab_next = "ctrl+shift+right"
 rename_tab = "prefix+comma"
 rename_workspace = "prefix+$"
+# Remove the focused worktree space and its checkout (the branch stays), once
+# the sidebar says "merged · remove?". Herdr asks first, as for right-click >
+# Delete worktree checkout. Shift-w is free: rename_workspace moved to $ above,
+# and Herdr's Shift-x closes a tab.
+remove_worktree = "prefix+shift+w"
 
 # Free g for lazygit and o for Finder; retain the displaced Herdr actions.
 goto = "prefix+f"
-# Step through the Agents sidebar, which is sorted with agents that need you first.
+# Step through the Agents sidebar in its order: grouped by space, as [ui] sorts it.
 next_agent = "prefix+a"
 previous_agent = "prefix+shift+a"
 open_notification_target = "prefix+shift+o"
@@ -183,8 +188,9 @@ description = "focus right, or pass to Neovim"
 sidebar_width = 30
 sidebar_min_width = 24
 sidebar_max_width = 36
-# Agents panel as a queue: blocked agents first, then working, then idle.
-agent_panel_sort = "priority"
+# Agents panel grouped by space, so each agent and its subagent tree sit with
+# their space.
+agent_panel_sort = "spaces"
 mouse_capture = true
 copy_on_select = true
 prompt_new_tab_name = false

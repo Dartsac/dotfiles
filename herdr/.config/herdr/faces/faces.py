@@ -29,7 +29,8 @@ sets these tokens, which the sidebar rows show:
     face     line 1  the character, then the task or the workspace's name; a
                      worktree space's name is its job (space_name)
     detail   line 2  workspace and agent; for a workspace, its branch,
-                     ahead/behind counts and changed files
+                     ahead/behind counts and changed files; for a worktree
+                     space, its progress or "merged · remove?" (progress_text)
     note     line 3  the agent's activity, when it says more than the face
     alert    line 3  instead of note, in bold, when the activity needs you
     tree1-6  then    a Pi parent's subagents, one per line, as a tree:
@@ -82,7 +83,7 @@ QUIET = ("Ready", "Working", "Finished")   # activities the face already shows
 NEEDS_YOU = ("Waiting for you", "60s", "Failed", "not done")   # activities shown in bold
 BUSY = ("working", "blocked")             # being given work, or in the middle of it
 AWAKE_MINUTES = 10           # an idle agent stays ready this long after its last work
-GIT_SECONDS = 4              # between looks at each workspace's branch
+GIT_SECONDS = 4              # between looks at each workspace's branch and each worktree's progress
 FRAME_SECONDS = 0.4          # one animation step
 IDLE_SECONDS = 1.0           # between looks when nothing is working
 # How long a face outlives a dead updater, and how often it is sent again so
@@ -241,9 +242,22 @@ def folder_of(workspace, snapshot):
     return None
 
 
-def described(snapshot, choice, git_line, awake=frozenset()):
+def progress_text(progress, changes):
+    """What a worktree space's line 2 says before its changed files: "↑3", or
+    "merged · remove?" once its work has landed and no file is changed. None
+    with no commit ahead of main."""
+    ahead, landed = progress
+    if landed and not changes:
+        return "merged · remove?"
+    return "↑%d" % ahead if ahead else None
+
+
+def described(snapshot, choice, git_line, awake=frozenset(), progress_of=lambda checkout: None):
     """{("pane"|"workspace", id): {"detail": text or None, "note": text or None, "alert": text or None}}: lines 2 and 3.
 
+    Line 2 of a space is its branch (`git_line` gives a folder's), then its
+    changed files. A worktree space has its progress in place of the branch
+    (`progress_of` gives a checkout's worktree_progress), once that is read.
     Line 3 is the activity: `alert` when it needs you, otherwise `note`.
     Each starts with the blank cells that put it under the name. None clears a
     token that is set and no longer wanted; a token that is neither is left out."""
@@ -271,8 +285,14 @@ def described(snapshot, choice, git_line, awake=frozenset()):
     for workspace in snapshot.get("workspaces") or []:
         tokens = workspace.get("tokens") or {}
         character, _ = workspace_character(workspace, by_workspace.get(workspace["workspace_id"]), choice)
-        folder = folder_of(workspace, snapshot)
-        git = " · ".join(part for part in (git_line(folder) if folder else None, tokens.get("changes")) if part)
+        changes, checkout = tokens.get("changes"), linked_checkout(workspace)
+        progress = progress_of(checkout) if checkout else None
+        if progress is not None:
+            first = progress_text(progress, changes)
+        else:
+            folder = folder_of(workspace, snapshot)
+            first = git_line(folder) if folder else None
+        git = " · ".join(part for part in (first, changes) if part)
         out[("workspace", workspace["workspace_id"])] = lines(tokens, detail=under(character, git))
     return {key: value for key, value in out.items() if value}
 
@@ -321,16 +341,21 @@ def trees(snapshot, choice, frame):
 
 
 # ---- branches ---------------------------------------------------------------
+def git_reader(folder, timeout):
+    """git(*args) in a folder: its output, or None when it fails. Never takes a lock."""
+    def git(*args):
+        done = subprocess.run(["git", "--no-optional-locks", "-C", folder, *args], capture_output=True, text=True,
+                              timeout=timeout, stdin=subprocess.DEVNULL)
+        return done.stdout.strip() if done.returncode == 0 else None
+    return git
+
+
 def git_line(folder, timeout=3.0):
     """"main ↑1 ↓2" for the repository a folder is in, or None if it is in none.
 
     Herdr's API does not carry the branch it shows, so this reads it. It only
     reads refs: no working-tree scan, and never index.lock."""
-    def git(*args):
-        done = subprocess.run(["git", "--no-optional-locks", "-C", folder, *args], capture_output=True, text=True,
-                              timeout=timeout, stdin=subprocess.DEVNULL)
-        return done.stdout.strip() if done.returncode == 0 else None
-
+    git = git_reader(folder, timeout)
     branch = git("symbolic-ref", "--short", "-q", "HEAD") or git("rev-parse", "--short", "HEAD")   # a branch, else a detached commit
     if not branch:
         return None
@@ -339,37 +364,73 @@ def git_line(folder, timeout=3.0):
     return " ".join([branch] + ["↑%d" % ahead] * (ahead > 0) + ["↓%d" % behind] * (behind > 0))
 
 
+MAIN_BRANCH = "main"         # where worktree work lands (docs/adr/0004)
+# How a branch's reflog names a commit made on it ("commit: <subject>",
+# "commit (amend): ..."); a rebase, merge, reset or pull makes none of its own.
+OWN_COMMITS = ("commit", "cherry-pick", "revert")
+
+
+def worktree_progress(checkout, timeout=3.0):
+    """(commits on a worktree's branch that main does not have, has its work landed on main).
+
+    Its work has landed when the branch is part of main (no commit of it is
+    missing from main) and its reflog records a commit made on it. A fresh
+    branch is part of main too, even after it catches up with main by a
+    rebase or fast-forward, but has no work of its own.
+
+    None outside a repository, or in one with no main branch. Reads refs
+    and the branch's reflog only, like git_line."""
+    git = git_reader(checkout, timeout)
+    ahead = git("rev-list", "--count", MAIN_BRANCH + "..HEAD")
+    if ahead is None:
+        return None
+    if int(ahead):
+        return int(ahead), False
+    branch = git("symbolic-ref", "-q", "HEAD")
+    history = (git("log", "--walk-reflogs", "--format=%gs", branch) or "").splitlines() if branch else []
+    return 0, any(entry.startswith(OWN_COMMITS) for entry in history)
+
+
 def branch_of(line):
     """The branch (or detached commit) a git_line starts with; "" for no line."""
     return (line or "").split(" ")[0]
 
 
 class GitWatch:
-    """Reads each watched folder's branch every few seconds, off the animation's thread."""
+    """Reads each watched folder's branch, and each worktree checkout's progress, every few seconds, off the animation's thread."""
 
-    def __init__(self, read=git_line, seconds=GIT_SECONDS):
-        self.read, self.seconds = read, seconds
-        self.folders, self.lines, self.new = frozenset(), {}, threading.Event()
+    def __init__(self, read=git_line, seconds=GIT_SECONDS, read_progress=worktree_progress):
+        self.read, self.read_progress, self.seconds = read, read_progress, seconds
+        self.folders, self.checkouts, self.new = frozenset(), frozenset(), threading.Event()
+        self.lines, self.progress_at = {}, {}
         threading.Thread(target=self.keep_looking, daemon=True).start()
 
-    def watch(self, folders):
-        folders = frozenset(folders)
-        fresh = folders - self.folders
-        self.folders = folders
+    def watch(self, folders, checkouts=()):
+        folders, checkouts = frozenset(folders), frozenset(checkouts)
+        fresh = (folders - self.folders) or (checkouts - self.checkouts)
+        self.folders, self.checkouts = folders, checkouts
         if fresh:
             self.new.set()                  # do not make a new workspace wait for the next round
 
     def line(self, folder):
         return self.lines.get(folder)
 
+    def progress(self, checkout):
+        return self.progress_at.get(checkout)
+
     def look(self):
-        lines = {}
-        for folder in self.folders:
+        self.lines = self.read_all(self.read, self.folders, self.lines)
+        self.progress_at = self.read_all(self.read_progress, self.checkouts, self.progress_at)
+
+    @staticmethod
+    def read_all(read, folders, was):
+        now = {}
+        for folder in folders:
             try:
-                lines[folder] = self.read(folder)
+                now[folder] = read(folder)
             except (OSError, subprocess.SubprocessError, ValueError):
-                lines[folder] = self.lines.get(folder)      # slow or failing just now: keep what was there
-        self.lines = lines
+                now[folder] = was.get(folder)      # slow or failing just now: keep what was there
+        return now
 
     def keep_looking(self):
         while True:
@@ -512,13 +573,14 @@ def keep_current(socket_path, config, state_dir, sleep, clock, git, now=time.tim
         choice = read_choice(config)
         up = awake.update(snapshot, read_minutes(config) * 60)
         faces, working = wanted(snapshot, choice, frame, up, git.line)
-        git.watch(filter(None, (folder_of(w, snapshot) for w in snapshot.get("workspaces") or [])))
+        workspaces = snapshot.get("workspaces") or []
+        git.watch(filter(None, (folder_of(w, snapshot) for w in workspaces)), filter(None, map(linked_checkout, workspaces)))
         want = {key: {TOKEN: text} for key, text in faces.items()}
         branches, children_working = trees(snapshot, choice, frame)
         working = working or children_working
-        for key, lines in list(described(snapshot, choice, git.line, up).items()) + list(branches.items()):
+        for key, lines in list(described(snapshot, choice, git.line, up, git.progress).items()) + list(branches.items()):
             want.setdefault(key, {}).update(lines)
-        want = identity.apply(snapshot, want, colors.assign(snapshot.get("workspaces") or []))
+        want = identity.apply(snapshot, want, colors.assign(workspaces))
         due = {kind for kind, since in renewed.items() if clock() - since >= REFRESH_SECONDS[kind]}   # renew before the deadline
         for kind in due:
             renewed[kind] = clock()
