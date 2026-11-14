@@ -118,6 +118,10 @@ fi
 # extension, the Python tests for the rest. They stay out of git, so a checkout
 # without them skips this. They make git repositories of their own, so they run
 # outside this commit's git environment.
+# No lint run and no CI run sees the Python tests, so two checks come first:
+# ruff, where it is installed, and a load of each test by /usr/bin/python3,
+# which runs none. On a Mac that is Python 3.9, and a commit made without
+# Homebrew on PATH runs the tests with it.
 herdr="$top/herdr/.config/herdr"
 staged=$(git diff --cached --name-only | grep '^herdr/\\.config/herdr/')
 if echo "$staged" | grep -q '/pi-extension/' && command -v node >/dev/null 2>&1 &&
@@ -125,6 +129,17 @@ if echo "$staged" | grep -q '/pi-extension/' && command -v node >/dev/null 2>&1 
     output=$(unset $(git rev-parse --local-env-vars); node --test "$herdr"/tests/*.test.mjs 2>&1) || { echo "$output"; exit 1; }
 fi
 if echo "$staged" | grep -q -v -e '/pi-extension/' -e '^$' && ls "$herdr"/tests/*_test.py >/dev/null 2>&1; then
+    if command -v ruff >/dev/null 2>&1; then
+        (cd "$top" && ruff check --quiet herdr/.config/herdr/tests/*_test.py) || exit 1
+    fi
+    if [ -x /usr/bin/python3 ]; then
+        output=$(/usr/bin/python3 -B -c 'import sys, unittest
+loader = unittest.TestLoader()
+loader.discover(sys.argv[1], sys.argv[2])
+print(*loader.errors)
+sys.exit(1 if loader.errors else 0)' "$herdr/tests" '*_test.py' 2>&1) ||
+            { echo "pre-commit: /usr/bin/python3 cannot load a Herdr test:"; echo "$output"; exit 1; }
+    fi
     output=$(unset $(git rev-parse --local-env-vars); python3 -B -m unittest discover -s "$herdr/tests" -p '*_test.py' 2>&1) || { echo "$output"; exit 1; }
 fi
 # Checkouts from before the extension tests existed have no runner.

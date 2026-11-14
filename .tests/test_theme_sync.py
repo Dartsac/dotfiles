@@ -18,6 +18,9 @@ PALETTE = {"pro": {"orange": "#c0ffee", "cyan": "#0a1b2c", "number": "#123456", 
 OTHER_VALUES = ["#beefed", "#444444", "#ff79c6"]
 # A test file that fails, for commits the hook must refuse.
 FAILING_TEST = "import unittest\nclass T(unittest.TestCase):\n    def test_it(self):\n        self.fail('broken on purpose')\n"
+# macOS's own Python is 3.9: it has no tomllib, which came with 3.11.
+SYSTEM_PYTHON_LACKS_TOMLLIB = os.access("/usr/bin/python3", os.X_OK) and subprocess.run(
+    ["/usr/bin/python3", "-c", "import tomllib"], capture_output=True).returncode != 0
 
 
 class ThrowawayRepo(unittest.TestCase):
@@ -301,6 +304,29 @@ class PreCommitHookTest(ThrowawayRepo):
         result = self.commit_with_hook({"herdr/.config/herdr/faces/faces.py": "\n"})
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_hook_lints_herdrs_tests_which_no_other_lint_run_sees(self):
+        seen = self.fake_ruff(1)
+        self.local_herdr_test("example_test.py", "import os\n")
+        self.local_herdr_test("notes.txt", "x\n")
+
+        result = self.commit_with_hook({"herdr/.config/herdr/config.base.toml": "\n"})
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("F401 imported but unused", result.stdout + result.stderr)
+        self.assertEqual(seen.read_text().split(), ["check", "--quiet", "herdr/.config/herdr/tests/example_test.py"])
+
+    @unittest.skipUnless(SYSTEM_PYTHON_LACKS_TOMLLIB, "needs a /usr/bin/python3 older than 3.11, as macOS has")
+    def test_hook_refuses_a_herdr_test_that_the_systems_python_cannot_load(self):
+        # A commit from a GUI client runs Herdr's tests with /usr/bin/python3, where this one is an import error.
+        self.local_herdr_test("example_test.py", "import tomllib, unittest\nclass T(unittest.TestCase):\n    def test_it(self):\n"
+                              "        tomllib.loads('')\n")
+
+        result = self.commit_with_hook({"herdr/.config/herdr/faces/faces.py": "\n"})
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("/usr/bin/python3 cannot load a Herdr test", result.stdout + result.stderr)
+        self.assertIn("No module named 'tomllib'", result.stdout + result.stderr)
 
     def test_hook_lets_a_herdr_commit_through_in_a_checkout_without_herdrs_tests(self):
         result = self.commit_with_hook({"herdr/.config/herdr/faces/faces.py": "\n", "herdr/.config/herdr/pi-extension/index.js": "\n"})

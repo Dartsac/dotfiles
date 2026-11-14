@@ -72,6 +72,11 @@ pre-commit hook runs it on the staged files where ruff is installed
 tests run in both workflows: with ruff in `lint.yml`, without it in
 `standalone.yml`.
 
+Herdr's own Python tests stay out of git, so neither workflow sees them. When
+a Herdr file is staged the hook checks them itself, before it runs them: with
+ruff, and by loading each with `/usr/bin/python3`, which fails on a module
+that Python 3.9 does not have.
+
 ## gnu stow naming convention
 
     1.	Root Directory: Your dotfiles directory contains subdirectories for each package (e.g., nvim, tmux).
