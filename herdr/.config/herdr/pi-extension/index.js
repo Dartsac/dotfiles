@@ -16,6 +16,9 @@ const agentDir = () => process.env.PI_CODING_AGENT_DIR || path.join(os.homedir()
 // Session entry recording whether this task's children had failures, so a
 // /reload doesn't forget a failure that pi-subagents already delivered.
 const ISSUES_ENTRY = "dotfiles-herdr-child-issues";
+// Session entry recording when a finished job cleared rows from the tree, so a
+// /reload while the next job goes on doesn't bring back earlier jobs' failures.
+const JOB_ENTRY = "dotfiles-herdr-job-finished";
 // How long shutdown waits for a child-tab step in flight (tab create, viewer
 // launch, tag: up to 5s + 5s + 1.5s), so it can't land after the next runtime starts.
 const TAB_SHUTDOWN_MS = 12_000;
@@ -102,11 +105,12 @@ export default function (pi) {
   let queued;
   let draining;
   let parentError = false;
-  // When the current task began (the user's last new message): the sidebar
-  // tree lists children started since, and every live one.
-  let taskStart = 0;
-  let tree = treeTokens([]);
-  let known; // the children the last scan listed; unset until the first scan
+  // When the parent's whole job last finished: the sidebar tree keeps a child
+  // that failed, was paused or was stopped after it (treeTokens).
+  let doneAt = 0;
+  let wasFinished = false; // the job was finished at the last projection
+  let treeChildren = []; // every child the last scan listed, foreground ones too
+  let known; // the background children the last scan listed; unset until the first scan
   const channels = supervisorRoot();
   const asyncRoot = asyncRunsRoot();
   const runner = path.join(agentDir(), "local-packages/pi-subagents/inspector-runner.mjs");
@@ -131,7 +135,25 @@ export default function (pi) {
     applies_to_source: "herdr:pi", tokens, ttl_ms: 120_000, seq: nextSeq(),
   });
   const identity = d => d.attention ? `${instance}:${d.attention}` : "";
-  const projection = () => ({ ...policy.desired(), tree });
+  // The job has just finished: the rows the tree kept for it leave. The session
+  // hears of it only when that clears a row (one entry per change, none per
+  // startup or reload); a later finish that clears nothing needs no record.
+  function jobFinished(now) {
+    const kept = JSON.stringify(treeTokens(treeChildren, doneAt));
+    doneAt = now;
+    if (kept === JSON.stringify(treeTokens(treeChildren, doneAt))) return;
+    // The poll timer gets here outside any Pi handler, where an error ends Pi.
+    // Unsaved, these rows would only show once more after a /reload mid-job.
+    try { pi.appendEntry(JOB_ENTRY, { doneAt }); } catch { /* the session file can't be written */ }
+  }
+  // What to report now. The tree follows the policy's completion.
+  function projection() {
+    const now = Date.now();
+    const finished = policy.finished(now);
+    if (finished && !wasFinished) jobFinished(now);
+    wasFinished = finished;
+    return { ...policy.desired(now), tree: treeTokens(treeChildren, doneAt) };
+  }
 
   function publish(force = false) {
     if (!root) return;
@@ -235,7 +257,7 @@ export default function (pi) {
     if (known && !live && children.some(c => !known.has(c.key))) policy.setChildren(1);
     known = new Set(children.map(c => c.key));
     policy.setChildren(live);
-    tree = treeTokens(all, taskStart);
+    treeChildren = all;
     return children;
   }
 
@@ -298,10 +320,7 @@ export default function (pi) {
   }
   pi.on("before_agent_start", (event, context) => {
     // A new task: not a message sent while children run or the parent wraps up.
-    if (event.messageType === "user" && !policy.busyNow() && !policy.wrappingUp()) {
-      setChildIssues(false);
-      taskStart = Date.now();
-    }
+    if (event.messageType === "user" && !policy.busyNow() && !policy.wrappingUp()) setChildIssues(false);
     if (event.messageType === "user" && typeof event.prompt === "string") {
       lastPrompt = event.prompt;
       void nameSession(context); // not awaited: never delays the turn
@@ -354,8 +373,14 @@ export default function (pi) {
     // Restore this task's child failures from the session, then record any that
     // arrived during startup (pi-subagents can deliver before this handler runs).
     const arrived = policy.childIssues;
-    policy.childIssues = (context.sessionManager.getBranch?.() ?? [])
-      .filter(e => e.type === "custom" && e.customType === ISSUES_ENTRY).at(-1)?.data?.childIssues === true;
+    const saved = type => (context.sessionManager.getBranch?.() ?? []).filter(e => e.type === "custom" && e.customType === type).at(-1)?.data;
+    policy.childIssues = saved(ISSUES_ENTRY)?.childIssues === true;
+    const savedDoneAt = saved(JOB_ENTRY)?.doneAt;
+    doneAt = Number.isFinite(savedDoneAt) ? savedDoneAt : 0;
+    wasFinished = false;
+    // Read the children before anything is reported: an event that arrives
+    // before the first poll must not find a job with live children finished.
+    scan();
     root = true;
     if (arrived) setChildIssues(true);
     policy.parentActive = !context.isIdle();
@@ -375,8 +400,6 @@ export default function (pi) {
     // from it now, rather than at its next prompt.
     const messages = (context.sessionManager.getBranch?.() ?? []).filter(e => e.type === "message").map(e => e.message);
     lastPrompt = messageText(messages.findLast(m => m?.role === "user"));
-    const lastUser = messages.findLast(m => m?.role === "user");
-    taskStart = Number.isFinite(lastUser?.timestamp) ? lastUser.timestamp : 0;
     if (lastPrompt) void nameSession(context, messageText(messages.findLast(m => m?.role === "assistant")));
     poll();
     timer = setInterval(poll, 1000);
@@ -428,7 +451,7 @@ export default function (pi) {
     await Promise.all([draining, tabStep]);
     closing?.halt();
     await metadata({ activity: null, "attention-id": null, "attention-title": null, "completion-title": null,
-      ...Object.fromEntries(Object.keys(tree).map(token => [token, null])) }).catch(() => {});
+      ...treeTokens([]) }).catch(() => {});
   });
 
   pi.registerShortcut("ctrl+shift+a", {

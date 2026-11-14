@@ -8,12 +8,12 @@ import { clean } from "./supervision.mjs";
 export const MAX_TABS = 8;
 const SOURCE = "dotfiles:subagent";
 const LIVE = new Set(["queued", "running", "pending"]);
+const SUCCEEDED = new Set(["complete", "completed"]);
 // The sidebar tree under a parent: at most this many rows, the last one
 // "+N more" when there are more children. config.base.toml has a row per token.
 export const TREE_ROWS = 6;
 // Each child's state as the face it wears (faces/characters.py STATES).
-const TREE_STATE = { running: "working", queued: "idle", pending: "idle", complete: "done", completed: "done",
-  failed: "blocked", paused: "unknown", stopped: "unknown" };
+const TREE_STATE = { running: "working", queued: "idle", pending: "idle", failed: "blocked", paused: "unknown", stopped: "unknown" };
 const RUN_ID = /^[A-Za-z0-9_-]+$/;
 
 function readStatus(dir) {
@@ -46,24 +46,28 @@ export function scanChildren(asyncRoot, sessionIds) {
         if (typeof step.runId !== "string" || !RUN_ID.test(step.runId)) return;
         const asyncDir = path.join(asyncRoot, step.runId);
         const child = readStatus(asyncDir);
+        const state = child?.state ?? step.status ?? "queued";
         children.push({
           key: step.runId, runId: step.runId, asyncDir, roots,
           name: clean(step.workflowKey || step.agent || "subagent", 40),
           agent: clean(step.agent || "subagent", 40), title: clean(step.label, 60),
-          state: child?.state ?? step.status ?? "queued", index: 0,
+          state, index: 0,
           // The workflow's launch time first: the child's own arrives a scan
           // later and would reorder the tree's rows.
           startedAt: step.startedAt ?? child?.startedAt, foreground,
+          endedAt: isLive(state) ? undefined : child?.endedAt ?? step.endedAt ?? child?.lastUpdate ?? root.lastUpdate,
         });
       } else {
         const several = (root.steps?.length ?? 0) > 1;
+        const state = several ? (step.status ?? root.state) : root.state;
         children.push({
           key: several ? `${root.runId}#${index}` : root.runId, runId: root.runId,
           asyncDir: path.join(asyncRoot, dir.name), roots, index,
           name: clean((!several && root.workflowKey) || step.agent || "subagent", 40) + (several ? `-${index + 1}` : ""),
           agent: clean(step.agent || "subagent", 40), title: clean(step.label, 60),
-          state: several ? (step.status ?? root.state) : root.state,
+          state,
           startedAt: step.startedAt ?? root.startedAt, foreground,
+          endedAt: isLive(state) ? undefined : step.endedAt ?? root.endedAt ?? root.lastUpdate,
         });
       }
     });
@@ -74,12 +78,18 @@ export function scanChildren(asyncRoot, sessionIds) {
 
 export const isLive = state => LIVE.has(state);
 
+// Shown in the tree: a live child, and one that ended without success (failed,
+// paused, stopped) after `doneAt`, the last moment the parent's whole job was
+// seen finished (0: not yet). A succeeded child leaves as soon as it ends.
+// One with no end time is kept only until the first finished job.
+const shownInTree = (c, doneAt) => isLive(c.state)
+  || (!SUCCEEDED.has(c.state) && (c.endedAt === undefined ? doneAt === 0 : c.endedAt > doneAt));
+
 // The parent's tree tokens, child1..child<rows>: "<face state> <name>", or
-// "more <n>" in the last row, or null for an unused row. It lists this task's
-// children: every live one, and those that started since `since` (the user's
-// last new message), in the order they started. faces.py draws them.
-export function treeTokens(children, since = 0, rows = TREE_ROWS) {
-  const shown = children.filter(c => isLive(c.state) || (c.startedAt ?? 0) >= since)
+// "more <n>" in the last row, or null for an unused row. It lists the children
+// that still matter (shownInTree), in the order they started. faces.py draws them.
+export function treeTokens(children, doneAt = 0, rows = TREE_ROWS) {
+  const shown = children.filter(c => shownInTree(c, doneAt))
     .sort((a, b) => (a.startedAt ?? Infinity) - (b.startedAt ?? Infinity) || a.key.localeCompare(b.key));
   const line = c => `${TREE_STATE[c.state] ?? "unknown"} ${c.name}`;
   const lines = shown.length > rows ? [...shown.slice(0, rows - 1).map(line), `more ${shown.length - rows + 1}`] : shown.map(line);
