@@ -16,6 +16,8 @@ THEME_SYNC = Path(__file__).resolve().parents[1] / "theme-sync"
 PALETTE = {"pro": {"orange": "#c0ffee", "cyan": "#0a1b2c", "number": "#123456", "white": "#333333", "foreground": "#f8f8f2"}}
 # Made-up values from the package's other theme files, outside the palette.
 OTHER_VALUES = ["#beefed", "#444444", "#ff79c6"]
+# A test file that fails, for commits the hook must refuse.
+FAILING_TEST = "import unittest\nclass T(unittest.TestCase):\n    def test_it(self):\n        self.fail('broken on purpose')\n"
 
 
 class ThrowawayRepo(unittest.TestCase):
@@ -182,9 +184,7 @@ class PreCommitHookTest(ThrowawayRepo):
         return subprocess.run(["git", "commit", "-q", "-m", "change"], cwd=self.repo, env=self.env, capture_output=True, text=True)
 
     def test_hook_refuses_a_commit_when_a_test_in_the_hidden_test_directory_fails(self):
-        failing = "import unittest\nclass T(unittest.TestCase):\n    def test_it(self):\n        self.fail('broken on purpose')\n"
-
-        result = self.commit_with_hook({".tests/test_example.py": failing})
+        result = self.commit_with_hook({".tests/test_example.py": FAILING_TEST})
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("broken on purpose", result.stdout + result.stderr)
@@ -197,10 +197,17 @@ class PreCommitHookTest(ThrowawayRepo):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_hook_runs_the_root_tests_when_the_install_script_is_staged(self):
-        failing = "import unittest\nclass T(unittest.TestCase):\n    def test_it(self):\n        self.fail('broken on purpose')\n"
-        self.commit({".tests/test_example.py": failing})
+        self.commit({".tests/test_example.py": FAILING_TEST})
 
         result = self.commit_with_hook({"install": "#!/usr/bin/env python3\n"})
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("broken on purpose", result.stdout + result.stderr)
+
+    def test_hook_runs_the_root_tests_when_a_package_manifest_is_staged(self):
+        self.commit({".tests/test_example.py": FAILING_TEST})
+
+        result = self.commit_with_hook({"alpha/README.package.json": "{}\n"})
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("broken on purpose", result.stdout + result.stderr)

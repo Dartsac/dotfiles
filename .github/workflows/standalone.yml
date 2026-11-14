@@ -12,7 +12,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        include:
+          # /usr/bin/python3 is the Python a Mac has without Homebrew (3.9).
+          - os: macos-latest
+            python: /usr/bin/python3
+          # Pinned, so .tests/linux.sh runs this same release locally.
+          - os: ubuntu-26.04
+            python: python3
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -23,12 +29,10 @@ jobs:
 
       - name: Install the packages' dependencies (Ubuntu)
         if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y stow direnv eza
+        run: sh .tests/ubuntu-deps.sh
 
       - name: ./install
-        run: python3 -B .tests/test_install.py -v
+        run: ${{ matrix.python }} -B .tests/test_install.py -v
 
       - name: Standalone check
-        run: python3 -B .tests/standalone.py
+        run: ${{ matrix.python }} -B .tests/standalone.py

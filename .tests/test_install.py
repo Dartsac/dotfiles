@@ -1,6 +1,7 @@
 """./install, run against a throwaway repository of made-up packages, with an
 empty home directory and a PATH holding only stow, the system tools and the
-made-up tools a test installs."""
+made-up tools a test installs. Then the repository's own manifests."""
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -10,7 +11,8 @@ import subprocess
 import tempfile
 import unittest
 
-INSTALL = Path(__file__).resolve().parents[1] / "install"
+REPO = Path(__file__).resolve().parents[1]
+INSTALL = REPO / "install"
 PLATFORM = {"Darwin": "macos", "Linux": "linux"}[platform.system()]
 HINTS = {"macos": "brew install {}", "linux": "sudo apt install {}"}
 
@@ -212,6 +214,36 @@ class InstallTest(unittest.TestCase):
         self.assertIn("bare", result.stderr)
         self.assertIn("nothing", result.stderr)
         self.assertEqual(self.links(), [])
+
+
+class ManifestsTest(unittest.TestCase):
+    """The repository's own dependency manifests, checked before CI sees them."""
+
+    def setUp(self):
+        self.manifests = {p.parent.name: json.loads(p.read_text()) for p in sorted(REPO.glob("*/README.package.json"))}
+
+    def test_every_manifest_is_complete_for_each_platform_it_lists(self):
+        self.assertTrue(self.manifests)
+        for name, manifest in self.manifests.items():
+            with self.subTest(package=name):
+                self.assertIn(manifest["role"], ("core", "optional", "owner"))
+                self.assertTrue(manifest["description"].strip())
+                platforms = manifest["platforms"]
+                self.assertTrue(platforms and set(platforms) <= {"macos", "linux"}, platforms)
+                if manifest["role"] == "core":
+                    self.assertEqual(sorted(platforms), ["linux", "macos"], "a core package is promised on both")
+                for dep in manifest["dependencies"]:
+                    self.assertIsInstance(dep["required"], bool, dep["command"])
+                    for platform_name in platforms:
+                        self.assertTrue(dep["hint"].get(platform_name, "").strip(), f"{dep['command']}: no {platform_name} hint")
+
+    def test_every_offered_package_has_a_standalone_check(self):
+        spec = importlib.util.spec_from_file_location("standalone", REPO / ".tests/standalone.py")
+        standalone = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(standalone)
+        offered = {name for name, manifest in self.manifests.items() if manifest["role"] in ("core", "optional")}
+
+        self.assertEqual(sorted(standalone.CHECKS), sorted(offered))
 
 
 if __name__ == "__main__":

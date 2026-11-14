@@ -101,8 +101,9 @@ top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 # Checkouts from before the guard existed have a theme-sync without it.
 grep -q -e --check-staged "$top/theme-sync" || exit 0
 "$top/theme-sync" --check-staged || exit 1
-# The root scripts' Python tests, when a script or a test is staged.
-if git diff --cached --name-only | grep -q -E '^(theme-sync|install|[^/]*\\.py|\\.tests/.*\\.py)$' &&
+# The root scripts' Python tests, when a script, a test or a package's
+# dependency manifest is staged.
+if git diff --cached --name-only | grep -q -E '^(theme-sync|install|[^/]*\\.py|\\.tests/.*\\.py|[^/]*/README\\.package\\.json)$' &&
     ls "$top"/.tests/test_*.py >/dev/null 2>&1; then
     output=$(python3 -B -m unittest discover -s "$top/.tests" -p 'test_*.py' 2>&1) || { echo "$output"; exit 1; }
 fi

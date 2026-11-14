@@ -30,11 +30,25 @@ it runs.
 ```sh
 python3 .tests/standalone.py        # every package it covers
 python3 .tests/standalone.py eza    # one package
+.tests/linux.sh                     # the same on Ubuntu, in Docker
 ```
 
 GitHub Actions runs it on macOS and Ubuntu on every push
 (`.github/workflows/standalone.yml`), with `./install`'s own tests
-(`.tests/test_install.py`).
+(`.tests/test_install.py`). `.tests/linux.sh` runs that Ubuntu job on a Mac:
+the Ubuntu release the workflow names and the same dependencies
+(`.tests/ubuntu-deps.sh`). Tool versions there differ from Homebrew's, so run
+it before pushing a change that Linux could take differently.
+
+A new package gets a `README.package.json`, a check in `.tests/standalone.py`
+and its dependencies in the workflow and `.tests/ubuntu-deps.sh`; a test fails
+until an offered package has its check.
+
+Some tools read `~/Library/Application Support/<tool>` on macOS and ignore
+`~/.config/<tool>`, whatever `XDG_CONFIG_HOME` says (eza does). Such a package
+links that path to its `.config` directory and lists it under
+`platform_paths` in its manifest, so `./install` stows it on macOS only. The
+standalone check is what shows whether a tool needs this.
 
 ## gnu stow naming convention
 

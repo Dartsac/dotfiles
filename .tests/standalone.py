@@ -74,6 +74,7 @@ def check_eza(machine):
     folder = machine.home / "listing"
     folder.mkdir()
     (folder / "diagram.puml").write_text("")
+    # eza applies theme.yml only when it colors its output.
     listing = run(["eza", "--icons=always", "--color=always", str(folder)], machine.env, machine.home, "eza")
     if "\uf1c1" not in listing:
         raise Failed(f"eza did not read theme.yml: no document icon for diagram.puml in {listing!r}")
