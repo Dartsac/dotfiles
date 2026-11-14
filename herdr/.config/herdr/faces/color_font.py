@@ -25,6 +25,7 @@ from fontTools.ttLib import TTFont, newTable
 from fontTools.ttLib.tables.sbixStrike import Strike
 from fontTools.ttLib.tables.sbixGlyph import Glyph
 from fontTools.ttLib.tables._g_l_y_f import GlyphCoordinates
+from fontTools.ttLib.tables.ttProgram import Program
 
 from characters import COLORS
 from sprites import CHARACTERS, H
@@ -108,8 +109,10 @@ def colored_font(source, palette):
         if name in (".notdef", "space"):
             continue
         glyph = font["glyf"][name]
-        if glyph.numberOfContours == 0:
+        if glyph.numberOfContours == 0:                    # a tile with no ink, like the right of an empty face
             glyph.coordinates, glyph.flags, glyph.endPtsOfContours = GlyphCoordinates(), array("B"), []
+            glyph.program = Program()
+            glyph.program.fromBytecode(b"")
         n = len(glyph.coordinates)
         glyph.coordinates.extend([(0, font["hhea"].descent), (advance, font["hhea"].ascent)])
         glyph.flags.extend([1, 1])

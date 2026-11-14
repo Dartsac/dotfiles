@@ -3,8 +3,10 @@
 
 The character shows the agent's state by what it is doing: awake at a prompt
 when ready, asleep when idle, busy (and animated) while working, waving when it
-needs you, pleased when done. Only the character has the state's color; every
-line of text has its workspace's color (identity.py).
+needs you, pleased when done. A space with no agent in it shows the character
+with a blank screen. Only the character has the state's color (gray when
+empty or asleep); every line of text has its workspace's color (identity.py),
+and so does Bit, which is text.
 
 Ready is this plugin's own state. Herdr calls an agent idle as soon as it is
 neither working nor waiting to be seen; here it stays ready until it has gone
@@ -58,7 +60,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path[:0] = [HERE, os.path.join(HERE, os.pardir, "scripts")]
-from characters import CHARACTERS, CHOICES, DEFAULT_CHOICE, STATES, blank, character_for, face, indent  # noqa: E402
+from characters import CHARACTERS, CHOICES, DEFAULT_CHOICE, FACE_LABELS, FACES, STATES, character_for, face, indent  # noqa: E402
 import identity  # noqa: E402
 from identity import TitleColors  # noqa: E402
 
@@ -118,13 +120,14 @@ def workspace_status(workspace, agents):
 
 
 def workspace_character(workspace, agents, choice):
-    """The character a workspace wears, and whether it has an agent to show at all.
+    """(the character a workspace wears, which of its FACES it shows).
 
-    It wears the character of an agent in the workspace's state."""
+    It wears the character of an agent in the workspace's state; with no
+    agent, the one an agent of no known kind would get, with its empty face."""
     if not agents:
-        return character_for(choice, ""), False
+        return character_for(choice, ""), "empty"
     status = workspace_status(workspace, agents)
-    return character_for(choice, next((k for s, k in agents if s == status), agents[0][1])), True
+    return character_for(choice, next((k for s, k in agents if s == status), agents[0][1])), status
 
 
 class Awake:
@@ -177,13 +180,11 @@ def wanted(snapshot, choice, frame, awake=frozenset()):
     by_workspace = agents_by_workspace(snapshot, awake)
     for workspace in snapshot.get("workspaces") or []:
         agents = by_workspace.get(workspace["workspace_id"])
-        character, has_agent = workspace_character(workspace, agents, choice)
+        character, which = workspace_character(workspace, agents, choice)
         label = workspace.get("label") or ""
         # Use the agent frame clock so the working face moves in both panels.
-        # With no agent, reserve its width but do not show or animate a face.
-        status = workspace_status(workspace, agents)
-        want[("workspace", workspace["workspace_id"])] = fit(face(character, status, frame) if has_agent else blank(character), label)
-        working = working or (has_agent and status == "working")
+        want[("workspace", workspace["workspace_id"])] = fit(face(character, which, frame), label)
+        working = working or which == "working"
     return want, working
 
 
@@ -494,8 +495,13 @@ def keep_current(socket_path, config, state_dir, sleep, clock, git, now=time.tim
 
 
 # ---- choosing ---------------------------------------------------------------
+def legend():
+    """What the faces in each row of the table are, in their order."""
+    return "faces: " + ", ".join(FACE_LABELS[which] for which in FACES)
+
+
 def table():
-    """One line per choice: every state's face, as it will look in the sidebar."""
+    """One line per choice: every face, as it will look in the sidebar."""
     lines = []
     for choice in CHOICES:
         if choice == "mixed":
@@ -503,7 +509,7 @@ def table():
             lines.append((choice, "Mixed", shown, "Byte for Pi, Wisp for every other agent"))
             continue
         c = CHARACTERS[choice]
-        lines.append((choice, c["title"], "  ".join(face(choice, s) for s in STATES), c["about"]))
+        lines.append((choice, c["title"], "  ".join(face(choice, s) for s in FACES), c["about"]))
     return lines
 
 
@@ -513,7 +519,7 @@ def pick(config):
     if shutil.which("fzf"):
         picked = subprocess.run(
             ["fzf", "--delimiter=\t", "--with-nth=2..", "--reverse", "--no-info", "--no-sort", "--prompt=sidebar character > ",
-             "--header=faces: asleep, ready, working, needs you, done, unknown   (● is the current one)"],
+             "--header=%s   (● is the current one)" % legend()],
             input="\n".join(rows), stdout=subprocess.PIPE, text=True)   # fzf draws on the terminal itself
         if picked.returncode != 0 or not picked.stdout.strip():
             return 0                             # Esc: leave it as it is

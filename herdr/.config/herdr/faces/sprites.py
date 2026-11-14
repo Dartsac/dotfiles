@@ -6,8 +6,9 @@ outline, so the glyph takes the text color and the dark parts are the
 terminal background showing through.
 """
 W, H = 24, 16
-# New states go last: a sprite's codepoints follow from its place here.
-STATES = ["idle", "work1", "work2", "work3", "work4", "blocked", "done", "unknown", "ready"]
+# Each character's sprites: the agent states, working as four frames, then the
+# empty space's. New ones go last: a sprite's codepoints follow from its place.
+STATES = ["idle", "work1", "work2", "work3", "work4", "blocked", "done", "unknown", "ready", "empty"]
 
 
 def grid():
@@ -65,12 +66,14 @@ def byte(eyes="open", mouth="smile", arm="down", antenna=True, extra=()):
         "wide":   box(4, 5, 6, 6) + box(9, 5, 11, 6),        # kept clear of the screen's edge
         "happy":  [(4, 6), (5, 5), (6, 6), (9, 6), (10, 5), (11, 6)],
         "dots":   [(5, 6), (10, 6)],
+        "none":   [],                                        # the screen is blank
     }[eyes]
     lips = {
         "smile": [(5, 8), (10, 8)] + box(6, 9, 9, 9),
         "flat":  box(6, 8, 9, 8),
         "small": box(7, 8, 8, 8),
         "grin":  box(6, 8, 9, 8) + box(7, 9, 8, 9),
+        "none":  [],
     }[mouth]
     put(g, face); put(g, lips)
     put(g, {
@@ -94,6 +97,7 @@ BYTE = {
     "done":    byte(eyes="happy", mouth="grin", extra=HEART),
     "unknown": byte(eyes="dots", mouth="flat", antenna=False, extra=QUESTION + [(9, 0)]),
     "ready":   byte(eyes="open", mouth="smile", extra=PROMPT),
+    "empty":   byte(eyes="none", mouth="none", antenna=False),          # nobody here: a blank screen
 }
 
 
@@ -116,6 +120,7 @@ def wisp(eyes="open", mouth="o", dy=0, hem="a", arm="rest", shadow=None, hollow=
         "intent":  [(6, 6)] + box(5, 7, 6, 8) + [(9, 6)] + box(9, 7, 10, 8),   # brows drawn in
         "happy":   [(4, 6), (5, 6), (3, 7), (6, 7), (10, 6), (11, 6), (9, 7), (12, 7)],   # two arches
         "dots":    [(5, 7), (10, 7)],
+        "none":    [],                                       # a blank face
     }[eyes]
     lips = {
         "o":     box(7, 10, 8, 10),
@@ -151,6 +156,7 @@ WISP = {
     "done":    wisp(eyes="happy", mouth="smile", dy=-1, hem="b", shadow=(5, 10), extra=HEART),
     "unknown": wisp(eyes="dots", mouth="none", dy=0, hem="a", arm="none", hollow=True, extra=QUESTION),
     "ready":   wisp(eyes="open", mouth="smile", dy=0, hem="a", shadow=(4, 11), extra=PROMPT),
+    "empty":   wisp(eyes="none", mouth="none", dy=0, hem="a", arm="none"),   # nobody here: a blank face
 }
 
 CHARACTERS = {"byte": BYTE, "wisp": WISP}

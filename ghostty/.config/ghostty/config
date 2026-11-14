@@ -15,7 +15,7 @@ font-size = 14
 # The name ends in a tag that changes with the drawings (faces/color_font.py):
 # a running Ghostty does not read a changed font file again under an old name.
 # After changing the sprites, put the new name here and reload this config.
-font-codepoint-map = U+100000-U+10007F=Herdr Sprites Pixel f750
+font-codepoint-map = U+100000-U+10007F=Herdr Sprites Pixel bb2d
 
 # Window and UI
 window-padding-x = 10
