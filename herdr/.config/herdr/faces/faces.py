@@ -26,7 +26,8 @@ reads Herdr's own state.
 once a second (every 0.4s while an agent is working, to step the animation) and
 sets these tokens, which the sidebar rows show:
 
-    face     line 1  the character, then the task or the workspace's name
+    face     line 1  the character, then the task or the workspace's name; a
+                     worktree space's name is its job (space_name)
     detail   line 2  workspace and agent; for a workspace, its branch,
                      ahead/behind counts and changed files
     note     line 3  the agent's activity, when it says more than the face
@@ -162,10 +163,52 @@ class Awake:
         return frozenset(pane for pane, since in rested.items() if now - since < seconds)
 
 
-def wanted(snapshot, choice, frame, awake=frozenset()):
+WORKTREE_BRANCH_PREFIX = "worktree/"   # before the branch name of a worktree Herdr creates
+PANE_NUMBERS = "123456789ABCDEFGHJKMNPQRSTVWXYZ0"   # Herdr's pane ids: "<workspace>:p<n>", n counting up in these digits
+
+
+def linked_checkout(workspace):
+    """A worktree space's checkout folder, or None for any other space."""
+    worktree = workspace.get("worktree") or {}
+    return worktree.get("checkout_path") if worktree.get("is_linked_worktree") else None
+
+
+def creation_order(pane_id):
+    """A pane's place in the order its workspace got its panes (unknown ids last).
+
+    Herdr numbers a pane when it is created in a workspace, or moved into it,
+    and never gives a number out twice."""
+    digits = (pane_id or "").rpartition(":p")[2]
+    if not digits or any(digit not in PANE_NUMBERS for digit in digits):
+        return float("inf")
+    number = 0
+    for digit in digits:
+        number = number * len(PANE_NUMBERS) + PANE_NUMBERS.index(digit) + 1
+    return number
+
+
+def space_name(workspace, snapshot, git_line):
+    """The name on a space's line 1. A worktree space is named after its job."""
+    label = workspace.get("label") or ""
+    checkout = linked_checkout(workspace)
+    # Herdr labels a worktree space after its checkout's folder; any other label is the owner's own.
+    if not checkout or label != os.path.basename(checkout.rstrip("/")):
+        return label
+    agents = [a for a in snapshot.get("agents") or [] if a.get("workspace_id") == workspace["workspace_id"]]
+    if agents:
+        first = min(agents, key=lambda a: creation_order(a.get("pane_id")))
+        task = (first.get("tokens") or {}).get("topic")
+        if task:
+            return task
+    return branch_of(git_line(checkout)).removeprefix(WORKTREE_BRANCH_PREFIX) or label
+
+
+def wanted(snapshot, choice, frame, awake=frozenset(), git_line=lambda folder: None):
     """({("pane"|"workspace", id): text or None}, is any agent working).
 
-    None clears the token: the pane has a face but no agent any more."""
+    None clears the token: the pane has a face but no agent any more.
+    `git_line` gives a folder's branch line (git_line below), for the name of
+    a worktree space whose first agent has no task yet."""
     tabs = {t["tab_id"]: t.get("label") or "" for t in snapshot.get("tabs") or []}
     want, working = {}, False
     for agent in snapshot.get("agents") or []:
@@ -181,18 +224,17 @@ def wanted(snapshot, choice, frame, awake=frozenset()):
     for workspace in snapshot.get("workspaces") or []:
         agents = by_workspace.get(workspace["workspace_id"])
         character, which = workspace_character(workspace, agents, choice)
-        label = workspace.get("label") or ""
         # Use the agent frame clock so the working face moves in both panels.
-        want[("workspace", workspace["workspace_id"])] = fit(face(character, which, frame), label)
+        want[("workspace", workspace["workspace_id"])] = fit(face(character, which, frame), space_name(workspace, snapshot, git_line))
         working = working or which == "working"
     return want, working
 
 
 def folder_of(workspace, snapshot):
-    """Where a workspace's repository is looked for: its project, else its first pane's folder."""
-    project = (workspace.get("tokens") or {}).get("project_path")
-    if project:
-        return project
+    """Where a workspace's repository is looked for: a worktree space's checkout, else its project, else its first pane's folder."""
+    folder = linked_checkout(workspace) or (workspace.get("tokens") or {}).get("project_path")
+    if folder:
+        return folder
     for pane in snapshot.get("panes") or []:
         if pane.get("workspace_id") == workspace["workspace_id"] and (pane.get("cwd") or pane.get("foreground_cwd")):
             return pane.get("cwd") or pane.get("foreground_cwd")
@@ -295,6 +337,11 @@ def git_line(folder, timeout=3.0):
     counts = (git("rev-list", "--left-right", "--count", "HEAD...@{upstream}") or "").split()
     ahead, behind = (int(counts[0]), int(counts[1])) if len(counts) == 2 and all(c.isdigit() for c in counts) else (0, 0)
     return " ".join([branch] + ["↑%d" % ahead] * (ahead > 0) + ["↓%d" % behind] * (behind > 0))
+
+
+def branch_of(line):
+    """The branch (or detached commit) a git_line starts with; "" for no line."""
+    return (line or "").split(" ")[0]
 
 
 class GitWatch:
@@ -464,7 +511,7 @@ def keep_current(socket_path, config, state_dir, sleep, clock, git, now=time.tim
             continue
         choice = read_choice(config)
         up = awake.update(snapshot, read_minutes(config) * 60)
-        faces, working = wanted(snapshot, choice, frame, up)
+        faces, working = wanted(snapshot, choice, frame, up, git.line)
         git.watch(filter(None, (folder_of(w, snapshot) for w in snapshot.get("workspaces") or [])))
         want = {key: {TOKEN: text} for key, text in faces.items()}
         branches, children_working = trees(snapshot, choice, frame)
