@@ -1,0 +1,24 @@
+{
+  "description": "lazygit's settings: Ctrl-Space selects, the mouse stays with the terminal, white text",
+  "role": "core",
+  "platforms": ["macos", "linux"],
+  "overridden_by": {"Library/Application Support/lazygit/config.yml": ["macos"]},
+  "dependencies": [
+    {
+      "command": "lazygit",
+      "required": true,
+      "hint": {
+        "macos": "brew install lazygit",
+        "linux": "sudo apt install lazygit, or your distribution's lazygit package; where there is none: https://github.com/jesseduffield/lazygit#installation"
+      }
+    },
+    {
+      "command": "git",
+      "required": true,
+      "hint": {
+        "macos": "xcode-select --install, or brew install git",
+        "linux": "sudo apt install git"
+      }
+    }
+  ]
+}

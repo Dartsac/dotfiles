@@ -28,8 +28,7 @@ def subdirectories(path):
 
 def projects(home):
     candidates = []
-    for root in (home / "repos", home / ".config",
-                 home / "dotfiles/lazygit/Library/Application Support"):
+    for root in (home / "repos", home / ".config"):
         candidates.extend(subdirectories(root))
     for app in subdirectories(home / "work/applications"):
         candidates.extend(path for path in subdirectories(app)

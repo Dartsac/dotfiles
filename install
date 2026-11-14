@@ -7,7 +7,8 @@
 
 For each package it creates the shared directories stow must not link whole
 (~/.config, ~/Library/Application Support, ...), stows the package with its
-flags, and names each dependency that is not installed, with a hint. It never
+flags, and names each dependency that is not installed, with a hint. It also
+names any file the tool would read instead of the package's. It never
 installs software and never replaces a real file: when one is in the way,
 stow says so and ./install exits non-zero. Undo with `stow -D <package>`.
 
@@ -23,6 +24,10 @@ links a package's top-level README.*):
   stow_flags      extra stow options, such as ["--no-folding"] (optional)
   platform_paths  top-level paths stowed only on some platforms, such as
                   {"Library": ["macos"]} (optional)
+  overridden_by   paths in the home directory that, where one exists, the
+                  tool reads instead of the package's, such as
+                  {"Library/Application Support/tool/config": ["macos"]}
+                  (optional)
 """
 
 import json
@@ -121,6 +126,13 @@ def report_missing(name, manifest):
         print(f"  {dep['command']} ({need}): {hint}")
 
 
+def report_overridden(name, manifest):
+    paths = manifest.get("overridden_by", {})
+    found = [path for path, platforms in paths.items() if THIS_PLATFORM in platforms and (HOME / path).exists()]
+    for path in found:
+        print(f"{name}: its tool reads ~/{path} instead of this package; move that file away to use the package")
+
+
 def main(args):
     if "-h" in args or "--help" in args:
         print(__doc__.strip())
@@ -140,6 +152,7 @@ def main(args):
     failed = [name for name in names if not stow(name, known[name])]
     for name in names:
         report_missing(name, known[name])
+        report_overridden(name, known[name])
     return 1 if failed else 0
 
 

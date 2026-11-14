@@ -7,4 +7,4 @@ set -eu
 sudo=
 [ "$(id -u)" = 0 ] || sudo=sudo
 $sudo apt-get update
-$sudo apt-get install -y stow direnv eza
+$sudo apt-get install -y stow direnv eza lazygit git

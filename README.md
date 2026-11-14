@@ -10,7 +10,8 @@
 `./install` creates shared directories such as `~/.config` first, so stow
 never links one whole into a package, stows each package with the flags it
 needs, and names each dependency you have not installed, with an install
-hint. It never installs software and never replaces a real file: when one is
+hint. It also names any file the tool would read instead of the package's. It
+never installs software and never replaces a real file: when one is
 in the way, it stops with stow's message. Owner packages (herdr, pi,
 hammerspoon) need `--force`. Undo with `stow -D <package>`.
 
@@ -50,6 +51,13 @@ links that path to its `.config` directory and lists it under
 `platform_paths` in its manifest, so `./install` stows it on macOS only. The
 standalone check is what shows whether a tool needs this.
 
+lazygit reads `~/.config/lazygit` on macOS too, but only while
+`~/Library/Application Support/lazygit` holds no `config.yml`, and lazygit
+creates an empty one there the first time it runs without a config. The
+lazygit package lists that file under `overridden_by` in its manifest, so
+`./install lazygit` names it when it exists. Move it away then; lazygit keeps
+its state, such as `state.yml`, in that folder, so leave the rest.
+
 ## gnu stow naming convention
 
     1.	Root Directory: Your dotfiles directory contains subdirectories for each package (e.g., nvim, tmux).
@@ -60,7 +68,7 @@ standalone check is what shows whether a tool needs this.
 | dotfile                               | gnu stow                                    |
 | ------------------------------------- | ------------------------------------------- |
 | ~/.config/nvim                        | nvim/.config/nvim                           |
-| ~/Library/Application Support/lazygit | lazygit/Library/Application Support/lazygit |
+| ~/.config/lazygit                     | lazygit/.config/lazygit                     |
 | ~/.gitconfig                          | git/.gitconfig                              |
 
 | Command                         | Effect                                                                            |

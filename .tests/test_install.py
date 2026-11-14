@@ -148,6 +148,24 @@ class InstallTest(unittest.TestCase):
         self.assertTrue((self.home / "Library/Application Support/here/rc").exists())
         self.assertFalse((self.home / "Library/Application Support/there").exists())
 
+    def test_names_a_file_the_tool_reads_instead_of_the_package_and_leaves_it(self):
+        other = next(p for p in HINTS if p != PLATFORM)
+        self.package("alpha", {".config/alpha/alpharc": ""},
+                     overridden_by={"Library/alpha/alpharc": [PLATFORM], "Library/alpha/elsewhere": [other],
+                                    "Library/alpha/absent": [PLATFORM]})
+        for name in ("alpharc", "elsewhere"):
+            (self.home / "Library/alpha").mkdir(parents=True, exist_ok=True)
+            (self.home / "Library/alpha" / name).write_text("mine\n")
+
+        result = self.install("alpha")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue((self.home / ".config/alpha/alpharc").exists())
+        named = [line for line in result.stdout.splitlines() if "Library/alpha/" in line]
+        self.assertEqual(len(named), 1, result.stdout)
+        self.assertIn("~/Library/alpha/alpharc", named[0])
+        self.assertEqual((self.home / "Library/alpha/alpharc").read_text(), "mine\n")
+
     def test_stops_with_stows_message_and_keeps_a_real_file_where_a_link_would_go(self):
         self.package("alpha", {".config/alpha/alpharc": "tracked\n"})
         mine = self.home / ".config/alpha/alpharc"
@@ -232,6 +250,9 @@ class ManifestsTest(unittest.TestCase):
                 self.assertTrue(platforms and set(platforms) <= {"macos", "linux"}, platforms)
                 if manifest["role"] == "core":
                     self.assertEqual(sorted(platforms), ["linux", "macos"], "a core package is promised on both")
+                for field in ("platform_paths", "overridden_by"):
+                    for path, path_platforms in manifest.get(field, {}).items():
+                        self.assertTrue(path_platforms and set(path_platforms) <= set(platforms), f"{field}: {path}")
                 for dep in manifest["dependencies"]:
                     self.assertIsInstance(dep["required"], bool, dep["command"])
                     for platform_name in platforms:
