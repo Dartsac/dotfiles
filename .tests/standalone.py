@@ -517,6 +517,21 @@ def run_tmux(machine, env, *args, what=None, timeout=TMUX_START_TIMEOUT):
     return run(["tmux", *args], env, machine.home, what or f"tmux {args[0]}", timeout=timeout)
 
 
+def stop_tmux(machine, env):
+    """Stop the tmux server and wait until it has gone. kill-server returns
+    while the server is still closing its sessions, and a tmux started then
+    reaches the old server as it exits: "server exited unexpectedly"."""
+    run_tmux(machine, env, "kill-server")
+    deadline = time.monotonic() + TMUX_START_TIMEOUT
+    while time.monotonic() < deadline:
+        listing = subprocess.run(["tmux", "list-sessions"], env=env, cwd=machine.home, stdin=subprocess.DEVNULL,
+                                 capture_output=True, text=True)
+        if listing.returncode != 0 and re.search("no server running|error connecting", listing.stderr):
+            return
+        time.sleep(0.1)
+    raise Failed(f"tmux's server was still running {TMUX_START_TIMEOUT}s after kill-server")
+
+
 def attach_tmux(machine, env, what, wait_for):
     """Attach to the tmux server in a terminal of its own and, once its screen
     holds `wait_for`, detach with the package's prefix (Ctrl-t, then d). tmux
@@ -650,7 +665,7 @@ def check_tmux(machine):
         attach_tmux(machine, env, "tmux attach after its first start", DRACULA_CURRENT_WINDOW)
         fail_unless_prefix_o_opens(machine, env, opener_log)
         fail_unless_prefix_ctrl_f_offers_projects(machine, env)
-        run_tmux(machine, env, "kill-server")
+        stop_tmux(machine, env)
 
         # A local override that colors the current window grey, and sets
         # again the last setting tmux.conf makes.
