@@ -171,6 +171,10 @@ class PreCommitHookTest(ThrowawayRepo):
     def setUp(self):
         super().setUp()
         shutil.copy2(THEME_SYNC, self.repo / "theme-sync")
+        # The rules the hook's ruff goes by. Without them a ruff that is
+        # installed here applies its own defaults, which fault the sample files
+        # below before the hook reaches the tests it is asked about.
+        shutil.copy2(THEME_SYNC.parent / "ruff.toml", self.repo / "ruff.toml")
         loader = SourceFileLoader("theme_sync", str(THEME_SYNC))
         module = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
         loader.exec_module(module)
