@@ -20,9 +20,9 @@ docker run --rm -v "$repo":/dotfiles:ro "$image" sh -c '
     set -eu
     export DEBIAN_FRONTEND=noninteractive
     sh /dotfiles/.tests/ubuntu-deps.sh >/dev/null 2>&1
-    # The tests themselves need git and python3. The runner image has both;
-    # a bare container has neither.
-    apt-get install -y -qq git python3 >/dev/null 2>&1
+    # The tests themselves need git, python3, and ps and pkill (procps). The
+    # runner image has them all; a bare container has none.
+    apt-get install -y -qq git python3 procps >/dev/null 2>&1
     useradd -m runner
     su runner -c "git config --global --add safe.directory /dotfiles &&
         cd /dotfiles &&

@@ -49,6 +49,9 @@ COLOR_CODE = re.compile(r"\x1b\[[0-9;]*m")
 # (2.37.1) print these even when DIRENV_LOG_FORMAT is empty, so they are
 # expected rather than silenced.
 DIRENV_REPORTS = re.compile(r"direnv: (loading|using|export) ")
+# How long a command may run when its check names no time of its own. One that
+# hangs then fails, and says what it left running, instead of stopping the run.
+RUN_TIMEOUT = 120
 # run_in_terminal: the terminal's rows and columns, how long without output
 # means the tool has finished drawing, and how long it may run in all.
 TERMINAL_SIZE = (40, 160)
@@ -188,20 +191,49 @@ def fail_unless_clean(what, status, output, error_output, reports=None):
         raise Failed(f"{what}: exit {status}\n{output}{error_output}".rstrip())
 
 
-def run(args, env, cwd, what, reports=None, timeout=None):
-    """Run a command; fail on a non-zero exit or any error output, or when it
-    runs longer than `timeout` seconds. A tool that reports its normal
-    progress as error output names those lines in `reports`."""
+def still_running(pid, home):
+    """The command lines of what a command that ran out of time has left
+    running: process `pid` and everything it started, and everything started
+    from the machine's `home`. A server the command started, such as tmux's,
+    is no child of it, but its command line or one below it names a file
+    there. Empty where there is no ps."""
     try:
-        result = subprocess.run(args, env=env, cwd=cwd, stdin=subprocess.DEVNULL, capture_output=True, text=True,
-                                timeout=timeout)
-    except subprocess.TimeoutExpired as expired:
-        # What it had written so far: text or bytes, depending on the Python.
-        written = [text if isinstance(text, str) else (text or b"").decode(errors="replace")
-                   for text in (expired.stdout, expired.stderr)]
-        raise Failed(f"{what}: still running after {timeout}s\n{''.join(w[-3000:] for w in written)}".rstrip())
-    fail_unless_clean(what, result.returncode, result.stdout, result.stderr, reports)
-    return result.stdout
+        listed = subprocess.run(["ps", "-A", "-o", "pid=,ppid=,args="], capture_output=True, text=True).stdout
+    except OSError:
+        return []
+    processes = {}
+    for line in listed.splitlines():
+        fields = line.split(None, 2)
+        if len(fields) == 3:
+            processes[int(fields[0])] = (int(fields[1]), fields[2])
+    found = {p for p, (_, command) in processes.items() if p == pid or home in command}
+    while True:
+        children = {p for p, (parent, _) in processes.items() if parent in found} - found
+        if not children:
+            return [processes[p][1][:300] for p in sorted(found)]
+        found |= children
+
+
+def run(args, env, cwd, what, reports=None, timeout=RUN_TIMEOUT):
+    """Run a command; fail on a non-zero exit or any error output, or when it
+    runs longer than `timeout` seconds, naming what is still running then. A
+    tool that reports its normal progress as error output names those lines
+    in `reports`."""
+    with subprocess.Popen(args, env=env, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, text=True) as process:
+        try:
+            output, error_output = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired as expired:
+            running = still_running(process.pid, env.get("HOME") or str(cwd))  # before the kill orphans its children
+            process.kill()
+            # What it had written so far: text or bytes, depending on the Python.
+            written = [text if isinstance(text, str) else (text or b"").decode(errors="replace")
+                       for text in (expired.stdout, expired.stderr)]
+            lines = [f"{what}: still running after {timeout}s", "".join(w[-3000:] for w in written).rstrip(),
+                     *(f"  running: {command}" for command in running)]
+            raise Failed("\n".join(line for line in lines if line))
+    fail_unless_clean(what, process.returncode, output, error_output, reports)
+    return output
 
 
 def run_in_terminal(args, env, cwd, what, keys, wait_for=None):

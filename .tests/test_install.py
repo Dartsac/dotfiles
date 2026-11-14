@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import subprocess
 import tempfile
@@ -15,6 +16,11 @@ REPO = Path(__file__).resolve().parents[1]
 INSTALL = REPO / "install"
 PLATFORM = {"Darwin": "macos", "Linux": "linux"}[platform.system()]
 HINTS = {"macos": "brew install {}", "linux": "sudo apt install {}"}
+# A script's first line and the program it names: "#!/bin/sh", "#!/usr/bin/env python3".
+SHEBANG = re.compile(r"#!\s*(?:\S*/env\s+(?:-S\s+)?)?(\S+)")
+# Interpreters a manifest need not list: macOS and every mainstream Linux
+# distribution install them with the system.
+PRESENT_EVERYWHERE = {"sh", "bash"}
 
 
 def dependency(command, required=True):
@@ -257,6 +263,28 @@ class ManifestsTest(unittest.TestCase):
                     self.assertIsInstance(dep["required"], bool, dep["command"])
                     for platform_name in platforms:
                         self.assertTrue(dep["hint"].get(platform_name, "").strip(), f"{dep['command']}: no {platform_name} hint")
+
+    @unittest.skipUnless(shutil.which("git"), "needs git")
+    def test_every_script_an_offered_package_tracks_runs_with_a_declared_dependency(self):
+        """The standalone check cannot see a dependency no manifest declares: its
+        machines keep every system tool. A script's interpreter is one it can
+        name: tmux ran a python3 script on every start before its manifest
+        listed python3."""
+        tracked = subprocess.run(["git", "ls-files", "-z"], cwd=REPO, capture_output=True, text=True, check=True)
+        for name, manifest in self.manifests.items():
+            if manifest["role"] == "owner":
+                continue
+            available = PRESENT_EVERYWHERE | {dep["command"] for dep in manifest["dependencies"]}
+            for path in filter(None, tracked.stdout.split("\0")):
+                script = REPO / path
+                if not path.startswith(name + "/") or not script.is_file():
+                    continue
+                with script.open("rb") as file:
+                    interpreter = SHEBANG.match(file.readline().decode(errors="replace"))
+                if interpreter:
+                    with self.subTest(script=path):
+                        self.assertIn(Path(interpreter.group(1)).name, available,
+                                      f"{name}/README.package.json does not list what runs {path}")
 
     def test_every_offered_package_has_a_standalone_check(self):
         spec = importlib.util.spec_from_file_location("standalone", REPO / ".tests/standalone.py")
