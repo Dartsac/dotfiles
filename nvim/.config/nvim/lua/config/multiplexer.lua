@@ -1,9 +1,10 @@
 -- Splits, project sessions and window/pane navigation for the multiplexer that
 -- applies here, chosen as fish's functions/multiplexer.fish chooses it: the
 -- pane's own (herdr via $HERDR_ENV, tmux via $TMUX), otherwise the Default
--- multiplexer ($DEFAULT_MULTIPLEXER, tmux when unset). External processes are
--- started with argument lists; the only shell strings are the fixed /bin/sh
--- script and the fish-quoted pane input below, so paths stay literal.
+-- multiplexer ($DEFAULT_MULTIPLEXER) when installed, else tmux, else herdr.
+-- External processes are started with argument lists; the only shell strings
+-- are the fixed /bin/sh script and the fish-quoted pane input below, so paths
+-- stay literal.
 local M = {}
 
 local function adapted(args)
@@ -32,7 +33,14 @@ function M.current()
 	elseif in_tmux() then
 		return "tmux"
 	end
-	return vim.env.DEFAULT_MULTIPLEXER == "herdr" and "herdr" or "tmux"
+	local by_preference = vim.env.DEFAULT_MULTIPLEXER == "herdr" and { "herdr", "tmux" } or { "tmux", "herdr" }
+	for _, name in ipairs(by_preference) do
+		if vim.fn.executable(name) == 1 then
+			return name
+		end
+	end
+	-- Neither is installed: create_session says tmux is missing.
+	return "tmux"
 end
 
 local function herdr_bin()

@@ -20,7 +20,7 @@ function fish_greeting
         echo "         !.........||||                     ||||"
         echo "         !.........||||  ##                 ||||"
         echo "         !.........||||                     ||||"
-        echo "         !.........||||    hello, isaac     ||||"
+        echo "         !.........||||$(_greeting_hello 21)||||"
         echo "         !.........||||                     ||||"
         echo "         !.........||||                     ||||"
         echo "         `.........||||                    ,||||"
@@ -45,6 +45,51 @@ function fish_greeting
         echo (date +%Y-%m-%d) >$last_run_file
     end
 end
+
+function _greeting_hello --argument-names width
+    # "hello, <name>" centred in `width` columns: greeting_name from
+    # config-local.fish, otherwise the user's login name.
+    set -l name $USER
+    set -q greeting_name; and set name $greeting_name
+    set -l hello (string shorten --max $width -- "hello, $name")
+    set -l length (string length --visible -- $hello)
+    string pad --right --width $width -- (string pad --width (math "$length + floor(($width - $length) / 2)") -- $hello)
+end
+
+# Homebrew, from whichever prefix holds it (Apple Silicon, Intel Mac, Linux)
+# or the one HOMEBREW_PREFIX names (set by a parent shell): the variables
+# `brew shellenv` exports, set without starting brew, per shell rather than as
+# universal variables. Unlike `brew shellenv`, PATH entries already present
+# stay where they are: moving Homebrew to the front in a nested shell would
+# put it ahead of a virtualenv or a project's own tools.
+if not set -q HOMEBREW_PREFIX
+    for prefix in /opt/homebrew /usr/local /home/linuxbrew/.linuxbrew
+        if test -x $prefix/bin/brew
+            set -gx HOMEBREW_PREFIX $prefix
+            break
+        end
+    end
+end
+if set -q HOMEBREW_PREFIX
+    set -q HOMEBREW_CELLAR; or set -gx HOMEBREW_CELLAR $HOMEBREW_PREFIX/Cellar
+    if not set -q HOMEBREW_REPOSITORY
+        # Intel Macs and Linux keep Homebrew's own repository in a subfolder.
+        set -gx HOMEBREW_REPOSITORY $HOMEBREW_PREFIX
+        test -d $HOMEBREW_PREFIX/Homebrew; and set HOMEBREW_REPOSITORY $HOMEBREW_PREFIX/Homebrew
+    end
+    fish_add_path --path $HOMEBREW_PREFIX/bin $HOMEBREW_PREFIX/sbin
+    # An empty entry (a trailing colon) keeps info's own folders.
+    set -q INFOPATH; or set -gx INFOPATH ''
+    contains -- $HOMEBREW_PREFIX/share/info $INFOPATH
+    or set -gx INFOPATH $HOMEBREW_PREFIX/share/info $INFOPATH
+end
+set -gx HOMEBREW_NO_ASK 1
+
+# fish_add_path skips entries already present, so nested shells (tmux, Neovim)
+# don't stack duplicates, and folders that don't exist. --path edits $PATH
+# only, never the universal fish_user_paths.
+fish_add_path --path ~/bin
+fish_add_path --path ~/.local/bin
 
 # theme
 set -g theme_color_scheme terminal-dark
@@ -96,9 +141,12 @@ set -gx SHELL (command -s fish)
 set -g fish_key_bindings fish_default_key_bindings
 
 # Multiplexer shortcuts act on the multiplexer that applies here (functions/
-# multiplexer.fish): the pane's own, else the Default multiplexer. A herdr
-# workspace corresponds to a per-project tmux session, so ks closes the
-# workspace. `dev` lives in functions/dev.fish.
+# multiplexer.fish): the pane's own, else the Default multiplexer, else tmux.
+# With none installed, `multiplexer` says so and fails: no case matches, so
+# the shortcut does nothing and fails too (a switch that matches nothing
+# keeps the status of its command substitution). A herdr workspace
+# corresponds to a per-project tmux session, so ks closes the workspace.
+# `dev` lives in functions/dev.fish.
 function ke --description 'stop the multiplexer server and every pane in it; start empty next time'
     switch (multiplexer)
         case herdr
@@ -120,8 +168,8 @@ function ks --description 'close the current session (herdr: workspace)'
             tmux kill-session $argv
     end
 end
-# (not `ls`: that name is taken by the eza alias on macOS, and on Linux it
-# would turn `ls`, `la`, `ll` and `lla` into tmux commands)
+# (not `ls`: that name is taken by the eza alias, and without eza it would
+# turn `ls`, `la`, `ll` and `lla` into tmux commands)
 function tls --description 'list sessions (herdr: workspaces)'
     switch (multiplexer)
         case herdr
@@ -156,6 +204,24 @@ alias lla "ll -A"
 alias lg lazygit
 alias g git
 
+# eza in place of ls. Interactive conveniences only: defining these costs
+# ~80 ms in every non-interactive `fish -c` (Neovim's system(), scripts).
+if status is-interactive; and command -q eza
+    # ld — lists only directories (no files)
+    alias ld "eza -lD"
+    # lf — lists only files (no directories)
+    # (-f already excludes directories; a `| grep` here would receive $argv)
+    alias lf "eza -lf --color=always"
+    # lh — lists only hidden files (no directories)
+    alias lh "eza -dl .* --group-directories-first"
+    # ll — lists everything with directories first
+    alias ll "eza -al --icons=always --group-directories-first"
+    # ls — lists only files sorted by size
+    alias ls "eza -alfr --icons=always --color=always --sort=size"
+    # lt — lists everything sorted by time updated
+    alias lt "eza -alr --sort=modified"
+end
+
 function v
     if test (count $argv) -eq 0
         nvim
@@ -164,70 +230,46 @@ function v
     end
 end
 
-command -qv nvim && alias vim nvim
+if command -q nvim
+    alias vim nvim
+    set -gx EDITOR nvim
+end
 
 bind \cf sessionizer
 
-set -gx EDITOR nvim
+# Go and bun, where installed. Appended (after /usr/bin, Homebrew): anything
+# `go install` or `bun install -g` drops there can't stand in for a system
+# command. --move also re-orders shells that inherited the old order (open
+# tmux panes).
+if command -q go
+    set -q GOPATH; or set -gx GOPATH $HOME/go
+    fish_add_path --path --append --move $GOPATH/bin
+end
+if test -d ~/.bun
+    set -gx BUN_INSTALL ~/.bun
+    fish_add_path --path --append --move $BUN_INSTALL/bin
+end
 
-# fish_add_path skips entries already present, so nested shells (tmux, Neovim)
-# don't stack duplicates. --path edits $PATH only, never the universal
-# fish_user_paths.
-fish_add_path --path ~/bin
-fish_add_path --path ~/.local/bin
-
-# homebrew (exported per shell: a universal variable is rewritten to disk on
-# every start)
-set -gx HOMEBREW_NO_ASK 1
-
-#Python@3.11 (universal, so it only needs setting once; rewriting it on every
-# start costs ~30 ms)
-contains /opt/homebrew/opt/python@3.11/libexec/bin $fish_user_paths
-or set -Ux fish_user_paths /opt/homebrew/opt/python@3.11/libexec/bin $fish_user_paths
-
-# Go
-set -gx GOPATH $HOME/go
-# Appended (after /usr/bin, Homebrew): anything `go install` drops here can't
-# stand in for a system command. --move also re-orders shells that inherited
-# the old order (open tmux panes).
-fish_add_path --path --append --move $GOPATH/bin
-
-# NVM
+# NVM (nvm.fish, in functions/): once it has installed a Node
 function __nvm_auto_use --on-variable PWD --description 'Run `nvm use` when entering a directory with .nvmrc'
     status --is-command-substitution; and return
 
-    if test -f .nvmrc; and test -r .nvmrc
+    if test -f .nvmrc; and test -r .nvmrc; and test -d "$nvm_data"
         nvm use
     end
 end
 
-# Per-OS config; only config-osx.fish exists so far, so skip missing ones
-# instead of erroring on every Linux/other start.
-switch (uname)
-    case Darwin
-        set os_config config-osx.fish
-    case Linux
-        set os_config config-linux.fish
-    case '*'
-        set os_config config-windows.fish
-end
-set os_config (dirname (status --current-filename))/$os_config
-test -f $os_config && source $os_config
-set -e os_config
+# Tide's prompt settings are universal variables. A machine that has none yet
+# gets tide-theme.fish: Tide's Lean style in the free Dracula colors.
+set -q tide_left_prompt_items
+or source (dirname (status --current-filename))/tide-theme.fish
 
+# This machine's own settings (config-local.example.fish shows some), kept
+# out of git.
 set LOCAL_CONFIG (dirname (status --current-filename))/config-local.fish
 if test -f $LOCAL_CONFIG
     source $LOCAL_CONFIG
 end
-# local::lib only exports variables; a shell started from another shell (Neovim,
-# tmux, scripts) inherits them, so skip the ~13 ms perl start there.
-if not set -q PERL_LOCAL_LIB_ROOT
-    eval "$(perl -I$HOME/perl5/lib/perl5 -Mlocal::lib=$HOME/perl5)"
-end
-
-# bun
-set --export BUN_INSTALL "$HOME/.bun"
-fish_add_path --path --append --move $BUN_INSTALL/bin # same reason as Go
 
 # Only absolute PATH entries: a relative one (bin, node_modules/.bin) is a
 # different folder in every directory, so any project could stand in for a
@@ -239,9 +281,21 @@ command -qv direnv && direnv hook fish | source
 # zoxide: `z <name>` jumps to a frequently used folder, `zi` picks one with fzf.
 # (Replaces the jethrokuan/z plugin; its history was imported on 2026-11-05.)
 if status is-interactive; and command -qv zoxide
+    # zoxide copies fish's own cd. An older zoxide (Ubuntu's) reads it from
+    # $__fish_data_dir, where fish 4.1 and newer no longer keep it, and
+    # warns; this copies it from fish itself, as a newer zoxide does.
+    if not functions -q __zoxide_cd_internal; and status list-files functions/cd.fish &>/dev/null
+        status get-file functions/cd.fish | string replace --regex -- '^function cd\s' 'function __zoxide_cd_internal ' | source
+    end
     zoxide init fish | source
-    # `zo <name>`: open the matching folder in Finder (z's old `zo` command)
-    function zo --description 'Open a zoxide match in Finder'
-        set -l dir (zoxide query -- $argv); and open $dir
+    # `zo <name>`: open the matching folder in Finder, or the file manager on
+    # Linux (z's old `zo` command)
+    function zo --description 'Open a zoxide match in the file manager'
+        set -l dir (zoxide query -- $argv); or return
+        if test (uname) = Darwin
+            open $dir
+        else
+            xdg-open $dir
+        end
     end
 end

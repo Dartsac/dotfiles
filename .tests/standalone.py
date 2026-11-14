@@ -10,8 +10,9 @@ For each package it copies this working tree as a fresh clone would see it
 directory, runs `./install <package>` with a clean environment whose PATH
 holds the system tools, stow, and only the package's declared dependencies,
 then starts the tool non-interactively (a full-screen tool, such as lazygit,
-in a terminal of its own, where the check types the key that quits it). Any
-exit status other than 0, and any error output, fails the check.
+or an interactive shell, in a terminal of its own, where the check types the
+keys that quit it). Any exit status other than 0, and any error output,
+fails the check.
 
 Then, for each declared dependency, it runs `./install <package>` again into
 another empty home without that dependency on PATH, and checks that ./install
@@ -53,12 +54,26 @@ DIRENV_REPORTS = re.compile(r"direnv: (loading|using|export) ")
 TERMINAL_SIZE = (40, 160)
 TERMINAL_QUIET = 1.5
 TERMINAL_TIMEOUT = 20
-# What a tool writes to a terminal besides text: colors, cursor moves, modes.
-TERMINAL_CODE = re.compile(r"\x1b(\[[0-9;?]*[ -/]*[@-~]|\][^\x07]*\x07|[()][0-9A-B]|[=>])")
+# What a tool writes to a terminal besides text: colors, cursor moves, modes,
+# and queries and titles (OSC and DCS strings, which end in BEL or ESC \).
+TERMINAL_CODE = re.compile(r"\x1b(\[[0-?]*[ -/]*[@-~]|[\]P][^\x07\x1b]*(\x07|\x1b\\)|[()][0-9A-B]|[=>])")
 # A full-screen tool asks the terminal to report mouse clicks with the first,
 # and draws white text with the second.
 MOUSE_REPORTING_ON = "\x1b[?1000h"
 WHITE_TEXT = "\x1b[37m"
+# What any terminal answers, and the check's terminal too: a Primary Device
+# Attributes query (as a VT220 would) and a cursor position query (the top
+# left corner). fish 4 asks both as it starts and waits up to 10 seconds for
+# the first answer, then warns as error output.
+TERMINAL_REPLIES = [(re.compile(rb"\x1b\[0?c"), b"\x1b[?62;22c"), (re.compile(rb"\x1b\[6n"), b"\x1b[1;1R")]
+# Where Homebrew installs itself: Apple Silicon, Intel Macs, Linux.
+HOMEBREW_PREFIXES = ["/opt/homebrew", "/usr/local", "/home/linuxbrew/.linuxbrew"]
+# Tide's prompt character in the free Dracula theme's green (#50FA7B), as fish
+# draws it in a terminal that shows 24-bit color.
+DRACULA_PROMPT_CHARACTER = (re.compile("\x1b\\[38;2;80;250;123m[^\x1b]*❯".encode()),
+                            "Tide prompt character in Dracula green")
+# The commands that act on tmux (or herdr, the owner's multiplexer).
+MULTIPLEXER_SHORTCUTS = ["ke", "ks", "tls", "a", "d", "dev", "sessionizer"]
 # nvim-treesitter reports each step of a parser install as error output
 # ("[nvim-treesitter/install/lua]: Compiling parser"); its errors read
 # "[nvim-treesitter/install/lua] error: ..." and are not matched.
@@ -167,10 +182,14 @@ def run(args, env, cwd, what, reports=None, timeout=None):
     return result.stdout
 
 
-def run_in_terminal(args, env, cwd, what, keys):
+def run_in_terminal(args, env, cwd, what, keys, wait_for=None):
     """Run a full-screen tool in a terminal of its own: once it has drawn its
-    screen and gone quiet, type `keys`, which must make it exit. Fail on a
-    non-zero exit or any error output; return what it drew on the terminal."""
+    screen and gone quiet, type `keys`, which must make it exit. A tool that
+    goes quiet before its screen is complete (fish draws Tide's prompt once a
+    background job has worked it out) names in `wait_for` what the screen must
+    hold first: a pattern and what it stands for. The terminal answers the
+    queries in TERMINAL_REPLIES. Fail on a non-zero exit, any error output, or
+    a screen that never holds it; return what it drew on the terminal."""
     leader, follower = pty.openpty()
     fcntl.ioctl(follower, termios.TIOCSWINSZ, struct.pack("HHHH", *TERMINAL_SIZE, 0, 0))
 
@@ -179,6 +198,7 @@ def run_in_terminal(args, env, cwd, what, keys):
         fcntl.ioctl(0, termios.TIOCSCTTY, 0)
 
     drawn, typed = b"", False
+    answered = [0] * len(TERMINAL_REPLIES)
     deadline = time.monotonic() + TERMINAL_TIMEOUT
     # Error output goes to a file, apart from the screen. A file never fills
     # up and blocks the tool, as an unread pipe would.
@@ -194,7 +214,12 @@ def run_in_terminal(args, env, cwd, what, keys):
                         drawn += os.read(leader, 65536)
                     except OSError:  # the tool closed the terminal
                         break
-                elif drawn and not typed:
+                    for i, (query, reply) in enumerate(TERMINAL_REPLIES):
+                        asked = len(query.findall(drawn))
+                        if asked > answered[i]:
+                            os.write(leader, reply * (asked - answered[i]))
+                            answered[i] = asked
+                elif drawn and not typed and (wait_for is None or wait_for[0].search(drawn)):
                     os.write(leader, keys)
                     typed = True
             status = process.wait(timeout=max(0, deadline - time.monotonic()))
@@ -208,6 +233,9 @@ def run_in_terminal(args, env, cwd, what, keys):
         error_output = error_file.read().decode(errors="replace")
     screen = drawn.decode(errors="replace")
     text = TERMINAL_CODE.sub("", screen)
+    if status is None and not typed and wait_for:
+        raise Failed(f"{what}: no {wait_for[1]} after {TERMINAL_TIMEOUT}s; the terminal showed:\n"
+                     f"{text}{error_output}".rstrip())
     if status is None:
         raise Failed(f"{what}: still running after {TERMINAL_TIMEOUT}s\n{text}{error_output}".rstrip())
     fail_unless_clean(what, status, text, error_output)
@@ -237,6 +265,88 @@ def check_eza(machine):
     listing = run(["eza", "--icons=always", "--color=always", str(folder)], machine.env, machine.home, "eza")
     if "\uf1c1" not in listing:
         raise Failed(f"eza did not read theme.yml: no document icon for diagram.puml in {listing!r}")
+
+
+def check_fish_first_start(machine, what, env):
+    """Start fish as a terminal does, an interactive login shell, on a day
+    it greets the user; once Tide's prompt is drawn in free Dracula colors,
+    type `exit`. Fail on any error output, a prompt that never comes, or a
+    greeting without the user's name."""
+    (machine.home / ".config/fish/fish_greeting_last_run").write_text("2000-01-01\n")
+    terminal = dict(env, TERM="xterm-256color", COLORTERM="truecolor")
+    screen = run_in_terminal(["fish", "--login"], terminal, machine.home, what, keys=b"exit\r",
+                             wait_for=DRACULA_PROMPT_CHARACTER)
+    text = TERMINAL_CODE.sub("", screen)
+    greeting = f"hello, {env['USER']}"
+    if greeting not in text:
+        raise Failed(f"{what}: the greeting does not say {greeting!r}; the terminal showed:\n{text}".rstrip())
+
+
+def forgetting_fish_state(check):
+    """fish keeps its settings (Tide's among them) and the greeting's date in
+    ~/.config/fish, which is the clone: remove what a check left there, so the
+    next machine starts fresh."""
+    def checked(machine):
+        folder = machine.clone / "fish/.config/fish"
+        before = set(folder.rglob("*"))
+        try:
+            check(machine)
+        finally:
+            for path in sorted(set(folder.rglob("*")) - before, reverse=True):
+                if path.is_dir() and not path.is_symlink():
+                    path.rmdir()
+                else:
+                    path.unlink()
+    return checked
+
+
+def fail_unless_fish_only_says(machine, env, command, expected, what):
+    """Run `command` in an interactive fish. It must fail, saying one line of
+    error output that holds `expected`, and nothing else. Not a login shell:
+    on macOS a login fish adds the real /usr/local/bin and /usr/bin
+    (/etc/paths) to PATH, and a command run here must find only the machine's
+    own tools."""
+    result = subprocess.run(["fish", "--interactive", "--command", command], env=env, cwd=machine.home,
+                            stdin=subprocess.DEVNULL, capture_output=True, text=True)
+    lines = result.stderr.strip().splitlines()
+    if result.returncode == 0 or result.stdout or len(lines) != 1 or expected not in lines[0]:
+        raise Failed(f"{what}: exit {result.returncode}; expected one line holding {expected!r}\n"
+                     f"{result.stdout}{result.stderr}".rstrip())
+
+
+@forgetting_fish_state
+def check_fish(machine):
+    check_fish_first_start(machine, "fish's first start", machine.env)
+    output = run(["fish", "--login", "--interactive", "--command",
+                  "printf 'brew=%s\\n' (command -s brew); functions ls | string match -q '*eza *'; and echo ls=eza; "
+                  "set -q VIRTUAL_ENV_DISABLE_PROMPT; and echo virtualenv=tide; true"],
+                 machine.env, machine.home, "fish --login --interactive")
+    homebrew = next((p for p in HOMEBREW_PREFIXES if os.access(f"{p}/bin/brew", os.X_OK)), None)
+    if homebrew and f"brew={homebrew}/bin/brew" not in output.splitlines():
+        raise Failed(f"fish did not put Homebrew ({homebrew}) on PATH:\n{output}".rstrip())
+    if "ls=eza" not in output.splitlines():
+        raise Failed("fish did not alias ls to eza with eza installed")
+    # Otherwise a Python virtualenv puts its own name before Tide's prompt,
+    # which already shows it.
+    if "virtualenv=tide" not in output.splitlines():
+        raise Failed("fish's first start did not leave a virtualenv's name to Tide (VIRTUAL_ENV_DISABLE_PROMPT)")
+    # tmux is installed, but its sessionizer script is not part of this package.
+    fail_unless_fish_only_says(machine, machine.env, "sessionizer", "tmux-sessionizer.sh",
+                               "fish's sessionizer with tmux but no sessionizer script")
+
+
+@forgetting_fish_state
+def check_fish_with_required_only(machine):
+    """Without tmux, herdr or Homebrew (HOMEBREW_PREFIX, which fish takes
+    from its environment as a nested shell would, names a folder without it,
+    so no Homebrew tool joins PATH), nor the optional tools: fish starts
+    cleanly, and each multiplexer shortcut says in one line that no
+    multiplexer is installed."""
+    env = dict(machine.env, HOMEBREW_PREFIX=str(machine.root / "no-homebrew"))
+    check_fish_first_start(machine, "fish's first start with only fish", env)
+    for shortcut in MULTIPLEXER_SHORTCUTS:
+        fail_unless_fish_only_says(machine, env, shortcut, "no multiplexer installed",
+                                   f"fish's {shortcut} without tmux or herdr")
 
 
 def check_lazygit(machine):
@@ -341,10 +451,11 @@ def check_nvim_with_required_only(machine):
     fail_unless_plugins_ready(what, report)
 
 
-CHECKS = {"direnv": check_direnv, "eza": check_eza, "lazygit": check_lazygit, "nvim": check_nvim}
+CHECKS = {"direnv": check_direnv, "eza": check_eza, "fish": check_fish, "lazygit": check_lazygit,
+          "nvim": check_nvim}
 # For a package with optional dependencies: its tool on a machine that has
 # only the required ones.
-REQUIRED_ONLY_CHECKS = {"nvim": check_nvim_with_required_only}
+REQUIRED_ONLY_CHECKS = {"fish": check_fish_with_required_only, "nvim": check_nvim_with_required_only}
 
 
 def manifests():
@@ -409,6 +520,9 @@ class Machine:
             "USER": os.environ.get("USER", "adopter"),
             "LOGNAME": os.environ.get("USER", "adopter"),
             "TMPDIR": str(root / "tmp"),
+            # A tmux that a check reaches by mistake talks to a server of the
+            # machine's own, never to this user's.
+            "TMUX_TMPDIR": str(root / "tmp"),
         }
 
     def install(self, package):

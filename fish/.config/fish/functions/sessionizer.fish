@@ -5,7 +5,14 @@ function sessionizer --description 'Open or switch to a project in the multiplex
             # also starts the default session if needed and attaches to it.
             python3 ~/.config/herdr/scripts/project-picker.py --attach $argv
         case tmux
-            tmux-sessionizer.sh $argv
+            if command -q tmux-sessionizer.sh
+                tmux-sessionizer.sh $argv
+            else
+                echo "sessionizer: tmux-sessionizer.sh is not on PATH" >&2
+                false
+            end
     end
+    set -l result $status
     commandline -f repaint 2>/dev/null
+    return $result
 end

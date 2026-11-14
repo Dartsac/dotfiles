@@ -6,8 +6,11 @@
 set -eu
 sudo=
 [ "$(id -u)" = 0 ] || sudo=sudo
+# The fish package needs fish 4 or newer: the fish project's own PPA has it.
 $sudo apt-get update
-$sudo apt-get install -y stow direnv eza lazygit git ripgrep curl build-essential
+$sudo apt-get install -y software-properties-common
+$sudo add-apt-repository -y ppa:fish-shell/release-4
+$sudo apt-get install -y stow direnv eza fish tmux zoxide lazygit git ripgrep curl build-essential
 
 # Ubuntu's neovim and tree-sitter-cli are older than nvim needs (Neovim 0.12,
 # tree-sitter 0.26.1): take each project's latest release, as Homebrew does.

@@ -1,0 +1,47 @@
+{
+  "description": "fish: Tide prompt in Dracula colors, Homebrew on PATH, eza aliases, multiplexer shortcuts",
+  "role": "core",
+  "platforms": ["macos", "linux"],
+  "dependencies": [
+    {
+      "command": "fish",
+      "required": true,
+      "hint": {
+        "macos": "brew install fish",
+        "linux": "fish 4.0 or newer: sudo add-apt-repository ppa:fish-shell/release-4 && sudo apt install fish, or your distribution's fish 4 package"
+      }
+    },
+    {
+      "command": "tmux",
+      "required": false,
+      "hint": {
+        "macos": "brew install tmux (the multiplexer shortcuts, such as dev and a, act on it)",
+        "linux": "sudo apt install tmux (the multiplexer shortcuts, such as dev and a, act on it)"
+      }
+    },
+    {
+      "command": "eza",
+      "required": false,
+      "hint": {
+        "macos": "brew install eza (ls, ll, ld, lf, lh and lt list with eza)",
+        "linux": "sudo apt install eza (ls, ll, ld, lf, lh and lt list with eza)"
+      }
+    },
+    {
+      "command": "zoxide",
+      "required": false,
+      "hint": {
+        "macos": "brew install zoxide (z jumps to a frequently used folder)",
+        "linux": "sudo apt install zoxide (z jumps to a frequently used folder)"
+      }
+    },
+    {
+      "command": "direnv",
+      "required": false,
+      "hint": {
+        "macos": "brew install direnv (loads a project's .envrc)",
+        "linux": "sudo apt install direnv (loads a project's .envrc)"
+      }
+    }
+  ]
+}
