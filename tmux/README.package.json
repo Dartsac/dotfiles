@@ -1,5 +1,5 @@
 {
-  "description": "tmux: plugins install on first start, free Dracula status line, Neovim-aware pane keys, session save and restore",
+  "description": "tmux: plugins install on first start, free Dracula status line, Neovim-aware pane keys, session save and restore, Ctrl-f project sessions",
   "role": "core",
   "platforms": ["macos", "linux"],
   "overridden_by": {".tmux.conf": ["macos", "linux"]},
@@ -24,8 +24,16 @@
       "command": "python3",
       "required": true,
       "hint": {
-        "macos": "xcode-select --install, or brew install python (runs session save and restore)",
-        "linux": "sudo apt install python3 (runs session save and restore)"
+        "macos": "xcode-select --install, or brew install python (runs session save and restore, and the sessionizer on prefix Ctrl-f)",
+        "linux": "sudo apt install python3 (runs session save and restore, and the sessionizer on prefix Ctrl-f)"
+      }
+    },
+    {
+      "command": "fzf",
+      "required": false,
+      "hint": {
+        "macos": "brew install fzf (prefix Ctrl-f picks a project)",
+        "linux": "sudo apt install fzf (prefix Ctrl-f picks a project)"
       }
     }
   ]

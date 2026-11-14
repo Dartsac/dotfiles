@@ -211,8 +211,8 @@ function M.create_session()
 	end
 
 	local cwd = vim.fn.getcwd()
-	-- Named as tmux-sessionizer.sh names it (`basename | tr . _`), so each finds
-	-- the other's session. tmux itself turns ':' into '_' too.
+	-- Named as the tmux package's scripts/sessionizer.py names it, so each finds the
+	-- other's session: . and : become _, as tmux reads them in a target as a pane and a window.
 	local basename = vim.fn.fnamemodify(cwd, ":t"):gsub("[.:]", "_")
 	local session_name = basename ~= "" and basename or "project"
 	local target = "=" .. session_name

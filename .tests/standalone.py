@@ -31,6 +31,7 @@ import platform
 import pty
 import re
 import select
+import shlex
 import shutil
 import struct
 import subprocess
@@ -354,18 +355,25 @@ def forgetting_fish_state(check):
     return checked
 
 
+def fail_unless_only_says(args, env, cwd, expected, what, succeeds=False, timeout=RUN_TIMEOUT):
+    """Run `args`. It must fail (or, with `succeeds`, exit 0), saying one
+    line of error output that holds `expected`, and nothing else."""
+    result = subprocess.run(args, env=env, cwd=cwd, stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                            timeout=timeout)
+    lines = result.stderr.strip().splitlines()
+    if (result.returncode == 0) != succeeds or result.stdout or len(lines) != 1 or expected not in lines[0]:
+        raise Failed(f"{what}: exit {result.returncode}; expected one line holding {expected!r}\n"
+                     f"{result.stdout}{result.stderr}".rstrip())
+
+
 def fail_unless_fish_only_says(machine, env, command, expected, what):
     """Run `command` in an interactive fish. It must fail, saying one line of
     error output that holds `expected`, and nothing else. Not a login shell:
     on macOS a login fish adds the real /usr/local/bin and /usr/bin
     (/etc/paths) to PATH, and a command run here must find only the machine's
     own tools."""
-    result = subprocess.run(["fish", "--interactive", "--command", command], env=env, cwd=machine.home,
-                            stdin=subprocess.DEVNULL, capture_output=True, text=True)
-    lines = result.stderr.strip().splitlines()
-    if result.returncode == 0 or result.stdout or len(lines) != 1 or expected not in lines[0]:
-        raise Failed(f"{what}: exit {result.returncode}; expected one line holding {expected!r}\n"
-                     f"{result.stdout}{result.stderr}".rstrip())
+    fail_unless_only_says(["fish", "--interactive", "--command", command], env, machine.home, expected, what,
+                          timeout=None)
 
 
 @forgetting_fish_state
@@ -384,9 +392,9 @@ def check_fish(machine):
     # which already shows it.
     if "virtualenv=tide" not in output.splitlines():
         raise Failed("fish's first start did not leave a virtualenv's name to Tide (VIRTUAL_ENV_DISABLE_PROMPT)")
-    # tmux is installed, but its sessionizer script is not part of this package.
-    fail_unless_fish_only_says(machine, machine.env, "sessionizer", "tmux-sessionizer.sh",
-                               "fish's sessionizer with tmux but no sessionizer script")
+    # tmux is installed, but its package, which holds the sessionizer, is not stowed.
+    fail_unless_fish_only_says(machine, machine.env, "sessionizer", "stow the tmux package",
+                               "fish's sessionizer with tmux but not the tmux package")
 
 
 @forgetting_fish_state
@@ -540,6 +548,69 @@ def fail_unless_prefix_o_opens(machine, env, opener_log):
         raise Failed(f"tmux's prefix o ({command}) ran {calls}, not {[expected]}")
 
 
+def fail_unless_session_opens(machine, env, args, cwd, name, folder, what):
+    """Run `args` in a terminal: the client must end up in the session
+    `name`, which starts in `folder` and names its window as tmux.conf's
+    automatic-rename-format does. Then detach."""
+    run_in_terminal(args, dict(env, TERM="xterm-256color"), cwd, what, keys=b"\x14d",
+                    wait_for=(re.compile(f" {name} ".encode()), f"status line naming the session {name}"))
+    path, renamed = run_tmux(machine, env, "display-message", "-p", "-t", f"={name}:",
+                             "#{session_path}|#{automatic-rename}").strip().split("|")
+    if path != str(folder):
+        raise Failed(f"{what}: the session {name} starts in {path!r}, not {folder}")
+    if renamed != "1":
+        raise Failed(f"{what}: the session {name}'s window has a fixed name, not tmux.conf's automatic one")
+
+
+def fail_unless_prefix_ctrl_f_offers_projects(machine, env):
+    """prefix C-f's popup runs the tmux package's sessionizer. In a home
+    without a common code folder it says so in one line and exits; in one
+    whose only common code folder is ~/code, it offers that folder's
+    subfolders, and the one chosen in fzf (with --filter, which picks
+    without a keyboard) becomes the session tmux attaches to. A local
+    override lists the projects instead."""
+    binding = run_tmux(machine, env, "list-keys", "-T", "prefix", "C-f").strip()
+    command = shlex.split(binding)[-1] if binding else ""
+    sessionizer = machine.home / ".config/tmux/scripts/sessionizer.py"
+    if command != str(sessionizer):
+        raise Failed(f"tmux's prefix C-f ({binding!r}) does not run the package's sessionizer {sessionizer}")
+    fail_unless_only_says([command], env, machine.home, "no projects",
+                          "the sessionizer in a home without code folders", succeeds=True)
+    for folder in ("code/alpha", "code/beta", "notes", "work/team/app"):
+        (machine.home / folder).mkdir(parents=True)
+    offered = run([command, "--list"], env, machine.home, "the sessionizer's list").splitlines()
+    expected = [str(machine.home / "code/alpha"), str(machine.home / "code/beta")]
+    if offered != expected:
+        raise Failed(f"the sessionizer offered {offered} in a home with ~/code, not {expected}")
+    code = machine.home / "code"
+    fail_unless_session_opens(machine, dict(env, FZF_DEFAULT_OPTS="--exact --filter=code/beta"), [command],
+                              machine.home, "beta", code / "beta", "the sessionizer choosing ~/code/beta")
+    # fish's Ctrl-f passes its arguments on: `sessionizer .` opens the current folder's session.
+    fail_unless_session_opens(machine, env, [command, "."], code / "alpha", "alpha", code / "alpha",
+                              "the sessionizer for . in ~/code/alpha")
+    # Inside tmux, from the popup, it switches the client to the session. tmux
+    # reads a : in a target as the start of a window, and . as a pane: the
+    # session's name has neither. The popup takes its environment from tmux's.
+    (code / "my.app:v2").mkdir()
+    run_tmux(machine, env, "set-environment", "-g", "FZF_DEFAULT_OPTS", "--exact --filter=code/my.app:v2")
+    try:
+        fail_unless_session_opens(machine, env, ["tmux", "attach", "-t", "=alpha", ";", "display-popup", "-E", command],
+                                  machine.home, "my_app_v2", code / "my.app:v2",
+                                  "prefix C-f's popup choosing ~/code/my.app:v2")
+    finally:
+        run_tmux(machine, env, "set-environment", "-gu", "FZF_DEFAULT_OPTS")
+
+    override = machine.clone / "tmux/.config/tmux/projects.local.txt"
+    override.write_text("# This machine's projects\n~/notes 0\n~/code\n!~/code/a*\n!~/code/my*\n~/work/* 1\n")
+    try:
+        offered = run([command, "--list"], env, machine.home, "the sessionizer's list with a local override")
+    finally:
+        override.unlink()
+    expected = [str(machine.home / p) for p in ("code/beta", "notes", "work/team/app")]
+    if offered.splitlines() != expected:
+        raise Failed(f"the sessionizer offered {offered.splitlines()} with a local override, not {expected}")
+
+
 def check_tmux(machine):
     """Start a tmux server as a first start does, cloning the plugin manager
     and the plugins: every plugin tmux.conf lists must be installed and
@@ -578,6 +649,7 @@ def check_tmux(machine):
             raise Failed(f"tmux's pane borders are {border!r}, not the free Dracula theme's {DRACULA_PANE_BORDER!r}")
         attach_tmux(machine, env, "tmux attach after its first start", DRACULA_CURRENT_WINDOW)
         fail_unless_prefix_o_opens(machine, env, opener_log)
+        fail_unless_prefix_ctrl_f_offers_projects(machine, env)
         run_tmux(machine, env, "kill-server")
 
         # A local override that colors the current window grey, and sets
@@ -598,11 +670,21 @@ def check_tmux(machine):
                        timeout=TMUX_START_TIMEOUT)
 
 
+def check_tmux_with_required_only(machine):
+    """Without fzf, the one optional dependency, which only the sessionizer
+    uses: in a home with a project to offer, the sessionizer says in one line
+    that fzf is missing, and fails."""
+    (machine.home / "code/alpha").mkdir(parents=True)
+    fail_unless_only_says([str(machine.home / ".config/tmux/scripts/sessionizer.py")], machine.env, machine.home,
+                          "fzf is not installed", "the sessionizer without fzf")
+
+
 CHECKS = {"direnv": check_direnv, "eza": check_eza, "fish": check_fish, "lazygit": check_lazygit,
           "nvim": check_nvim, "tmux": check_tmux}
 # For a package with optional dependencies: its tool on a machine that has
 # only the required ones.
-REQUIRED_ONLY_CHECKS = {"fish": check_fish_with_required_only, "nvim": check_nvim_with_required_only}
+REQUIRED_ONLY_CHECKS = {"fish": check_fish_with_required_only, "nvim": check_nvim_with_required_only,
+                        "tmux": check_tmux_with_required_only}
 
 
 def manifests():

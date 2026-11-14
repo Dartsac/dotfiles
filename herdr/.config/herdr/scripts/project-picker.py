@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""herdr counterpart to ~/.local/bin/tmux-sessionizer.sh.
+"""herdr's sessionizer, the counterpart of tmux's, offering the same projects
+in the same fzf: the folders ~/.config/tmux/projects.local.txt lists, or else
+the common code folders' subfolders (tmux/.config/tmux/scripts/sessionizer.py).
 
 Inside herdr (Ctrl-t Ctrl-f, or plain Ctrl-f in fish) it opens or focuses the
 chosen project's workspace in the current session. Outside herdr it refuses
@@ -11,54 +13,22 @@ import argparse
 import json
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import time
 
 from herdr_cli import herdr_binary
 
-
-def subdirectories(path):
-    try:
-        return [child for child in path.iterdir() if child.is_dir()]
-    except OSError:
-        return []
-
-
-def projects(home):
-    candidates = []
-    for root in (home / "repos", home / ".config"):
-        candidates.extend(subdirectories(root))
-    for app in subdirectories(home / "work/applications"):
-        candidates.extend(path for path in subdirectories(app)
-                          if path.name not in {"investigations", "exports", "reference"})
-        candidates.extend(subdirectories(app / "investigations"))
-    for group in subdirectories(home / "work/cross-application"):
-        candidates.extend(subdirectories(group))
-    candidates.extend(path for path in (home / "work", home / "work/shared/scripts",
-                                       home / "Documents/vault", home / "dotfiles/pi")
-                      if path.is_dir())
-    return sorted({str(path) for path in candidates})
+# tmux's sessionizer, in this clone: this file is
+# <clone>/herdr/.config/herdr/scripts/project-picker.py.
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tmux/.config/tmux/scripts"))
+from sessionizer import choose, projects  # noqa: E402
 
 
 def choose_project(candidates):
     if not candidates:
         raise RuntimeError("No project directories found.")
-    command = ["fzf", "--read0", "--print0", "--no-multi", "--no-expect",
-               "--no-print-query", "--prompt=Herdr project> "]
-    if shutil.which("tree"):
-        # fzf shell-quotes {} before interpolation, including paths with spaces.
-        command += ["--preview", "tree -L 2 -I 'node_modules|vendor|.git' -- {}"]
-    result = subprocess.run(command, input="\0".join(candidates) + "\0",
-                            stdout=subprocess.PIPE, text=True)
-    if result.returncode in (1, 130):  # No match or user cancellation.
-        return None
-    result.check_returncode()
-    selected = result.stdout.removesuffix("\0")
-    if selected not in candidates:
-        raise RuntimeError("fzf returned an unexpected project selection.")
-    return selected
+    return choose(candidates, prompt="Herdr project> ")
 
 
 def herdr(binary, *args):

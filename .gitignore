@@ -8,6 +8,8 @@ fish/.config/fish/completions/copilot.fish
 nvim/.config/nvim/lua/config/local.lua
 # tmux's local override (example: tmux.local.example.conf)
 tmux/.config/tmux/tmux.local.conf
+# The sessionizer's local list of projects (example: projects.local.example.txt)
+tmux/.config/tmux/projects.local.txt
 
 # Python bytecode (the herdr scripts import herdr_cli.py)
 __pycache__/

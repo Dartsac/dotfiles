@@ -1,0 +1,15 @@
+# Copy to projects.local.txt (git ignores it) to choose the projects the
+# sessionizer (prefix Ctrl-f) offers. Without that file it offers the folders
+# inside ~/repos, ~/projects, ~/code and ~/src.
+#
+# Each line is a folder, then how many levels below it the projects are:
+# 1 when not given (its subfolders), 0 for the folder itself. * matches any
+# name. A line that starts with ! leaves the folders it matches out.
+
+# The folders inside ~/code, and those inside each folder in ~/clients.
+~/code
+~/clients 2
+!~/clients/*/archive
+
+# A project of its own.
+~/Documents/notes 0

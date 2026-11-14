@@ -26,7 +26,7 @@ working tree, runs `./install <package>` into an empty home directory with
 only the package's declared dependencies on PATH, starts the tool, and fails
 on any error. It also removes each dependency in turn and checks that
 `./install` names it with its hint, and starts a tool that has optional
-dependencies (Neovim, fish) once more with only the required ones. The
+dependencies (Neovim, fish, tmux) once more with only the required ones. The
 dependencies must be installed where it runs.
 
 ```sh
