@@ -221,6 +221,45 @@ class PreCommitHookTest(ThrowawayRepo):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("runner ran with --staged", result.stderr)
 
+    def local_herdr_test(self, name, text):
+        """A Herdr test as the owner's checkout has it: on disk, never in git."""
+        path = self.repo / "herdr/.config/herdr/tests" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+
+    def test_hook_runs_herdrs_python_tests_when_a_herdr_file_is_staged(self):
+        self.local_herdr_test("example_test.py", FAILING_TEST)
+
+        result = self.commit_with_hook({"herdr/.config/herdr/faces/faces.py": "\n"})
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("broken on purpose", result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_hook_runs_herdrs_node_tests_when_its_pi_extension_is_staged(self):
+        self.local_herdr_test("example_test.py", FAILING_TEST)  # the Python tests are for the rest of Herdr
+        self.local_herdr_test("example.test.mjs", "throw new Error('node test broken on purpose');\n")
+
+        result = self.commit_with_hook({"herdr/.config/herdr/pi-extension/index.js": "\n"})
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("node test broken on purpose", result.stdout + result.stderr)
+        self.assertNotIn("broken on purpose", (result.stdout + result.stderr).replace("node test broken on purpose", ""))
+
+    def test_hook_runs_herdrs_tests_outside_the_commits_git_environment(self):
+        # Herdr's tests make git repositories of their own; the commit's index must not reach them.
+        self.local_herdr_test("example_test.py", "import os, unittest\nclass T(unittest.TestCase):\n    def test_it(self):\n"
+                              "        self.assertNotIn('GIT_INDEX_FILE', os.environ)\n")
+
+        result = self.commit_with_hook({"herdr/.config/herdr/faces/faces.py": "\n"})
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_hook_lets_a_herdr_commit_through_in_a_checkout_without_herdrs_tests(self):
+        result = self.commit_with_hook({"herdr/.config/herdr/faces/faces.py": "\n", "herdr/.config/herdr/pi-extension/index.js": "\n"})
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

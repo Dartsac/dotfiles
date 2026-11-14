@@ -95,7 +95,7 @@ FREE_DRACULA = {
 HASH_COMMENTS = {".toml", ".yml", ".yaml", ".conf", ".ini", ".fish", ".sh"}
 HOOK = """#!/bin/sh
 # Installed by theme-sync: refuse commits that add Dracula PRO color values,
-# and commits of a root script or pi extension whose tests fail.
+# and commits of a root script, Herdr file or pi extension whose tests fail.
 top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 [ -x "$top/theme-sync" ] || exit 0
 # Checkouts from before the guard existed have a theme-sync without it.
@@ -106,6 +106,19 @@ grep -q -e --check-staged "$top/theme-sync" || exit 0
 if git diff --cached --name-only | grep -q -E '^(theme-sync|install|[^/]*\\.py|\\.tests/.*\\.py|[^/]*/README\\.package\\.json)$' &&
     ls "$top"/.tests/test_*.py >/dev/null 2>&1; then
     output=$(python3 -B -m unittest discover -s "$top/.tests" -p 'test_*.py' 2>&1) || { echo "$output"; exit 1; }
+fi
+# Herdr's tests, when one of its files is staged: the Node tests for its pi
+# extension, the Python tests for the rest. They stay out of git, so a checkout
+# without them skips this. They make git repositories of their own, so they run
+# outside this commit's git environment.
+herdr="$top/herdr/.config/herdr"
+staged=$(git diff --cached --name-only | grep '^herdr/\\.config/herdr/')
+if echo "$staged" | grep -q '/pi-extension/' && command -v node >/dev/null 2>&1 &&
+    ls "$herdr"/tests/*.test.mjs >/dev/null 2>&1; then
+    output=$(unset $(git rev-parse --local-env-vars); node --test "$herdr"/tests/*.test.mjs 2>&1) || { echo "$output"; exit 1; }
+fi
+if echo "$staged" | grep -q -v -e '/pi-extension/' -e '^$' && ls "$herdr"/tests/*_test.py >/dev/null 2>&1; then
+    output=$(unset $(git rev-parse --local-env-vars); python3 -B -m unittest discover -s "$herdr/tests" -p '*_test.py' 2>&1) || { echo "$output"; exit 1; }
 fi
 # Checkouts from before the extension tests existed have no runner.
 [ -f "$top/.tests/pi-extensions.mjs" ] && command -v node >/dev/null 2>&1 || exit 0
