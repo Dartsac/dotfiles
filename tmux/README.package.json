@@ -1,0 +1,32 @@
+{
+  "description": "tmux: plugins install on first start, free Dracula status line, Neovim-aware pane keys, session save and restore",
+  "role": "core",
+  "platforms": ["macos", "linux"],
+  "overridden_by": {".tmux.conf": ["macos", "linux"]},
+  "dependencies": [
+    {
+      "command": "tmux",
+      "required": true,
+      "hint": {
+        "macos": "brew install tmux (3.2 or newer)",
+        "linux": "sudo apt install tmux (3.2 or newer)"
+      }
+    },
+    {
+      "command": "git",
+      "required": true,
+      "hint": {
+        "macos": "xcode-select --install, or brew install git (clones the plugin manager and plugins on first start)",
+        "linux": "sudo apt install git (clones the plugin manager and plugins on first start)"
+      }
+    },
+    {
+      "command": "python3",
+      "required": true,
+      "hint": {
+        "macos": "xcode-select --install, or brew install python (runs session save and restore)",
+        "linux": "sudo apt install python3 (runs session save and restore)"
+      }
+    }
+  ]
+}

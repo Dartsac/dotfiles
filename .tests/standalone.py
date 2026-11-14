@@ -82,6 +82,28 @@ TREESITTER_REPORTS = re.compile(r"\[nvim-treesitter(/install/[\w-]+)?\]: ")
 # Neovim's own visual * and # mappings. Nothing is shown and nothing is
 # broken, but v:errmsg keeps the message.
 SEARCHINDEX_MAPPING = re.compile(r"E227: Mapping already exists for [#*]$")
+# The plugins tmux.conf lists, by the folder TPM installs each into.
+TMUX_PLUGINS = ["tpm", "tmux-sensible", "tmux-yank", "tmux-pane-clarity", "tmux-resurrect", "tmux-continuum"]
+# tmux's status line with the current window in the free Dracula theme's
+# purple (#BD93F9), as tmux draws it in a terminal that shows 24-bit color.
+DRACULA_CURRENT_WINDOW = (re.compile(rb"\x1b\[(?:[0-9;]*;)?48;2;189;147;249m"),
+                          "status line with the current window in Dracula purple")
+# Inactive pane borders in the free Dracula theme's comment color.
+DRACULA_PANE_BORDER = "fg=#6272a4"
+# The current window in grey (#808080), as the check's local override colors it.
+OVERRIDDEN_CURRENT_WINDOW = (re.compile(rb"\x1b\[(?:[0-9;]*;)?48;2;128;128;128m"),
+                             "status line with the current window in the local override's grey")
+# What opens a folder in the file manager on each platform. On Debian and
+# Ubuntu `open` is openvt, which starts a program on a new virtual console.
+FOLDER_OPENERS = {"macos": "open", "linux": "xdg-open"}
+# prefix o runs its opener in the background: how long it may take to start,
+# and then how long a second opener has to show itself.
+OPENER_TIMEOUT = 5
+OPENER_QUIET = 0.5
+# tmux's first start clones the plugin manager and every plugin before it
+# answers.
+TMUX_FIRST_START_TIMEOUT = 300
+TMUX_START_TIMEOUT = 60
 # Neovim's first start clones every plugin and builds every parser; a later
 # start only loads them.
 NVIM_FIRST_START_TIMEOUT = 900
@@ -451,8 +473,101 @@ def check_nvim_with_required_only(machine):
     fail_unless_plugins_ready(what, report)
 
 
+def run_tmux(machine, env, *args, what=None, timeout=TMUX_START_TIMEOUT):
+    return run(["tmux", *args], env, machine.home, what or f"tmux {args[0]}", timeout=timeout)
+
+
+def attach_tmux(machine, env, what, wait_for):
+    """Attach to the tmux server in a terminal of its own and, once its screen
+    holds `wait_for`, detach with the package's prefix (Ctrl-t, then d). tmux
+    shows the errors it met loading its config to the first client that
+    attaches, in view mode: fail when the pane is left in it."""
+    terminal = dict(env, TERM="xterm-256color")
+    screen = run_in_terminal(["tmux", "attach"], terminal, machine.home, what, keys=b"\x14d", wait_for=wait_for)
+    mode = run_tmux(machine, env, "display-message", "-p", "#{pane_mode}")
+    if mode.strip():
+        text = "\n".join(line.strip() for line in TERMINAL_CODE.sub("", screen).splitlines() if line.strip())
+        raise Failed(f"{what}: tmux showed its pane in {mode.strip()}; the terminal showed:\n{text}")
+
+
+def fail_unless_prefix_o_opens(machine, env, opener_log):
+    """Run prefix o's command as tmux runs a key's, in the pane's folder: it
+    must call the platform's folder opener once, on that folder, and nothing
+    else. The openers are stubs that note each call in the file `opener_log`."""
+    binding = run_tmux(machine, env, "list-keys", "-T", "prefix", "o").strip()
+    command = re.sub(r"^bind-key\s+(-r\s+)?-T prefix\s+o\s+", "", binding)
+    (machine.root / "prefix-o.conf").write_text(command + "\n")
+    run_tmux(machine, env, "source-file", str(machine.root / "prefix-o.conf"), what="tmux's prefix o")
+    deadline = time.monotonic() + OPENER_TIMEOUT
+    while not opener_log.exists() and time.monotonic() < deadline:
+        time.sleep(0.1)
+    time.sleep(OPENER_QUIET)  # for a second opener it might also run
+    calls = opener_log.read_text().splitlines() if opener_log.exists() else []
+    expected = f"{FOLDER_OPENERS[PLATFORM]} {machine.home}"
+    if calls != [expected]:
+        raise Failed(f"tmux's prefix o ({command}) ran {calls}, not {[expected]}")
+
+
+def check_tmux(machine):
+    """Start a tmux server as a first start does, cloning the plugin manager
+    and the plugins: every plugin tmux.conf lists must be installed and
+    loaded, and tmux must draw its free Dracula colors without errors and
+    open folders with the platform's opener. Then start it again with a local
+    override, whose settings must win."""
+    # A shell of the machine's own in each pane, not the user's login shell;
+    # and in front of the system's tools, an `open` and an `xdg-open` that
+    # only note how they were called.
+    opener_log, stubs = machine.root / "opener_log", machine.root / "stubs"
+    stubs.mkdir()
+    for command in FOLDER_OPENERS.values():
+        (stubs / command).write_text(f'#!/bin/sh\necho "{command} $*" >> "{opener_log}"\n')
+        (stubs / command).chmod(0o755)
+    env = dict(machine.env, SHELL="/bin/sh", PATH=os.pathsep.join([str(stubs), machine.env["PATH"]]))
+
+    try:
+        run_tmux(machine, env, "new-session", "-d", what="tmux's first start", timeout=TMUX_FIRST_START_TIMEOUT)
+        plugins = machine.home / ".config/tmux/plugins"
+        missing = [name for name in TMUX_PLUGINS if not (plugins / name).is_dir()]
+        if missing:
+            raise Failed(f"tmux's first start did not install {missing} into ~/.config/tmux/plugins")
+        # TPM binds prefix I as it loads, and tmux-pane-clarity records the
+        # folder TPM loaded it from, or the problem it met.
+        if not run_tmux(machine, env, "list-keys", "-T", "prefix", "I").strip():
+            raise Failed("tmux's first start did not load TPM: no prefix I binding")
+        loaded = run_tmux(machine, env, "show-option", "-gqv", "@pane_clarity_dir").strip()
+        if loaded != str(plugins / "tmux-pane-clarity"):
+            raise Failed(f"tmux's first start did not load its plugins: tmux-pane-clarity loaded from {loaded!r}")
+        problem = run_tmux(machine, env, "show-option", "-gqv", "@pane_clarity_error").strip()
+        if problem:
+            raise Failed(f"tmux-pane-clarity reported a problem on tmux's first start: {problem}")
+        # The plugins load last; tmux-pane-clarity sets the border style then.
+        border = run_tmux(machine, env, "show-option", "-gv", "pane-border-style").strip()
+        if border != DRACULA_PANE_BORDER:
+            raise Failed(f"tmux's pane borders are {border!r}, not the free Dracula theme's {DRACULA_PANE_BORDER!r}")
+        attach_tmux(machine, env, "tmux attach after its first start", DRACULA_CURRENT_WINDOW)
+        fail_unless_prefix_o_opens(machine, env, opener_log)
+        run_tmux(machine, env, "kill-server")
+
+        # A local override that colors the current window grey, and sets
+        # again the last setting tmux.conf makes.
+        override = machine.clone / "tmux/.config/tmux/tmux.local.conf"
+        override.write_text("set -g window-status-current-format '#[bg=#808080] #I #W '\n"
+                            "set -s extended-keys off\n")
+        try:
+            run_tmux(machine, env, "new-session", "-d", what="tmux with a local override")
+            attach_tmux(machine, env, "tmux attach with a local override", OVERRIDDEN_CURRENT_WINDOW)
+            extended_keys = run_tmux(machine, env, "show-option", "-sv", "extended-keys").strip()
+            if extended_keys != "off":
+                raise Failed(f"tmux.conf set extended-keys {extended_keys} after the local override set it off")
+        finally:
+            override.unlink()
+    finally:
+        subprocess.run(["tmux", "kill-server"], env=env, stdin=subprocess.DEVNULL, capture_output=True,
+                       timeout=TMUX_START_TIMEOUT)
+
+
 CHECKS = {"direnv": check_direnv, "eza": check_eza, "fish": check_fish, "lazygit": check_lazygit,
-          "nvim": check_nvim}
+          "nvim": check_nvim, "tmux": check_tmux}
 # For a package with optional dependencies: its tool on a machine that has
 # only the required ones.
 REQUIRED_ONLY_CHECKS = {"fish": check_fish_with_required_only, "nvim": check_nvim_with_required_only}
@@ -534,8 +649,13 @@ class Machine:
             "GIT_TERMINAL_PROMPT": "0",
         }
 
+    def install_command(self, package):
+        """./install, run by the check's own Python: python3 is a dependency a
+        package declares (tmux), so a machine has it only for such a package."""
+        return [sys.executable, str(self.clone / "install"), package]
+
     def install(self, package):
-        return subprocess.run([str(self.clone / "install"), package], env=self.env, cwd=self.home,
+        return subprocess.run(self.install_command(package), env=self.env, cwd=self.home,
                               capture_output=True, text=True)
 
     def links(self):
@@ -547,7 +667,7 @@ def check(package, manifest, clone, hidden):
     with tempfile.TemporaryDirectory() as temp:
         machine = Machine(Path(temp).resolve(), clone, commands, hidden)
         # With every dependency present, ./install has nothing to report.
-        reported = run([str(clone / "install"), package], machine.env, machine.home, f"./install {package}")
+        reported = run(machine.install_command(package), machine.env, machine.home, f"./install {package}")
         if reported.strip():
             raise Failed(f"./install {package} reported, with every dependency installed:\n{reported}".rstrip())
         for shared in (".config", "Library", "Library/Application Support"):
