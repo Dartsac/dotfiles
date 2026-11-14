@@ -3,6 +3,10 @@
 The font copies the cell of the terminal font (Hack Nerd Font Mono): same units
 per em, advance width, ascent and descent. A sprite's pixels then fill the cell
 exactly, and three glyphs side by side join into one picture.
+
+The fonts carry no build time, so the same drawings build the same files (with
+the same fontTools): after a rebuild, `git status` shows whether the tracked
+fonts were out of date.
 """
 import os, sys
 from fontTools.fontBuilder import FontBuilder
@@ -11,6 +15,7 @@ from fontTools.ttLib import TTFont
 from fontTools.ttLib.removeOverlaps import removeOverlaps
 from sprites import CHARACTERS, STATES, BASE, W, H
 
+os.environ["SOURCE_DATE_EPOCH"] = "0"       # fontTools stamps the head table with this instead of now
 CELL = 8                                   # sprite pixels per terminal cell
 out_dir = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
 hack = TTFont(os.path.expanduser("~/Library/Fonts/HackNerdFontMono-Regular.ttf"))
