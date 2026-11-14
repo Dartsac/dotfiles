@@ -6,10 +6,11 @@ fish/.config/fish/completions/fabric.fish
 fish/.config/fish/completions/copilot.fish
 # Neovim's local override (example: lua/config/local.example.lua)
 nvim/.config/nvim/lua/config/local.lua
-# tmux's local override (example: tmux.local.example.conf)
-tmux/.config/tmux/tmux.local.conf
-# The sessionizer's local list of projects (example: projects.local.example.txt)
-tmux/.config/tmux/projects.local.txt
+# Every other local override, by its name: <name>.local.<suffix>, beside a
+# tracked <name>.local.example.<suffix> (tmux.local.conf, projects.local.txt).
+# Name a new one this way and git ignores it before its commit reaches main.
+*.local.*
+!*.local.example.*
 
 # Python bytecode (the herdr scripts import herdr_cli.py)
 __pycache__/

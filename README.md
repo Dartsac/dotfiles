@@ -26,8 +26,8 @@ working tree, runs `./install <package>` into an empty home directory with
 only the package's declared dependencies on PATH, starts the tool, and fails
 on any error. It also removes each dependency in turn and checks that
 `./install` names it with its hint, and starts a tool that has optional
-dependencies (Neovim, fish, tmux) once more with only the required ones. The
-dependencies must be installed where it runs.
+dependencies once more with only the required ones. The dependencies must be
+installed where it runs.
 
 ```sh
 python3 .tests/standalone.py        # every package it covers
@@ -37,8 +37,9 @@ python3 .tests/standalone.py eza    # one package
 
 GitHub Actions runs it on macOS and Ubuntu on every push
 (`.github/workflows/standalone.yml`), with `./install`'s own tests
-(`.tests/test_install.py`) and the check's (`.tests/test_standalone.py`: git on
-its machines never reaches your credentials). `.tests/linux.sh` runs that
+(`.tests/test_install.py`), `theme-sync`'s and its pre-commit hook's
+(`.tests/test_theme_sync.py`) and the check's (`.tests/test_standalone.py`: git
+on its machines never reaches your credentials). `.tests/linux.sh` runs that
 Ubuntu job on a Mac: the Ubuntu release the workflow names and the same
 dependencies (`.tests/ubuntu-deps.sh`). Tool versions there differ from
 Homebrew's, so run it before pushing a change that Linux could take
@@ -67,7 +68,9 @@ The repository's Python passes `ruff check`. `ruff.toml` has the rules: names
 that are unused or undefined, and syntax that Python 3.9, macOS's own, cannot
 read. GitHub Actions runs it on every push (`.github/workflows/lint.yml`). The
 pre-commit hook runs it on the staged files where ruff is installed
-(`brew install ruff`), and lets the commit through where it is not.
+(`brew install ruff`), and lets the commit through where it is not. The hook's
+tests run in both workflows: with ruff in `lint.yml`, without it in
+`standalone.yml`.
 
 ## gnu stow naming convention
 

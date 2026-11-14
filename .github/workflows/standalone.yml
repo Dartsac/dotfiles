@@ -34,6 +34,10 @@ jobs:
       - name: ./install
         run: ${{ matrix.python }} -B .tests/test_install.py -v
 
+      # Without ruff on PATH here; lint.yml runs them again with it.
+      - name: theme-sync and the pre-commit hook
+        run: ${{ matrix.python }} -B .tests/test_theme_sync.py -v
+
       - name: The standalone check's machine
         run: ${{ matrix.python }} -B .tests/test_standalone.py -v
 

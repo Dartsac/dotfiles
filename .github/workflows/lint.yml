@@ -1,5 +1,6 @@
 # The repository's Python passes ruff's checks (ruff.toml has the rules). The
-# pre-commit hook runs the same on staged files where ruff is installed.
+# pre-commit hook runs the same on staged files where ruff is installed, so its
+# tests run here too, with ruff on PATH.
 name: lint
 
 on:
@@ -14,5 +15,13 @@ jobs:
       - uses: actions/checkout@v7
 
       # Pinned: a newer ruff may fault what this one passes.
+      - name: Install ruff
+        run: pipx install ruff==0.17.5
+
       - name: ruff check
-        run: pipx run ruff==0.17.5 check
+        run: ruff check
+
+      # standalone.yml runs these without ruff. With it, the hook lints what
+      # each test stages before it reaches the tests the test is about.
+      - name: The pre-commit hook where ruff is installed
+        run: python3 -B .tests/test_theme_sync.py -v
