@@ -180,10 +180,11 @@ export function nestedForeground(eventsRoot, children, doneAt = 0) {
 // else complete. One detached from its call (/subagents-detach) goes on
 // running, marked `detached`, until pi-subagents reports its end
 // (detachedEnded): no tool call holds the parent any more, so the parent's
-// job waits for it as for a background child. What the parent will no longer
-// show (forget) is dropped.
+// job waits for it as for a background child. One the session recorded before
+// a /reload comes back ended (restore). What the parent will no longer show
+// (forget) is dropped.
 export class ForegroundRuns {
-  constructor() { this.calls = new Map(); } // tool call id -> its start time, then its child
+  constructor() { this.calls = new Map(); } // tool call id (or saved:<run id>) -> its start time, then its child
 
   start(event) {
     if (event.toolName === "subagent") this.calls.set(event.toolCallId, { startedAt: Date.now() });
@@ -197,6 +198,7 @@ export class ForegroundRuns {
       name: agent, agent, title: "", state: "running", startedAt: call.startedAt };
   }
 
+  // The run this call ended, if any: not one detached from it, which goes on.
   end(event) {
     const call = this.calls.get(event.toolCallId);
     if (!call) return;
@@ -205,16 +207,21 @@ export class ForegroundRuns {
     if (results.some(r => r.detached)) { call.child.detached = true; return; }
     const failed = event.isError || event.result?.isError || results.some(r => r.exitCode !== undefined && r.exitCode !== 0);
     const state = results.some(r => r.stopped) ? "stopped" : results.some(r => r.interrupted) ? "paused" : failed ? "failed" : "complete";
-    Object.assign(call.child, { state, endedAt: Date.now() });
+    return Object.assign(call.child, { state, endedAt: Date.now() });
   }
 
   // pi-subagents' subagent:foreground-complete, sent only for a detached run.
+  // The run it ended, if any.
   detachedEnded(data) {
     const child = this.list().find(c => c.runId === data?.runId && isLive(c.state));
     if (!child) return;
     const state = ["complete", "failed", "paused", "stopped"].includes(data.state) ? data.state : data.success ? "complete" : "failed";
-    Object.assign(child, { state, endedAt: Number.isFinite(data.timestamp) ? data.timestamp : Date.now() });
+    return Object.assign(child, { state, endedAt: Number.isFinite(data.timestamp) ? data.timestamp : Date.now() });
   }
+
+  // An ended run the session recorded before a /reload, as `end` or
+  // `detachedEnded` returned it.
+  restore(child) { this.calls.set(`saved:${child.key}`, { child }); }
 
   // The runs that streamed progress, live or ended.
   list() { return [...this.calls.values()].flatMap(c => c.child ? [c.child] : []); }

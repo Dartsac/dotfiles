@@ -19,6 +19,10 @@ const ISSUES_ENTRY = "dotfiles-herdr-child-issues";
 // Session entry recording when a finished job cleared rows from the tree, so a
 // /reload while the next job goes on doesn't bring back earlier jobs' failures.
 const JOB_ENTRY = "dotfiles-herdr-job-finished";
+// Session entry holding a foreground run of the parent's that ended without
+// success. pi-subagents keeps such a run in memory only, so without it a
+// /reload while the job goes on would drop its row from the tree.
+const FOREGROUND_ENTRY = "dotfiles-herdr-foreground-run";
 // Session entry naming a child this parent opened a tab for, so a /reload never
 // opens it again (ChildTabs' `opened`). It names the parent's pane too: a session
 // resumed in another pane can't adopt the old pane's tabs, so opens its own.
@@ -130,6 +134,14 @@ export default function (pi) {
     if (policy.childIssues === value) return;
     policy.childIssues = value;
     if (root) pi.appendEntry(ISSUES_ENTRY, { childIssues: value });
+  }
+  // A foreground run of the parent's has ended. One that did not succeed
+  // qualifies the finish (pi-subagents sends a completion event only for one
+  // that was detached) and is recorded for a /reload.
+  function foregroundEnded(child) {
+    if (!hasChildIssue(child)) return;
+    setChildIssues(true);
+    if (root) pi.appendEntry(FOREGROUND_ENTRY, child);
   }
   let sessionFile;
   // Session label (topic.mjs): asked for on a prompt, at most TOPIC_ATTEMPTS times.
@@ -336,7 +348,7 @@ export default function (pi) {
   // before ours. Headless children never reach the TUI-only activation below.
   subscriptions.push(pi.events.on("herdr:busy", data => { policy.setBusy(data?.active === true); publish(); }));
   // Before the handler below, which reports: the run has ended by then.
-  subscriptions.push(pi.events.on("subagent:foreground-complete", data => foregroundRuns.detachedEnded(data)));
+  subscriptions.push(pi.events.on("subagent:foreground-complete", data => foregroundEnded(foregroundRuns.detachedEnded(data))));
   for (const name of ["subagent:async-complete", "subagent:foreground-complete"]) {
     subscriptions.push(pi.events.on(name, data => {
       if (hasChildIssue(data)) setChildIssues(true);
@@ -404,6 +416,8 @@ export default function (pi) {
     policy.childIssues = saved(ISSUES_ENTRY)?.childIssues === true;
     const savedDoneAt = saved(JOB_ENTRY)?.doneAt;
     doneAt = Number.isFinite(savedDoneAt) ? savedDoneAt : 0;
+    // Those an earlier finished job left behind are dropped by the scan below.
+    for (const child of customData(context, FOREGROUND_ENTRY)) if (typeof child?.key === "string") foregroundRuns.restore(child);
     wasFinished = false;
     // Read the children before anything is reported: an event that arrives
     // before the first poll must not find a job with live children finished.
@@ -455,7 +469,7 @@ export default function (pi) {
   });
   pi.on("tool_execution_end", event => {
     humanTools.delete(event.toolCallId);
-    foregroundRuns.end(event);
+    foregroundEnded(foregroundRuns.end(event));
     if (!root) return;
     if (event.toolName === "ask_user_question") policy.setHuman("questionnaire", false);
     poll();
