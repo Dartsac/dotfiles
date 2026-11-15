@@ -103,15 +103,17 @@ top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 # Checkouts from before the guard existed have a theme-sync without it.
 grep -q -e --check-staged "$top/theme-sync" || exit 0
 "$top/theme-sync" --check-staged || exit 1
+# The root scripts, Python without the suffix (ruff.toml lists them too).
+scripts='theme-sync|install|land'
 # Lint for the staged Python, where ruff is installed. ruff.toml has the rules;
 # CI runs them on every push (.github/workflows/lint.yml).
-python=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '(\\.py|^theme-sync|^install)$')
+python=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '(\\.py|^('"$scripts"'))$')
 if [ -n "$python" ] && command -v ruff >/dev/null 2>&1; then
     (cd "$top" && ruff check --quiet $python) || exit 1
 fi
 # The root scripts' Python tests, when a script, a test or a package's
 # dependency manifest is staged.
-if git diff --cached --name-only | grep -q -E '^(theme-sync|install|[^/]*\\.py|\\.tests/.*\\.py|[^/]*/README\\.package\\.json)$' &&
+if git diff --cached --name-only | grep -q -E '^('"$scripts"'|[^/]*\\.py|\\.tests/.*\\.py|[^/]*/README\\.package\\.json)$' &&
     ls "$top"/.tests/test_*.py >/dev/null 2>&1; then
     output=$(python3 -B -m unittest discover -s "$top/.tests" -p 'test_*.py' 2>&1) || { echo "$output"; exit 1; }
 fi

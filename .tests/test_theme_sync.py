@@ -6,6 +6,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -198,6 +199,35 @@ class GhosttyVariantTest(unittest.TestCase):
         self.assertEqual(self.theme_sync.ghostty_variant(), "van-helsing")
 
 
+class RootScriptsTest(unittest.TestCase):
+    """A root script or a test file added without its wiring: nothing else
+    fails. `land` went unlinted until its ruff.toml entry was noticed missing."""
+
+    def setUp(self):
+        self.repo = THEME_SYNC.parent
+        self.scripts = sorted(path.name for path in self.repo.iterdir() if path.is_file()
+                              and path.read_bytes()[:64].startswith(b"#!") and b"python" in path.read_bytes()[:64])
+
+    def test_every_root_python_script_is_linted_and_tested_by_the_hook(self):
+        self.assertIn("install", self.scripts)
+        ruff = (self.repo / "ruff.toml").read_text()
+        named = re.search(r"^scripts='([^']*)'$", load_theme_sync().HOOK, re.MULTILINE)
+        self.assertTrue(named, "the pre-commit hook has no scripts='...' line")
+        for script in self.scripts:
+            with self.subTest(script=script):
+                self.assertIn(f'"{script}"', ruff, "ruff.toml's extend-include does not name it")
+                self.assertIn(script, named.group(1).split("|"), "the pre-commit hook's scripts do not name it")
+
+    def test_every_test_file_runs_in_ci_and_in_linux_sh(self):
+        tests = sorted(path.name for path in (self.repo / ".tests").glob("test_*.py"))
+        self.assertIn("test_install.py", tests)
+        for runner in (".github/workflows/standalone.yml", ".tests/linux.sh"):
+            text = (self.repo / runner).read_text()
+            for test in tests:
+                with self.subTest(runner=runner, test=test):
+                    self.assertIn(f".tests/{test}", text)
+
+
 class PreCommitHookTest(ThrowawayRepo):
     """The hook theme-sync installs, run by a real commit in a copy of the repository layout."""
 
@@ -237,6 +267,16 @@ class PreCommitHookTest(ThrowawayRepo):
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("broken on purpose", result.stdout + result.stderr)
+
+    def test_hook_lints_the_land_script_and_runs_the_root_tests_when_it_is_staged(self):
+        seen = self.fake_ruff(0)
+        self.commit({".tests/test_example.py": FAILING_TEST})
+
+        result = self.commit_with_hook({"land": "#!/usr/bin/env python3\n"})
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("broken on purpose", result.stdout + result.stderr)
+        self.assertEqual(seen.read_text().split(), ["check", "--quiet", "land"])
 
     def test_hook_runs_the_root_tests_when_a_package_manifest_is_staged(self):
         self.commit({".tests/test_example.py": FAILING_TEST})

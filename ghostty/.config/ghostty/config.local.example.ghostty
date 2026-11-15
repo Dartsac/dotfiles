@@ -20,5 +20,6 @@
 # font from Dracula PRO into ~/Library/Fonts. Its name ends in a tag that
 # changes with the drawings (faces/color_font.py): a running Ghostty does not
 # read a changed font file again under a name it has loaded. After changing
-# the sprites, put the new name here and in your copy, then reload.
+# the sprites, put the new name here and in your copy, then reload: Herdr's
+# own tests (not in git) fail until both name the current font.
 # font-codepoint-map = U+100000-U+10007F=Herdr Sprites Pixel bb2d

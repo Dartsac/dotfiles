@@ -40,6 +40,9 @@ jobs:
       - name: theme-sync and the pre-commit hook
         run: ${{ matrix.python }} -B .tests/test_theme_sync.py -v
 
+      - name: ./land
+        run: ${{ matrix.python }} -B .tests/test_land.py -v
+
       - name: The standalone check's machine
         run: ${{ matrix.python }} -B .tests/test_standalone.py -v
 

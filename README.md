@@ -30,7 +30,8 @@ dependencies once more with only the required ones. The dependencies must be
 installed where it runs: a font in your own font folder (`~/Library/Fonts`,
 `~/.local/share/fonts`), since one installed for every user cannot be hidden.
 Nor can a command that an app keeps in a folder of its own, as `Ghostty.app`
-keeps `ghostty` on macOS: the check skips removing that one.
+keeps `ghostty` on macOS: the check skips removing that one, and says so
+under the package's `ok`.
 
 ```sh
 python3 .tests/standalone.py        # every package it covers
@@ -41,12 +42,12 @@ python3 .tests/standalone.py eza    # one package
 GitHub Actions runs it on macOS and Ubuntu on every push
 (`.github/workflows/standalone.yml`), with `./install`'s own tests
 (`.tests/test_install.py`), `theme-sync`'s and its pre-commit hook's
-(`.tests/test_theme_sync.py`) and the check's (`.tests/test_standalone.py`: git
-on its machines never reaches your credentials). `.tests/linux.sh` runs that
-Ubuntu job on a Mac: the Ubuntu release the workflow names and the same
-dependencies (`.tests/ubuntu-deps.sh`). Tool versions there differ from
-Homebrew's, so run it before pushing a change that Linux could take
-differently.
+(`.tests/test_theme_sync.py`), `./land`'s (`.tests/test_land.py`) and the
+check's (`.tests/test_standalone.py`: git on its machines never reaches your
+credentials). `.tests/linux.sh` runs that Ubuntu job on a Mac: the Ubuntu
+release the workflow names and the same dependencies
+(`.tests/ubuntu-deps.sh`). Tool versions there differ from Homebrew's, so run
+it before pushing a change that Linux could take differently.
 
 A new package gets a `README.package.json`, a check in `.tests/standalone.py`
 and its dependencies in the workflow and `.tests/ubuntu-deps.sh`; a test fails
@@ -79,6 +80,14 @@ Herdr's own Python tests stay out of git, so neither workflow sees them. When
 a Herdr file is staged the hook checks them itself, before it runs them: with
 ruff, and by loading each with `/usr/bin/python3`, which fails on a module
 that Python 3.9 does not have.
+
+### Landing
+
+`main` moves when a branch's runs on GitHub are green. `./land <branch>`
+pushes the branch, waits for its runs, fast-forwards `main`, pushes it and
+deletes the branch. It stops at the first step that cannot finish, and
+deletes nothing before `main` is on GitHub. `./land --help` describes the
+steps, which also run one at a time.
 
 ## gnu stow naming convention
 

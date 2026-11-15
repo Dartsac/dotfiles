@@ -1,5 +1,7 @@
 # Ghostty's built-in free Dracula theme. For Dracula PRO, a paid theme, see
-# config.local.example.ghostty.
+# config.local.example.ghostty. theme-sync and Neovim
+# (nvim's lua/config/colorscheme.lua) read the last `theme =` line too, here
+# and then in the local override.
 theme = Dracula
 
 # Font Configuration

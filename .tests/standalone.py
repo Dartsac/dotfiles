@@ -19,8 +19,8 @@ another empty home without that dependency on PATH, and checks that ./install
 names it with its hint for this platform and still stows the package. A
 font dependency is likewise linked into, or left out of, the home's own font
 folder. A command an app keeps in a folder of its own (a manifest's also_in,
-such as /Applications/Ghostty.app) cannot be left out, so that run is skipped
-for it.
+such as /Applications/Ghostty.app) cannot be left out: that run is skipped
+for it, and the package's line says so.
 
 A package with optional dependencies may also be started on a machine that
 has only its required ones: the tool must still start cleanly.
@@ -865,7 +865,10 @@ class Machine:
 
 
 def check(package, manifest, clone, hidden):
+    """Check the package; return the dependencies it could not take away for
+    the run without each."""
     dependencies = manifest["dependencies"]
+    kept = []
     with tempfile.TemporaryDirectory() as temp:
         machine = Machine(Path(temp).resolve(), clone, dependencies, hidden)
         # With every dependency present, ./install has nothing to report.
@@ -891,7 +894,9 @@ def check(package, manifest, clone, hidden):
         # A command its app keeps in a folder of its own, such as
         # /Applications/Ghostty.app, is on every machine here: the check
         # cannot take it away. .tests/test_install.py covers that lookup.
-        if "command" in dependency and INSTALL.outside_path(dependency):
+        found = INSTALL.outside_path(dependency)
+        if found:
+            kept.append(f"{dependency['command']}, in {os.path.dirname(found)}")
             continue
         missing = INSTALL.dependency_name(dependency)
         with tempfile.TemporaryDirectory() as temp:
@@ -905,6 +910,7 @@ def check(package, manifest, clone, hidden):
                              f"expected {missing} named with its hint\n{output}".rstrip())
             if not machine.links():
                 raise Failed(f"./install {package} without {missing} stowed nothing")
+    return kept
 
 
 def main(args):
@@ -926,8 +932,8 @@ def main(args):
         copy_tree(clone)
         for package in packages:
             try:
-                check(package, known[package], clone, hidden)
-                print(f"ok    {package}")
+                kept = check(package, known[package], clone, hidden)
+                print(f"ok    {package}" + "".join(f"\n      not checked without {k}" for k in kept))
             except Failed as failure:
                 failures += 1
                 print(f"FAIL  {package}: {failure}")

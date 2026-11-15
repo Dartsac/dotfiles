@@ -150,7 +150,7 @@ def dependency_name(dependency):
 
 def outside_path(dependency):
     """Where a command is among the folders its manifest says to look in too
-    (also_in), or None."""
+    (also_in), or None; None for a font."""
     folders = [str(HOME / folder) for folder in dependency.get("also_in", {}).get(THIS_PLATFORM, [])]
     return shutil.which(dependency["command"], path=os.pathsep.join(folders)) if folders else None
 
