@@ -1,8 +1,9 @@
 # dotfiles
 
 A terminal setup built around fish, Neovim, tmux and Ghostty, in the free
-Dracula theme. Each package works alone: take the ones you want, and each
-starts cleanly on a fresh machine with only its own dependencies installed.
+Dracula theme. Each package on offer works alone: take the ones you want, and
+each starts cleanly on a fresh machine with only its own dependencies
+installed.
 
 ## Quick start
 
@@ -33,14 +34,16 @@ the package's links and leaves the folders `./install` created.
 
 Plain `stow <package>` from the clone works too: `.stowrc` sets the target to
 your home directory wherever you cloned. Create `~/.config` first if it does
-not exist, or stow links the whole of it into the package.
+not exist, or stow links the whole of it into the package. Stow karabiner
+with `--no-folding`, and eza on Linux with `./install`, which leaves out its
+macOS-only `Library` folder.
 
 ## Packages
 
 macOS is the primary platform: the owner uses it every day. The core packages
 (fish, nvim, tmux, lazygit, direnv, eza and ghostty) are also promised on
-Linux. GitHub Actions stows each package alone on macOS and Ubuntu and starts
-it on every push.
+Linux. On every push, GitHub Actions stows each package on offer alone and
+checks that it works, on macOS and, for the core packages, on Ubuntu.
 
 | Package                 | What it configures                                                                              | Platforms    | Needs                 | Optional dependencies             |
 | ----------------------- | ----------------------------------------------------------------------------------------------- | ------------ | --------------------- | --------------------------------- |
@@ -56,12 +59,13 @@ it on every push.
 Packages never require each other: one uses another's tool when it is
 installed. fish's multiplexer shortcuts use tmux, and without it say quietly
 that no multiplexer is installed. For each dependency you lack, `./install`
-says what it adds, or the version the package needs (Neovim 0.12, tmux 3.2,
-fish 4).
+prints how to install it; for an optional one, also what it adds. Some need
+a version newer than a distribution may ship (Neovim 0.12, tmux 3.2, fish 4),
+and the hint says so.
 
 Each package declares its description, role, platforms and dependencies in
 `<package>/README.package.json`, which `./install` reads; a test keeps this
-table in step with them.
+table's platforms and dependencies in step with them.
 
 ### karabiner is optional
 
@@ -103,7 +107,7 @@ beside it and uncomment what you need:
 | `ghostty` | `~/.config/ghostty/config.local.ghostty` | `ghostty/.config/ghostty/config.local.example.ghostty`    |
 
 They hold what is one person's or one machine's: the name fish's greeting
-says hello to, the multiplexer fish's shortcuts prefer, a pinned Python,
+says hello to, the default multiplexer, a pinned Python,
 Neovim's notes vault and Python, the projects tmux's sessionizer (prefix
 Ctrl-f) offers, extra keys. Each example says what goes in it.
 
@@ -160,21 +164,26 @@ its own otherwise.
 
 How the owner's machines are set up. An adopter needs none of this.
 
-The clone is at `~/dotfiles`, which owner packages assume. Every package is
-stowed, owner packages with `--force`:
+The owner has two Macs, and the clone is at `~/dotfiles` on both, which owner
+packages assume. The Personal machine, where agents are allowed, stows every
+package, owner packages with `--force`:
 
 ```sh
 ./install fish nvim tmux lazygit direnv eza ghostty karabiner
 ./install --force herdr pi hammerspoon
 ```
 
+The Work machine allows no AI tools: Pi is not there, and tmux, not herdr,
+is its multiplexer.
+
 Each machine has its local overrides, made from the examples: the greeting's
-name, herdr as the default multiplexer, Perl's `local::lib`, the notes vault,
-Neovim's automatic `lazy-lock.json` commit, Ghostty's Command+M chord for
-Pi's model picker, and the projects list that tmux's sessionizer and herdr's
-project picker share. On the Work machine they are written by hand.
-Karabiner's profile, with its device and a Command+M rule, stays on each
-machine. Hammerspoon reads `~/.config/hammerspoon` because its
+name, Perl's `local::lib`, the notes vault, Neovim's automatic
+`lazy-lock.json` commit, and the projects list that tmux's sessionizer (and
+herdr's project picker, where herdr is) offers. Only the Personal machine's
+name herdr as the default multiplexer and give Ghostty the Command+M chord
+for Pi's model picker. On the Work machine the overrides are written by hand.
+Karabiner's profile stays on each machine, with its device, and on the
+Personal machine a Command+M rule. Hammerspoon reads `~/.config/hammerspoon` because its
 `MJConfigFile` setting points there; the first lines of
 `hammerspoon/.config/hammerspoon/init.lua` give the command. Then
 `theme-sync` puts Dracula PRO over the free theme.

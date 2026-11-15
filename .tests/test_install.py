@@ -371,6 +371,7 @@ class ReadmeTest(unittest.TestCase):
 
     @staticmethod
     def names(cell):
+        """A cell's comma-separated entries; none for an empty cell or —."""
         return set() if cell in ("", "—") else {name.strip() for name in cell.split(",")}
 
     def test_the_catalog_lists_each_offered_package_as_its_manifest_declares_it(self):
@@ -384,9 +385,9 @@ class ReadmeTest(unittest.TestCase):
                 self.assertEqual("(optional)" in package, manifest["role"] == "optional",
                                  f"the catalog marks a package (optional) when its role is optional: {package}")
                 self.assertEqual(self.names(platforms), {platform_names[p] for p in manifest["platforms"]})
-                required = {d.get("font") or d["command"]: d["required"] for d in manifest["dependencies"]}
-                self.assertEqual(self.names(needs), {dep for dep, r in required.items() if r})
-                self.assertEqual(self.names(optional), {dep for dep, r in required.items() if not r})
+                required_by_name = {d.get("font") or d["command"]: d["required"] for d in manifest["dependencies"]}
+                self.assertEqual(self.names(needs), {dep for dep, r in required_by_name.items() if r})
+                self.assertEqual(self.names(optional), {dep for dep, r in required_by_name.items() if not r})
 
     def test_lists_the_owner_packages_apart_from_the_catalog(self):
         owner = sorted(name for name, m in self.manifests.items() if m["role"] == "owner")
