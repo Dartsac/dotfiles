@@ -37,8 +37,8 @@ Package: $DRACULA_PRO_DIR, else the newest dracula-pro-v* directory under
 ~/Documents/Resources/Themes/Dracula Packages. It must contain
 design/palette.md, themes/ghostty and themes/vim (v2.2 or newer). Without a
 theme package the free Dracula theme stays: no app theme or local override is
-written, and whole-file templates get the free theme's colors. A block an
-earlier run wrote stays, and theme-sync names its file.
+written, and whole-file templates get the free theme's colors. What an
+earlier run left (a block, Neovim's theme) stays, and theme-sync names it.
 
   theme-sync                 install everything
   theme-sync --check         report what would change; write nothing
@@ -284,7 +284,7 @@ def write_block(install, path, about, text):
     install.write(path, with_block(path, f"{BLOCK_START}: {about}\n{text}{BLOCK_END}\n"))
 
 
-def with_blocks(paths):
+def holding_a_block(paths):
     """Those of `paths` that hold a block."""
     return [path for path in paths if path.is_file() and BLOCK_START in path.read_text()]
 
@@ -295,9 +295,10 @@ def free_color(name):
 
 
 def read_templates():
-    """[(template path, target path, whether the target takes a block)] from
-    theme-templates.txt."""
-    pairs = []
+    """theme-templates.txt's lines as two lists of (template path, target
+    path): those that write the whole target (->), and those that write a
+    block into a local override (>>)."""
+    files, blocks = [], []
     for number, line in enumerate(TEMPLATES.read_text().splitlines(), 1):
         line = line.strip()
         if not line or line.startswith("#"):
@@ -307,8 +308,8 @@ def read_templates():
         if arrow not in line or not source or not target:
             raise SystemExit(f"theme-sync: {TEMPLATES.name} line {number}: expected 'template -> target' "
                              "or 'template >> local override'")
-        pairs.append((REPO / source, Path(target).expanduser(), arrow == ">>"))
-    return pairs
+        (blocks if arrow == ">>" else files).append((REPO / source, Path(target).expanduser()))
+    return files, blocks
 
 
 def blend(color, other, percent):
@@ -537,12 +538,12 @@ def main():
     if sys.argv[1:] not in ([], ["--check"], ["--names"]):
         raise SystemExit(__doc__)
     install = Installer(check=sys.argv[1:] == ["--check"])
-    templates = read_templates()
     package, why = find_package()
     colors = None
     if sys.argv[1:] == ["--names"]:
         print("\n".join(sorted(read_palettes(package)["pro"] if package else FREE_THEME)))
         return
+    files, blocks = read_templates()
     override = GHOSTTY / "config.local.ghostty"
     if package:
         palettes = read_palettes(package)
@@ -560,28 +561,28 @@ def main():
             choice = ("# Choose another variant here, or in a `theme =` line after this block, then run theme-sync.\n"
                       f"theme = {ghostty_theme(variant)}\n")
             write_block(install, override, "Dracula PRO, the variant theme-sync and Neovim use.", choice)
+        for template, target in blocks:
+            if stowed(target):
+                about = f"Dracula PRO from {template.relative_to(REPO)}. Edit that, not this block, then run theme-sync."
+                write_block(install, target, about, render(template, colors))
         install.copy_tree(package / "themes/vim", NVIM_THEME)
         print(f"theme-sync: {package.name}, variant '{variant}'")
     else:
-        earlier = with_blocks([override] + [target for _, target, in_block in templates if in_block])
+        print(f"theme-sync: no Dracula PRO package ({why}); app themes and local overrides left as they are")
+        earlier = holding_a_block([override] + [target for _, target in blocks]) + ([NVIM_THEME] if NVIM_THEME.exists() else [])
         if earlier:
-            print(f"theme-sync: no Dracula PRO package ({why}); app themes and local overrides left as they are. "
-                  "These keep Dracula PRO from an earlier run; delete their theme-sync block for the free Dracula theme:")
+            print("theme-sync: an earlier run left Dracula PRO in these, which still show it "
+                  "(README, 'Back to the free theme'):")
             print("\n".join(f"  {path}" for path in earlier))
         else:
-            print(f"theme-sync: no Dracula PRO package ({why}); the free Dracula theme stays: "
-                  "app themes and local overrides left as they are")
+            print("theme-sync: the free Dracula theme stays")
 
     # Prepare the color font before a generated config can refer to it.
     install_herdr_fonts(install, colors)
-    for template, target, in_block in templates:
-        if (in_block and colors is None) or not stowed(target):
+    for template, target in files:
+        if not stowed(target):
             continue
         source = template.relative_to(REPO)
-        if in_block:
-            about = f"Dracula PRO from {source}. Edit that, not this block, then run theme-sync."
-            write_block(install, target, about, render(template, colors))
-            continue
         stray = template.with_name(target.name)
         if stray.exists() and stray.resolve() != target.resolve():
             print(f"theme-sync: {stray.relative_to(REPO)} is not read by anything; edit {template.name} instead and delete it")

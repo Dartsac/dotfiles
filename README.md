@@ -173,8 +173,8 @@ downloaded package (v2.2 or newer) in
   `themes/vim/colors`. If one is missing, `theme-sync` names it and does not
   try an older version. The free Dracula theme then stays: it writes no app
   theme and no local override, and fills templates with the free theme's
-  colors. A block an earlier run wrote into a local override stays, and
-  `theme-sync` names each such file: delete the block for the free theme.
+  colors. What an earlier run left stays, and `theme-sync` names it: see
+  "Back to the free theme" below.
 
 It installs the package's Ghostty and Neovim themes, writes the palette the
 Hammerspoon dictation card reads, fills in the templates listed in
@@ -225,3 +225,26 @@ To theme another app:
    tracked config carries the free theme, add `template >> local override`
    instead: the template holds only the settings Dracula PRO changes.
 3. Run `theme-sync`.
+
+### Back to the free theme
+
+`theme-sync` never takes Dracula PRO out again. Run without a theme package,
+it names what an earlier run left that still shows it. To go back (a later
+run with a theme package writes it all again):
+
+- Ghostty: delete the block in `config.local.ghostty`, and any
+  `theme = Dracula-…` line of your own there. Reload.
+- tmux: delete the block in `tmux.local.conf`. Reload with prefix r.
+- fish: delete the block in `config-local.fish`. New shells then show Tide's
+  own colors again. Where those are not the free theme's (a machine that had
+  Dracula PRO before `theme-sync` wrote the block, or that ran
+  `tide configure`), `source ~/.config/fish/tide-theme.fish` sets them all to
+  the free theme's.
+- Neovim: delete `~/.local/share/nvim/site/pack/themes/start/dracula-pro`.
+  While that folder is there Neovim uses Dracula PRO, whatever Ghostty names.
+
+Tried on fresh machines with a made-up theme package: after each step the
+tool showed the free theme (Ghostty's background, tmux's pane borders and
+current window after a reload and after a restart, Tide's prompt character,
+Neovim's colorscheme), and `theme-sync` named nothing left. With only
+Ghostty's block deleted, Neovim stayed on Dracula PRO until its folder went.

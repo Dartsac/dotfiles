@@ -99,7 +99,7 @@ TERMINAL_REPLIES = [(re.compile(rb"\x1b\[0?c"), b"\x1b[?62;22c"), (re.compile(rb
 HOMEBREW_PREFIXES = ["/opt/homebrew", "/usr/local", "/home/linuxbrew/.linuxbrew"]
 # The made-up Dracula PRO's colors, in the variant theme-sync uses when
 # nothing names another.
-PRO = synthetic_theme.PALETTES["pro"]
+MADE_UP_PRO = synthetic_theme.PALETTES["pro"]
 
 
 def rgb(color):
@@ -120,7 +120,7 @@ def current_window(color, what):
 
 
 DRACULA_PROMPT_CHARACTER = prompt_character("#50fa7b", "Dracula green")
-PRO_PROMPT_CHARACTER = prompt_character(PRO["green"], "the made-up Dracula PRO's green")
+PRO_PROMPT_CHARACTER = prompt_character(MADE_UP_PRO["green"], "the made-up Dracula PRO's green")
 # The commands that act on tmux (or herdr, the owner's multiplexer).
 MULTIPLEXER_SHORTCUTS = ["ke", "ks", "tls", "a", "d", "dev", "sessionizer"]
 # nvim-treesitter reports each step of a parser install as error output
@@ -135,13 +135,16 @@ SEARCHINDEX_MAPPING = re.compile(r"E227: Mapping already exists for [#*]$")
 TMUX_PLUGINS = ["tpm", "tmux-sensible", "tmux-yank", "tmux-pane-clarity", "tmux-resurrect", "tmux-continuum"]
 DRACULA_CURRENT_WINDOW = current_window("#bd93f9", "Dracula purple")
 # tmux's Dracula PRO colors the current window orange.
-PRO_CURRENT_WINDOW = current_window(PRO["orange"], "the made-up Dracula PRO's orange")
+PRO_CURRENT_WINDOW = current_window(MADE_UP_PRO["orange"], "the made-up Dracula PRO's orange")
 # Ghostty's built-in free Dracula theme, by the background it sets.
 DRACULA_BACKGROUND = "#282a36"
 # Inactive pane borders in the free Dracula theme's comment color.
 DRACULA_PANE_BORDER = "fg=#6272a4"
 # The current window in grey, as the check's local override colors it.
 OVERRIDDEN_CURRENT_WINDOW = current_window("#808080", "the local override's grey")
+# The active pane's border in grey, as the check's local override colors it
+# after theme-sync's Dracula PRO has colored it too.
+OVERRIDDEN_ACTIVE_BORDER = "fg=#808080"
 # What opens a folder in the file manager on each platform. On Debian and
 # Ubuntu `open` is openvt, which starts a program on a new virtual console.
 FOLDER_OPENERS = {"macos": "open", "linux": "xdg-open"}
@@ -416,7 +419,7 @@ def check_ghostty(machine):
     finally:
         override.unlink()
         shutil.rmtree(themes, ignore_errors=True)
-    for expected in ("theme = Dracula-Pro", f"background = {PRO['background']}", "keybind = shift+enter=text:local"):
+    for expected in ("theme = Dracula-Pro", f"background = {MADE_UP_PRO['background']}", "keybind = shift+enter=text:local"):
         if expected not in settings:
             raise Failed(f"Ghostty after theme-sync: no {expected!r} in +show-config")
 
@@ -646,6 +649,14 @@ def stop_tmux(machine, env):
     raise Failed(f"tmux's server was still running {TMUX_START_TIMEOUT}s after kill-server")
 
 
+def fail_unless_extended_keys_off(machine, env, what):
+    """tmux.conf's last setting turns extended-keys on; the check's local
+    override, sourced after it, turns it off."""
+    extended_keys = run_tmux(machine, env, "show-option", "-sv", "extended-keys").strip()
+    if extended_keys != "off":
+        raise Failed(f"{what}: extended-keys is {extended_keys}, not the local override's off")
+
+
 def attach_tmux(machine, env, what, wait_for):
     """Attach to the tmux server in a terminal of its own and, once its screen
     holds `wait_for`, detach with the package's prefix (Ctrl-t, then d). tmux
@@ -790,23 +801,24 @@ def check_tmux(machine):
         try:
             run_tmux(machine, env, "new-session", "-d", what="tmux with a local override")
             attach_tmux(machine, env, "tmux attach with a local override", OVERRIDDEN_CURRENT_WINDOW)
-            extended_keys = run_tmux(machine, env, "show-option", "-sv", "extended-keys").strip()
-            if extended_keys != "off":
-                raise Failed(f"tmux.conf set extended-keys {extended_keys} after the local override set it off")
+            fail_unless_extended_keys_off(machine, env, "tmux with a local override")
             stop_tmux(machine, env)
 
             # Dracula PRO, which theme-sync puts into the local override
-            # before what it holds.
-            override.write_text("set -s extended-keys off\n")
+            # before what it holds: a setting of the override's own, and a
+            # color the theme sets too, which the override's line wins.
+            override.write_text(f"set -s extended-keys off\nset -g pane-active-border-style '{OVERRIDDEN_ACTIVE_BORDER}'\n")
             run_theme_sync(machine)
             run_tmux(machine, env, "new-session", "-d", what="tmux after theme-sync")
             border = run_tmux(machine, env, "show-option", "-gv", "pane-border-style").strip()
-            if border != f"fg={PRO['comment']}":
+            if border != f"fg={MADE_UP_PRO['comment']}":
                 raise Failed(f"tmux's pane borders after theme-sync are {border!r}, not Dracula PRO's comment color")
             attach_tmux(machine, env, "tmux attach after theme-sync", PRO_CURRENT_WINDOW)
-            extended_keys = run_tmux(machine, env, "show-option", "-sv", "extended-keys").strip()
-            if extended_keys != "off":
-                raise Failed(f"theme-sync lost the local override's own setting: extended-keys is {extended_keys}")
+            fail_unless_extended_keys_off(machine, env, "tmux after theme-sync")
+            active = run_tmux(machine, env, "show-option", "-gv", "pane-active-border-style").strip()
+            if active != OVERRIDDEN_ACTIVE_BORDER:
+                raise Failed(f"theme-sync's Dracula PRO won over the local override's own color: the active pane's "
+                             f"border is {active!r}, not {OVERRIDDEN_ACTIVE_BORDER!r}")
         finally:
             override.unlink()
     finally:

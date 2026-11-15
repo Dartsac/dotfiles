@@ -219,6 +219,7 @@ class OverlayTest(unittest.TestCase):
             (self.repo / name).write_text(text)
         shutil.copy2(THEME_SYNC, self.repo / "theme-sync")
         self.config = self.home / ".config"
+        self.nvim_theme = self.home / ".local/share/nvim/site/pack/themes/start/dracula-pro"
         for app in ("app", "tmux", "fish", "ghostty"):
             (self.config / app).mkdir(parents=True)
         (self.config / "ghostty/config").write_text("theme = Dracula\nconfig-file = ?config.local.ghostty\n")
@@ -320,6 +321,17 @@ class OverlayTest(unittest.TestCase):
         self.assertNotIn("the free Dracula theme stays", output)
         for name in ("tmux/tmux.local.conf", "fish/config-local.fish", "ghostty/config.local.ghostty"):
             self.assertIn(str(self.config / name), output)
+        # Neovim uses the Dracula PRO theme for as long as it is installed.
+        self.assertIn(str(self.nvim_theme), output)
+
+    def test_without_a_theme_package_a_neovim_theme_left_by_an_earlier_run_is_named(self):
+        (self.nvim_theme / "colors").mkdir(parents=True)
+        self.env["DRACULA_PRO_DIR"] = str(self.home / "no-package")
+
+        output = self.theme_sync()
+
+        self.assertNotIn("the free Dracula theme stays", output)
+        self.assertIn(str(self.nvim_theme), output)
 
     def test_an_override_whose_package_is_not_stowed_is_left_alone(self):
         for app in ("tmux", "app"):
