@@ -1,6 +1,7 @@
 """./install, run against a throwaway repository of made-up packages, with an
 empty home directory and a PATH holding only stow, the system tools and the
-made-up tools a test installs. Then the repository's own manifests."""
+made-up tools a test installs. Then the repository's own manifests, and
+README.md's catalog of them."""
 import importlib.util
 import json
 import os
@@ -28,6 +29,12 @@ USER_FONTS = {"macos": "Library/Fonts", "linux": ".local/share/fonts"}
 def repository_manifests():
     """Each of the repository's packages and its manifest, by name."""
     return {p.parent.name: json.loads(p.read_text()) for p in sorted(REPO.glob("*/README.package.json"))}
+
+
+def tracked_files():
+    """The repository's files that git tracks, as paths from its root."""
+    tracked = subprocess.run(["git", "ls-files", "-z"], cwd=REPO, capture_output=True, text=True, check=True)
+    return list(filter(None, tracked.stdout.split("\0")))
 
 
 def dependency(name, required=True, kind="command"):
@@ -319,12 +326,12 @@ class ManifestsTest(unittest.TestCase):
         machines keep every system tool. A script's interpreter is one it can
         name: tmux ran a python3 script on every start before its manifest
         listed python3."""
-        tracked = subprocess.run(["git", "ls-files", "-z"], cwd=REPO, capture_output=True, text=True, check=True)
+        tracked = tracked_files()
         for name, manifest in self.manifests.items():
             if manifest["role"] == "owner":
                 continue
             available = PRESENT_EVERYWHERE | {dep["command"] for dep in manifest["dependencies"] if "command" in dep}
-            for path in filter(None, tracked.stdout.split("\0")):
+            for path in tracked:
                 script = REPO / path
                 if not path.startswith(name + "/") or not script.is_file():
                     continue
@@ -353,13 +360,14 @@ class ReadmeTest(unittest.TestCase):
         self.manifests = repository_manifests()
 
     def table(self, heading):
-        """The rows of the first table under the `## heading`, as lists of
-        cells without backticks."""
+        """The rows of the first table under the `## heading`, below its
+        header and separator, as lists of cells without backticks."""
         section = re.search(rf"^## {re.escape(heading)}\n(.*?)(?=^## |\Z)", self.readme, re.M | re.S)
         self.assertIsNotNone(section, f"README.md has no '## {heading}'")
-        lines = [line for line in section.group(1).splitlines() if line.startswith("|")]
-        rows = [[cell.strip().replace("`", "") for cell in line.strip("|").split("|")] for line in lines]
-        return [row for row in rows[1:] if not set(row[0]) <= set("-: ")]
+        table = re.search(r"^\|.*\n(?:\|.*\n?)*", section.group(1), re.M)
+        self.assertIsNotNone(table, f"README.md has no table under '## {heading}'")
+        return [[cell.strip().replace("`", "") for cell in line.strip("|").split("|")]
+                for line in table.group(0).splitlines()[2:]]
 
     @staticmethod
     def names(cell):
@@ -389,8 +397,7 @@ class ReadmeTest(unittest.TestCase):
         """A path into a package (`nvim/.config/nvim`) or a root folder
         (`.tests/`), or a relative link, names a file in git: not a package
         that does not exist, nor a file git ignores, which a clone lacks."""
-        tracked = subprocess.run(["git", "ls-files", "-z"], cwd=REPO, capture_output=True, text=True, check=True)
-        files = set(filter(None, tracked.stdout.split("\0")))
+        files = set(tracked_files())
         folders = {str(Path(*Path(f).parts[:i])) for f in files for i in range(1, len(Path(f).parts))}
         known = files | folders
         root = {path.name for path in REPO.iterdir()}

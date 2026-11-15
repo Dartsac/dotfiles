@@ -42,7 +42,7 @@ macOS is the primary platform: the owner uses it every day. The core packages
 Linux. GitHub Actions stows each package alone on macOS and Ubuntu and starts
 it on every push.
 
-| Package                 | What it configures                                                                              | Platforms    | Needs                 | Optional                          |
+| Package                 | What it configures                                                                              | Platforms    | Needs                 | Optional dependencies             |
 | ----------------------- | ----------------------------------------------------------------------------------------------- | ------------ | --------------------- | --------------------------------- |
 | `fish`                  | Tide prompt in Dracula colors, Homebrew on PATH, eza aliases, multiplexer shortcuts             | macOS, Linux | `fish`                | `tmux`, `eza`, `zoxide`, `direnv` |
 | `nvim`                  | Neovim: free Dracula theme, LSP, Telescope search, Markdown and Obsidian notes                  | macOS, Linux | `nvim`, `git`         | `rg`, `curl`, `tree-sitter`, `cc` |
@@ -139,10 +139,11 @@ the same key transcribes it to the clipboard. A minute of silence stops it.
 
 It needs:
 
-- macOS and [Hammerspoon](https://www.hammerspoon.org), told to read this
-  config: `defaults write org.hammerspoon.Hammerspoon MJConfigFile
-  "~/.config/hammerspoon/init.lua"`. Hammerspoon needs the Microphone and
-  Accessibility permissions.
+- macOS and [Hammerspoon](https://www.hammerspoon.org), with the Microphone
+  and Accessibility permissions. Copy `dictation.lua`, `dictation_target.lua`,
+  `dictation_theme.lua` and `deepgram_stream.py` into your own Hammerspoon
+  folder (`~/.hammerspoon`) and add `Dictation = require("dictation")` to its
+  `init.lua`: the files find each other in whichever folder Hammerspoon reads.
 - A key that sends F18. Karabiner-Elements can map a spare one. `CONFIG` at
   the top of `hammerspoon/.config/hammerspoon/dictation.lua` changes the key,
   hold-to-talk, the language and words to favour.
@@ -152,7 +153,6 @@ It needs:
 - A Deepgram API key in `~/.config/deepgram/api_key`. Deepgram charges for
   transcription.
 
-`init.lua` also loads herdr's away alerts; leave that line out without herdr.
 The card takes Dracula PRO's colors when `theme-sync` has written them, and
 its own otherwise.
 
@@ -172,8 +172,7 @@ Each machine has its local overrides, made from the examples: the greeting's
 name, herdr as the default multiplexer, Perl's `local::lib`, the notes vault,
 Neovim's automatic `lazy-lock.json` commit, Ghostty's Command+M chord for
 Pi's model picker, and the projects list that tmux's sessionizer and herdr's
-project picker share. On the machine without agents they are written by
-hand. Karabiner's profile, with its device and a Command+M rule, stays on
+project picker share. On the Work machine they are written by hand. Karabiner's profile, with its device and a Command+M rule, stays on
 each machine. Then `theme-sync` puts Dracula PRO over the free theme.
 
 ### Dracula PRO and theme-sync
