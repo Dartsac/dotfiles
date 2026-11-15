@@ -11,12 +11,16 @@ function dev
                 # Open this directory's workspace, laying it out only if new
                 set -l opened (python3 ~/.config/herdr/scripts/project-picker.py --default-session --json (pwd))
                 or return
+                # The picker printed nothing: its question was cancelled (Esc), so do not attach.
+                test -n "$opened"; or return 0
                 set -l root_pane (printf '%s' $opened | jq -r '.root_pane_id // empty')
                 if test -n "$root_pane"
                     herdr pane run $root_pane v >/dev/null
                     and herdr pane split $root_pane --direction down --ratio 0.8 --focus >/dev/null
                 end
-                herdr
+                # The picker has focused the workspace: attach without the
+                # herdr function, which would run the picker again.
+                command herdr
             end
         case tmux
             if test -n "$TMUX"

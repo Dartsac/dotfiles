@@ -98,10 +98,11 @@ def say(message):
         print(message, file=sys.stderr)
 
 
-def choose(candidates, prompt="Project> "):
-    """The project chosen in fzf, or None when cancelled."""
+def choose(candidates, prompt="Project> ", preview=True):
+    """The candidate chosen in fzf, or None when cancelled. `preview` shows
+    each candidate's folder tree: candidates that are not folders turn it off."""
     command = ["fzf", "--read0", "--print0", "--no-multi", "--no-expect", "--no-print-query", f"--prompt={prompt}"]
-    if shutil.which("tree"):
+    if preview and shutil.which("tree"):
         # fzf quotes {} for the shell, spaces included.
         command += ["--preview", "tree -L 2 -I 'node_modules|vendor|.git' -- {}"]
     result = subprocess.run(command, input="\0".join(candidates) + "\0", stdout=subprocess.PIPE, text=True)

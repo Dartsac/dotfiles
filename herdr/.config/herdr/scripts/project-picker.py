@@ -4,8 +4,10 @@ in the same fzf: the folders ~/.config/tmux/projects.local.txt lists, or else
 the common code folders' subfolders (tmux/.config/tmux/scripts/sessionizer.py).
 
 Inside herdr (Ctrl-t Ctrl-f, or plain Ctrl-f in fish) it opens or focuses the
-chosen project's workspace in the current session. Outside herdr it refuses
-unless --default-session or --attach names the default session explicitly.
+chosen project's workspace in the current session. A folder in a main checkout
+whose main space is open gets no workspace of its own: the picker offers that
+main space or a new worktree space. Outside herdr it refuses unless
+--default-session or --attach names the default session explicitly.
 --list only prints candidate directories. An optional directory skips fzf.
 """
 
@@ -31,18 +33,90 @@ def choose_project(candidates):
     return choose(candidates, prompt="Herdr project> ")
 
 
+class HerdrError(RuntimeError):
+    """An error Herdr answered with; `code` names it (e.g. not_git_worktree)."""
+
+    def __init__(self, error):
+        super().__init__(error.get("message", str(error)))
+        self.code = error.get("code")
+
+
 def herdr(binary, *args):
-    result = subprocess.run([binary, *args], check=True, capture_output=True, text=True)
+    result = subprocess.run([binary, *args], capture_output=True, text=True)
+    if result.returncode:
+        # Herdr prints an API error as JSON on stderr, and exits with 1.
+        try:
+            error = json.loads(result.stderr)["error"]
+        except (ValueError, KeyError, TypeError):
+            result.check_returncode()
+        raise HerdrError(error)
     if not result.stdout.strip():
         return None  # e.g. `workspace report-metadata` prints nothing on success.
-    response = json.loads(result.stdout)
-    if "error" in response:
-        raise RuntimeError(str(response["error"]))
-    return response["result"]
+    return json.loads(result.stdout)["result"]
 
 
 def same_directory(value, path):
     return bool(value) and Path(value).expanduser().resolve() == path
+
+
+def resolved_folder(selected):
+    path = Path(selected).expanduser().resolve(strict=True)
+    if not path.is_dir():
+        raise RuntimeError(f"Not a directory: {path}")
+    return path
+
+
+def find_main_space(path, binary):
+    """The main space of the main checkout that holds `path`, and the repo's
+    name, as Herdr knows them; None when no main space is open there."""
+    try:
+        listing = herdr(binary, "worktree", "list", "--cwd", str(path))
+    except HerdrError as error:
+        # Outside git, or in a repository whose worktrees git cannot list: no
+        # main checkout to speak of. Any other error stands: worktree_busy
+        # passes, and opening the folder meanwhile could make a second main space.
+        if error.code in ("not_git_worktree", "worktree_list_failed"):
+            return None
+        raise
+    checkouts = {Path(checkout["path"]).resolve(): checkout for checkout in listing["worktrees"]}
+    holding = [root for root in checkouts if path.is_relative_to(root)]
+    if not holding:
+        return None
+    # The deepest: a linked worktree can sit inside the main checkout.
+    checkout = checkouts[max(holding, key=lambda root: len(root.parts))]
+    if checkout["is_linked_worktree"] or not checkout.get("open_workspace_id"):
+        return None
+    return checkout["open_workspace_id"], listing["source"]["repo_name"]
+
+
+GO_TO_MAIN_SPACE = "Go to the main space"
+NEW_WORKTREE_SPACE = "New worktree space"
+
+
+def open_folder(selected, binary):
+    """Open the folder the picker was given: its checkout's main space or a new
+    worktree space when that main space is open, else its own workspace.
+
+    Returns (workspace id, the new workspace's root pane id or None), or None
+    when the question was cancelled.
+    """
+    path = resolved_folder(selected)
+    found = find_main_space(path, binary)
+    if not found:
+        return open_project(path, binary)
+    main_space_id, repo_name = found
+    # Only a terminal can answer (Ctrl-f's popup, fish); Neovim's <leader>Tc
+    # cannot, and gets the main space.
+    choice = GO_TO_MAIN_SPACE
+    if sys.stdin.isatty():
+        choice = choose([GO_TO_MAIN_SPACE, NEW_WORKTREE_SPACE], prompt=f"{repo_name}> ", preview=False)
+    if choice == NEW_WORKTREE_SPACE:
+        created = herdr(binary, "worktree", "create", "--workspace", main_space_id, "--focus")
+        return created["workspace"]["workspace_id"], created["root_pane"]["pane_id"]
+    if choice == GO_TO_MAIN_SPACE:
+        herdr(binary, "workspace", "focus", main_space_id)
+        return main_space_id, None
+    return None
 
 
 def open_project(selected, binary):
@@ -50,9 +124,7 @@ def open_project(selected, binary):
 
     Returns (workspace id, the new workspace's root pane id or None).
     """
-    path = Path(selected).expanduser().resolve(strict=True)
-    if not path.is_dir():
-        raise RuntimeError(f"Not a directory: {path}")
+    path = resolved_folder(selected)
     snapshot = herdr(binary, "api", "snapshot")["snapshot"]
     workspaces = snapshot["workspaces"]
 
@@ -115,7 +187,8 @@ def main():
                         help="like --default-session, then attach to it (outside herdr only)")
     parser.add_argument("--json", action="store_true",
                         help='print {"workspace_id", "root_pane_id"}; root_pane_id is null '
-                             "unless the workspace was just created")
+                             "unless the workspace or worktree space was just created; "
+                             "nothing when the question is cancelled")
     args = parser.parse_args()
     if args.list:
         print("\n".join(projects(Path.home())))
@@ -131,7 +204,10 @@ def main():
         return 0
     if not inside:
         ensure_default_server(binary)
-    workspace_id, root_pane = open_project(selected, binary)
+    opened = open_folder(selected, binary)
+    if not opened:
+        return 0
+    workspace_id, root_pane = opened
     if args.json:
         print(json.dumps({"workspace_id": workspace_id, "root_pane_id": root_pane}))
     if args.attach and not inside:
