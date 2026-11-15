@@ -145,6 +145,11 @@ OVERRIDDEN_CURRENT_WINDOW = current_window("#808080", "the local override's grey
 # The active pane's border in grey, as the check's local override colors it
 # after theme-sync's Dracula PRO has colored it too.
 OVERRIDDEN_ACTIVE_BORDER = "fg=#808080"
+# Karabiner-Elements' profile, which it rewrites itself, and the folder its
+# rule importer (Complex Modifications, Add predefined rule) reads.
+KARABINER_FOLDER = ".config/karabiner"
+KARABINER_PROFILE = f"{KARABINER_FOLDER}/karabiner.json"
+KARABINER_RULES = f"{KARABINER_FOLDER}/assets/complex_modifications"
 # What opens a folder in the file manager on each platform. On Debian and
 # Ubuntu `open` is openvt, which starts a program on a new virtual console.
 FOLDER_OPENERS = {"macos": "open", "linux": "xdg-open"}
@@ -357,7 +362,8 @@ def run_theme_sync(machine):
 
 
 # Each check starts the package's tool on the machine and raises Failed when
-# it does not start cleanly or ignores the package's config.
+# it does not start cleanly or ignores the package's config. One that cannot
+# start it returns a line that says so, for the package's line.
 
 def check_direnv(machine):
     project = machine.home / "project"
@@ -516,6 +522,51 @@ def check_fish_with_required_only(machine):
     for shortcut in MULTIPLEXER_SHORTCUTS:
         fail_unless_fish_only_says(machine, env, shortcut, "no multiplexer installed",
                                    f"fish's {shortcut} without tmux or herdr")
+
+
+def fail_unless_rules_importable(env, home, what):
+    """The rules Karabiner's importer offers are the files in
+    ~/.config/karabiner/assets/complex_modifications: karabiner_cli must find
+    each one valid. Return their names."""
+    files = sorted((home / KARABINER_RULES).glob("*.json"))
+    if not files:
+        raise Failed(f"{what}: no rules in ~/{KARABINER_RULES} for Karabiner's importer")
+    linted = run(["karabiner_cli", "--lint-complex-modifications", *map(str, files)], env, home,
+                 f"{what}: karabiner_cli --lint-complex-modifications")
+    if linted.splitlines() != [f"{file}: ok" for file in files]:
+        raise Failed(f"{what}: karabiner_cli did not find each rule file valid:\n{linted}".rstrip())
+    return [file.name for file in files]
+
+
+def check_karabiner(machine):
+    """The package ships rules for Karabiner's importer and no profile: an
+    adopter's own profile stays as it was. Karabiner itself never starts here,
+    which the package's line says: it would take this machine's keyboard."""
+    shipped = fail_unless_rules_importable(machine.env, machine.home, "karabiner")
+    if (machine.home / KARABINER_PROFILE).exists():
+        raise Failed(f"./install karabiner created ~/{KARABINER_PROFILE} in an empty home")
+    # Karabiner writes its profile and imports a rule into that folder: they
+    # belong to the home, not to the clone.
+    if (machine.home / KARABINER_FOLDER).is_symlink():
+        raise Failed(f"./install karabiner linked ~/{KARABINER_FOLDER} into the clone, where Karabiner would "
+                     "write the profile")
+
+    # A home where Karabiner already runs: its profile, and a rule imported earlier.
+    home = machine.root / "home-with-karabiner"
+    env = dict(machine.env, HOME=str(home))
+    profile, own_rule = home / KARABINER_PROFILE, home / KARABINER_RULES / "own.json"
+    own_rule.parent.mkdir(parents=True)
+    own_profile = '{"profiles": [{"name": "Mine", "selected": true}]}\n'
+    profile.write_text(own_profile)
+    shutil.copy2(machine.home / KARABINER_RULES / shipped[0], own_rule)
+    what = "./install karabiner beside an adopter's own profile"
+    run(machine.install_command("karabiner"), env, home, what)
+    if profile.is_symlink() or profile.read_text() != own_profile:
+        raise Failed(f"{what} replaced the profile ~/{KARABINER_PROFILE}")
+    importable = fail_unless_rules_importable(env, home, what)
+    if importable != sorted([*shipped, own_rule.name]):
+        raise Failed(f"{what}: the importer offers {importable}, not the package's {shipped} and the adopter's own")
+    return ["not started: Karabiner, which would take this machine's keyboard; karabiner_cli validated the rules"]
 
 
 def check_lazygit(machine):
@@ -836,7 +887,7 @@ def check_tmux_with_required_only(machine):
 
 
 CHECKS = {"direnv": check_direnv, "eza": check_eza, "fish": check_fish, "ghostty": check_ghostty,
-          "lazygit": check_lazygit, "nvim": check_nvim, "tmux": check_tmux}
+          "karabiner": check_karabiner, "lazygit": check_lazygit, "nvim": check_nvim, "tmux": check_tmux}
 # For a package with optional dependencies: its tool on a machine that has
 # only the required ones.
 REQUIRED_ONLY_CHECKS = {"fish": check_fish_with_required_only, "nvim": check_nvim_with_required_only,
@@ -955,10 +1006,9 @@ class Machine:
 
 
 def check(package, manifest, clone, hidden):
-    """Check the package; return the dependencies it could not take away for
-    the run without each."""
+    """Check the package; return a line for each step it could not take: a
+    check's own, and the run without a dependency it could not take away."""
     dependencies = manifest["dependencies"]
-    kept = []
     with tempfile.TemporaryDirectory() as temp:
         machine = Machine(Path(temp).resolve(), clone, dependencies, hidden)
         # With every dependency present, ./install has nothing to report.
@@ -968,7 +1018,7 @@ def check(package, manifest, clone, hidden):
         for shared in (".config", "Library", "Library/Application Support"):
             if (machine.home / shared).is_symlink():
                 raise Failed(f"./install {package} linked ~/{shared} into the clone")
-        CHECKS[package](machine)
+        unchecked = CHECKS[package](machine) or []
 
     if package in REQUIRED_ONLY_CHECKS:
         required = [d for d in dependencies if d["required"]]
@@ -986,7 +1036,7 @@ def check(package, manifest, clone, hidden):
         # cannot take it away. .tests/test_install.py covers that lookup.
         found = INSTALL.outside_path(dependency)
         if found:
-            kept.append(f"{dependency['command']}, in {os.path.dirname(found)}")
+            unchecked.append(f"not checked without {dependency['command']}, in {os.path.dirname(found)}")
             continue
         missing = INSTALL.dependency_name(dependency)
         with tempfile.TemporaryDirectory() as temp:
@@ -1000,7 +1050,7 @@ def check(package, manifest, clone, hidden):
                              f"expected {missing} named with its hint\n{output}".rstrip())
             if not machine.links():
                 raise Failed(f"./install {package} without {missing} stowed nothing")
-    return kept
+    return unchecked
 
 
 def main(args):
@@ -1022,8 +1072,8 @@ def main(args):
         copy_tree(clone)
         for package in packages:
             try:
-                kept = check(package, known[package], clone, hidden)
-                print(f"ok    {package}" + "".join(f"\n      not checked without {k}" for k in kept))
+                unchecked = check(package, known[package], clone, hidden)
+                print(f"ok    {package}" + "".join(f"\n      {u}" for u in unchecked))
             except Failed as failure:
                 failures += 1
                 print(f"FAIL  {package}: {failure}")

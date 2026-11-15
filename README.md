@@ -76,6 +76,15 @@ lazygit package lists that file under `overridden_by` in its manifest, so
 `./install lazygit` names it when it exists. Move it away then; lazygit keeps
 its state, such as `state.yml`, in that folder, so leave the rest.
 
+karabiner is optional, and macOS only. It ships rules, not a profile:
+`./install karabiner` (or `stow --no-folding karabiner`) links them into
+`~/.config/karabiner/assets/complex_modifications`, and Karabiner-Elements
+offers them under Settings, Complex Modifications, Add predefined rule.
+`~/.config/karabiner` stays a folder of your own, so the profile Karabiner
+writes there, `karabiner.json`, stays yours, and one you already have stays
+as it was. The standalone check never starts Karabiner, and says so under the
+package's `ok`: `karabiner_cli` validates the rules instead.
+
 ### Lint
 
 The repository's Python passes `ruff check`. `ruff.toml` has the rules: names

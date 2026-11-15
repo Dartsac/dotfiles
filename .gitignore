@@ -75,7 +75,11 @@ herdr/.config/herdr/sessions/
 herdr/.config/herdr/*.log
 herdr/.config/herdr/*.sock
 herdr/.config/herdr/*.sock.agent
-# Karabiner rewrites these timestamped copies on its own; keep the real karabiner.json
+# Karabiner's profile and the timestamped copies it rewrites on its own, where
+# ~/.config/karabiner links into the clone (stowed before --no-folding): each
+# machine keeps its own (its devices, the owner's Command+M rule). The package
+# ships only the rules in assets/complex_modifications.
+/karabiner/.config/karabiner/karabiner.json
 /karabiner/.config/karabiner/automatic_backups/
 
 # Tide prompt settings: contain Dracula Pro colors (paid theme), keep local

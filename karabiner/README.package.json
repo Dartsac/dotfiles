@@ -1,0 +1,16 @@
+{
+  "description": "Karabiner-Elements: importable rules (Ctrl+[ to Escape, Ctrl+Backspace deletes a word); your profile stays yours",
+  "role": "optional",
+  "platforms": ["macos"],
+  "stow_flags": ["--no-folding"],
+  "dependencies": [
+    {
+      "command": "karabiner_cli",
+      "also_in": {"macos": ["/Library/Application Support/org.pqrs/Karabiner-Elements/bin"]},
+      "required": true,
+      "hint": {
+        "macos": "brew install --cask karabiner-elements (imports the rules: Settings, Complex Modifications, Add predefined rule)"
+      }
+    }
+  ]
+}

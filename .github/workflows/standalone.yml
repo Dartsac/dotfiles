@@ -27,7 +27,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install stow direnv eza fish tmux fzf zoxide lazygit git neovim ripgrep tree-sitter-cli
-          brew install --cask ghostty font-hack-nerd-font
+          brew install --cask ghostty font-hack-nerd-font karabiner-elements
 
       - name: Install the packages' dependencies (Ubuntu)
         if: runner.os == 'Linux'
