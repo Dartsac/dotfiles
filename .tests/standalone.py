@@ -25,6 +25,10 @@ for it, and the package's line says so.
 A package with optional dependencies may also be started on a machine that
 has only its required ones: the tool must still start cleanly.
 
+Where the owner puts Dracula PRO over the free theme (ghostty, tmux, fish's
+Tide, nvim), the check then runs theme-sync with a made-up theme package
+(synthetic_theme.py), and the tool must show its colors.
+
 The dependencies must be installed where this runs: commands are taken from
 PATH or from where their app keeps them, and fonts from this user's own font
 folder.
@@ -48,6 +52,8 @@ import tempfile
 import termios
 import time
 from pathlib import Path
+
+import synthetic_theme
 
 REPO = Path(__file__).resolve().parents[1]
 MANIFEST = "README.package.json"
@@ -91,10 +97,30 @@ WHITE_TEXT = "\x1b[37m"
 TERMINAL_REPLIES = [(re.compile(rb"\x1b\[0?c"), b"\x1b[?62;22c"), (re.compile(rb"\x1b\[6n"), b"\x1b[1;1R")]
 # Where Homebrew installs itself: Apple Silicon, Intel Macs, Linux.
 HOMEBREW_PREFIXES = ["/opt/homebrew", "/usr/local", "/home/linuxbrew/.linuxbrew"]
-# Tide's prompt character in the free Dracula theme's green (#50FA7B), as fish
-# draws it in a terminal that shows 24-bit color.
-DRACULA_PROMPT_CHARACTER = (re.compile("\x1b\\[38;2;80;250;123m[^\x1b]*❯".encode()),
-                            "Tide prompt character in Dracula green")
+# The made-up Dracula PRO's colors, in the variant theme-sync uses when
+# nothing names another.
+PRO = synthetic_theme.PALETTES["pro"]
+
+
+def rgb(color):
+    """#50fa7b -> 80;250;123, as a terminal that shows 24-bit color is sent it."""
+    return ";".join(str(channel) for channel in bytes.fromhex(color[1:]))
+
+
+def prompt_character(color, what):
+    """Tide's prompt character in `color`, as fish draws it in a terminal
+    that shows 24-bit color."""
+    return re.compile(f"\x1b\\[38;2;{rgb(color)}m[^\x1b]*❯".encode()), f"Tide prompt character in {what}"
+
+
+def current_window(color, what):
+    """tmux's status line with the current window in `color`, as tmux draws
+    it in a terminal that shows 24-bit color."""
+    return re.compile(f"\x1b\\[(?:[0-9;]*;)?48;2;{rgb(color)}m".encode()), f"status line with the current window in {what}"
+
+
+DRACULA_PROMPT_CHARACTER = prompt_character("#50fa7b", "Dracula green")
+PRO_PROMPT_CHARACTER = prompt_character(PRO["green"], "the made-up Dracula PRO's green")
 # The commands that act on tmux (or herdr, the owner's multiplexer).
 MULTIPLEXER_SHORTCUTS = ["ke", "ks", "tls", "a", "d", "dev", "sessionizer"]
 # nvim-treesitter reports each step of a parser install as error output
@@ -107,17 +133,15 @@ TREESITTER_REPORTS = re.compile(r"\[nvim-treesitter(/install/[\w-]+)?\]: ")
 SEARCHINDEX_MAPPING = re.compile(r"E227: Mapping already exists for [#*]$")
 # The plugins tmux.conf lists, by the folder TPM installs each into.
 TMUX_PLUGINS = ["tpm", "tmux-sensible", "tmux-yank", "tmux-pane-clarity", "tmux-resurrect", "tmux-continuum"]
-# tmux's status line with the current window in the free Dracula theme's
-# purple (#BD93F9), as tmux draws it in a terminal that shows 24-bit color.
-DRACULA_CURRENT_WINDOW = (re.compile(rb"\x1b\[(?:[0-9;]*;)?48;2;189;147;249m"),
-                          "status line with the current window in Dracula purple")
+DRACULA_CURRENT_WINDOW = current_window("#bd93f9", "Dracula purple")
+# tmux's Dracula PRO colors the current window orange.
+PRO_CURRENT_WINDOW = current_window(PRO["orange"], "the made-up Dracula PRO's orange")
 # Ghostty's built-in free Dracula theme, by the background it sets.
 DRACULA_BACKGROUND = "#282a36"
 # Inactive pane borders in the free Dracula theme's comment color.
 DRACULA_PANE_BORDER = "fg=#6272a4"
-# The current window in grey (#808080), as the check's local override colors it.
-OVERRIDDEN_CURRENT_WINDOW = (re.compile(rb"\x1b\[(?:[0-9;]*;)?48;2;128;128;128m"),
-                             "status line with the current window in the local override's grey")
+# The current window in grey, as the check's local override colors it.
+OVERRIDDEN_CURRENT_WINDOW = current_window("#808080", "the local override's grey")
 # What opens a folder in the file manager on each platform. On Debian and
 # Ubuntu `open` is openvt, which starts a program on a new virtual console.
 FOLDER_OPENERS = {"macos": "open", "linux": "xdg-open"}
@@ -318,6 +342,17 @@ def run_in_terminal(args, env, cwd, what, keys, wait_for=None):
     return screen
 
 
+def run_theme_sync(machine):
+    """Run the clone's theme-sync with a made-up Dracula PRO package: it puts
+    the theme into the local override of each package stowed here. The
+    check's own Python runs it, as it runs ./install."""
+    package = machine.root / "dracula-pro-v9"
+    if not package.exists():
+        synthetic_theme.write_package(package)
+    run([sys.executable, "-B", str(machine.clone / "theme-sync")], dict(machine.env, DRACULA_PRO_DIR=str(package)),
+        machine.home, "theme-sync with a made-up Dracula PRO package")
+
+
 # Each check starts the package's tool on the machine and raises Failed when
 # it does not start cleanly or ignores the package's config.
 
@@ -372,18 +407,30 @@ def check_ghostty(machine):
         shift_enter = [s for s in settings if s.startswith("keybind = shift+enter=")]
         raise Failed(f"Ghostty's config won over its local override: {shift_enter}")
 
+    # Dracula PRO, which theme-sync puts into that local override.
+    themes = machine.clone / "ghostty/.config/ghostty/themes"
+    override.write_text("keybind = shift+enter=text:local\n")
+    try:
+        run_theme_sync(machine)
+        settings = ghostty_settings(machine, "ghostty after theme-sync")
+    finally:
+        override.unlink()
+        shutil.rmtree(themes, ignore_errors=True)
+    for expected in ("theme = Dracula-Pro", f"background = {PRO['background']}", "keybind = shift+enter=text:local"):
+        if expected not in settings:
+            raise Failed(f"Ghostty after theme-sync: no {expected!r} in +show-config")
 
-def check_fish_first_start(machine, what, env):
+
+def check_fish_first_start(machine, what, env, prompt=DRACULA_PROMPT_CHARACTER, name=None):
     """Start fish as a terminal does, an interactive login shell, on a day
-    it greets the user; once Tide's prompt is drawn in free Dracula colors,
-    type `exit`. Fail on any error output, a prompt that never comes, or a
-    greeting without the user's name."""
+    it greets the user; once Tide's prompt is drawn (`prompt`: in free
+    Dracula colors), type `exit`. Fail on any error output, a prompt that
+    never comes, or a greeting without the user's name (or `name`)."""
     (machine.home / ".config/fish/fish_greeting_last_run").write_text("2000-01-01\n")
     terminal = dict(env, TERM="xterm-256color", COLORTERM="truecolor")
-    screen = run_in_terminal(["fish", "--login"], terminal, machine.home, what, keys=b"exit\r",
-                             wait_for=DRACULA_PROMPT_CHARACTER)
+    screen = run_in_terminal(["fish", "--login"], terminal, machine.home, what, keys=b"exit\r", wait_for=prompt)
     text = TERMINAL_CODE.sub("", screen)
-    greeting = f"hello, {env['USER']}"
+    greeting = f"hello, {name or env['USER']}"
     if greeting not in text:
         raise Failed(f"{what}: the greeting does not say {greeting!r}; the terminal showed:\n{text}".rstrip())
 
@@ -447,6 +494,12 @@ def check_fish(machine):
     fail_unless_fish_only_says(machine, machine.env, "sessionizer", "stow the tmux package",
                                "fish's sessionizer with tmux but not the tmux package")
 
+    # Tide's colors in Dracula PRO, which theme-sync puts into the local
+    # override beside the name it holds for the greeting.
+    (machine.home / ".config/fish/config-local.fish").write_text("set -g greeting_name owner\n")
+    run_theme_sync(machine)
+    check_fish_first_start(machine, "fish after theme-sync", machine.env, prompt=PRO_PROMPT_CHARACTER, name="owner")
+
 
 @forgetting_fish_state
 def check_fish_with_required_only(machine):
@@ -491,9 +544,10 @@ def check_lazygit(machine):
         raise Failed(f"lazygit wrote into the clone: {[str(p.relative_to(machine.clone)) for p in written]}")
 
 
-def start_nvim(machine, what, note, first_start=False, builds_parsers=False):
+def start_nvim(machine, what, note, first_start=False, builds_parsers=False, colorscheme="dracula"):
     """Start Neovim with NVIM_PROBE, which opens `note`; fail on any error it
-    reports. A first start installs every plugin, and where the machine can
+    reports, or on a colorscheme other than `colorscheme` (the free Dracula
+    theme's). A first start installs every plugin, and where the machine can
     build Treesitter parsers, the probe waits for them. Return the probe's
     report."""
     probe, report_file = machine.root / "probe.lua", machine.root / "report.json"
@@ -510,8 +564,8 @@ def start_nvim(machine, what, note, first_start=False, builds_parsers=False):
     errmsg = "" if SEARCHINDEX_MAPPING.match(report["errmsg"]) else report["errmsg"]
     if errmsg or errors:
         raise Failed(f"{what} reported errors:\n" + "\n".join([errmsg, *errors]).strip())
-    if report["colors_name"] != "dracula":
-        raise Failed(f"{what}: the colorscheme is {report['colors_name']}, not the free Dracula theme")
+    if report["colors_name"] != colorscheme:
+        raise Failed(f"{what}: the colorscheme is {report['colors_name']}, not {colorscheme}")
     return report
 
 
@@ -552,6 +606,15 @@ def check_nvim(machine):
         override.unlink()
     if not (report["obsidian_loaded"] and report["vault_keys"]):
         raise Failed("nvim ignored the vault the local override names: no obsidian.nvim or vault keys for its note")
+
+    # Dracula PRO, which theme-sync installs, in the variant Ghostty's local
+    # override names (Ghostty's package is not stowed here: its folder is the
+    # machine's own).
+    ghostty = machine.home / ".config/ghostty"
+    ghostty.mkdir(parents=True)
+    (ghostty / "config.local.ghostty").write_text("theme = Dracula-Van-Helsing\n")
+    run_theme_sync(machine)
+    start_nvim(machine, "nvim after theme-sync", note, colorscheme="dracula-pro-van-helsing")
 
 
 def check_nvim_with_required_only(machine):
@@ -682,7 +745,8 @@ def check_tmux(machine):
     and the plugins: every plugin tmux.conf lists must be installed and
     loaded, and tmux must draw its free Dracula colors without errors and
     open folders with the platform's opener. Then start it again with a local
-    override, whose settings must win."""
+    override, whose settings must win, and once more after theme-sync has put
+    Dracula PRO into that override."""
     # A shell of the machine's own in each pane, not the user's login shell;
     # and in front of the system's tools, an `open` and an `xdg-open` that
     # only note how they were called.
@@ -729,6 +793,20 @@ def check_tmux(machine):
             extended_keys = run_tmux(machine, env, "show-option", "-sv", "extended-keys").strip()
             if extended_keys != "off":
                 raise Failed(f"tmux.conf set extended-keys {extended_keys} after the local override set it off")
+            stop_tmux(machine, env)
+
+            # Dracula PRO, which theme-sync puts into the local override
+            # before what it holds.
+            override.write_text("set -s extended-keys off\n")
+            run_theme_sync(machine)
+            run_tmux(machine, env, "new-session", "-d", what="tmux after theme-sync")
+            border = run_tmux(machine, env, "show-option", "-gv", "pane-border-style").strip()
+            if border != f"fg={PRO['comment']}":
+                raise Failed(f"tmux's pane borders after theme-sync are {border!r}, not Dracula PRO's comment color")
+            attach_tmux(machine, env, "tmux attach after theme-sync", PRO_CURRENT_WINDOW)
+            extended_keys = run_tmux(machine, env, "show-option", "-sv", "extended-keys").strip()
+            if extended_keys != "off":
+                raise Failed(f"theme-sync lost the local override's own setting: extended-keys is {extended_keys}")
         finally:
             override.unlink()
     finally:

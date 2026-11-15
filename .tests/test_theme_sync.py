@@ -9,8 +9,11 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
+
+import synthetic_theme
 
 THEME_SYNC = Path(__file__).resolve().parents[1] / "theme-sync"
 # Made-up "package" colors. Greys and free Dracula colors are public.
@@ -197,6 +200,143 @@ class GhosttyVariantTest(unittest.TestCase):
         (self.theme_sync.GHOSTTY / "config.local.ghostty").write_text(
             "theme = Dracula-Van-Helsing\n# theme = Dracula-Buffy\n")
         self.assertEqual(self.theme_sync.ghostty_variant(), "van-helsing")
+
+
+class OverlayTest(unittest.TestCase):
+    """theme-sync run on a home with a made-up theme package: Dracula PRO goes
+    into each package's local override, beside the owner's own entries, which
+    come after it and win. theme-sync runs from a copy of the repository with
+    templates of its own."""
+
+    TEMPLATES = {
+        "theme-templates.txt": "app/colors.conf.template -> ~/.config/app/colors.conf\n"
+                               "tmux/pro.conf.template >> ~/.config/tmux/tmux.local.conf\n"
+                               "fish/pro.fish.template >> ~/.config/fish/config-local.fish\n",
+        "app/colors.conf.template": "background = {{background}}\nalert = {{bright_red}}\nmuted = {{dim_red}}\n",
+        "tmux/pro.conf.template": 'set -g @pane_clarity_border_style "fg={{comment}}"\n',
+        "fish/pro.fish.template": "set -g tide_character_color '{{green}}'\n",
+    }
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        self.home, self.repo = root / "home", root / "repo"
+        package = synthetic_theme.write_package(root / "dracula-pro-v9")
+        for name, text in self.TEMPLATES.items():
+            (self.repo / name).parent.mkdir(parents=True, exist_ok=True)
+            (self.repo / name).write_text(text)
+        shutil.copy2(THEME_SYNC, self.repo / "theme-sync")
+        self.config = self.home / ".config"
+        for app in ("app", "tmux", "fish", "ghostty"):
+            (self.config / app).mkdir(parents=True)
+        (self.config / "ghostty/config").write_text("theme = Dracula\nconfig-file = ?config.local.ghostty\n")
+        self.env = {"HOME": str(self.home), "PATH": os.environ["PATH"], "DRACULA_PRO_DIR": str(package)}
+        self.pro, self.van_helsing = synthetic_theme.PALETTES["pro"], synthetic_theme.PALETTES["van-helsing"]
+
+    def theme_sync(self, *args):
+        result = subprocess.run([sys.executable, "-B", str(self.repo / "theme-sync"), *args], env=self.env,
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return result.stdout
+
+    def owner_overrides(self):
+        """Local overrides as the owner keeps them: an opening comment, then
+        settings of their own. fish has none yet."""
+        overrides = {
+            "tmux/tmux.local.conf": "# My tmux.\n\n# A frame around every pane.\nset -g @pane_clarity_mode 'always'\n",
+            "ghostty/config.local.ghostty": "keybind = super+m=text:x\n",
+        }
+        for name, text in overrides.items():
+            (self.config / name).write_text(text)
+        return overrides
+
+    def read(self, name):
+        return (self.config / name).read_text()
+
+    def test_dracula_pro_goes_into_each_local_override_before_the_owners_entries(self):
+        overrides = self.owner_overrides()
+
+        self.theme_sync()
+
+        tmux = self.read("tmux/tmux.local.conf")
+        self.assertIn(f'set -g @pane_clarity_border_style "fg={self.pro["comment"]}"', tmux)
+        self.assertTrue(tmux.startswith("# My tmux.\n"), tmux)
+        self.assertTrue(tmux.endswith("\n# A frame around every pane.\nset -g @pane_clarity_mode 'always'\n"), tmux)
+        self.assertLess(tmux.index(self.pro["comment"]), tmux.index("# A frame"))
+        self.assertIn(f"set -g tide_character_color '{self.pro['green']}'", self.read("fish/config-local.fish"))
+        ghostty = self.read("ghostty/config.local.ghostty")
+        self.assertIn("theme = Dracula-Pro\n", ghostty)
+        self.assertTrue(ghostty.endswith(overrides["ghostty/config.local.ghostty"]), ghostty)
+        self.assertIn(f"background = {self.pro['background']}", self.read("ghostty/themes/Dracula-Pro"))
+
+    def test_a_second_run_changes_nothing_and_a_variant_chosen_after_the_block_replaces_it(self):
+        self.owner_overrides()
+        self.theme_sync()
+        written = self.read("tmux/tmux.local.conf")
+
+        self.assertIn("everything is up to date", self.theme_sync())
+        self.assertEqual(self.read("tmux/tmux.local.conf"), written)
+
+        with open(self.config / "ghostty/config.local.ghostty", "a") as override:
+            override.write("theme = Dracula-Van-Helsing\n")
+        self.theme_sync()
+
+        tmux = self.read("tmux/tmux.local.conf")
+        self.assertIn(self.van_helsing["comment"], tmux)
+        self.assertNotIn(self.pro["comment"], tmux)
+        self.assertEqual(tmux.count("@pane_clarity_border_style"), 1, tmux)
+        self.assertIn(f"tide_character_color '{self.van_helsing['green']}'", self.read("fish/config-local.fish"))
+        ghostty = self.read("ghostty/config.local.ghostty")
+        self.assertEqual(re.findall(r"(?m)^theme = .*", ghostty), ["theme = Dracula-Van-Helsing"] * 2, ghostty)
+
+    def test_check_names_each_override_it_would_change_and_writes_nothing(self):
+        overrides = self.owner_overrides()
+
+        output = self.theme_sync("--check")
+
+        for name in ("tmux/tmux.local.conf", "fish/config-local.fish", "ghostty/config.local.ghostty"):
+            self.assertIn(f"would update {self.config / name}", output)
+        for name, text in overrides.items():
+            self.assertEqual(self.read(name), text)
+        self.assertFalse((self.config / "fish/config-local.fish").exists())
+
+    def test_without_a_package_the_overrides_are_left_alone_and_the_free_theme_stays(self):
+        overrides = self.owner_overrides()
+        self.env["DRACULA_PRO_DIR"] = str(self.home / "no-package")
+
+        output = self.theme_sync()
+
+        self.assertIn("the free Dracula theme stays", output)
+        for name, text in overrides.items():
+            self.assertEqual(self.read(name), text)
+        self.assertFalse((self.config / "fish/config-local.fish").exists())
+        self.assertFalse((self.config / "ghostty/themes").exists())
+        # Templates of owner packages get the free Dracula theme's colors.
+        self.assertEqual(self.read("app/colors.conf").splitlines()[1:],
+                         ["background = #282a36", "alert = #ff6e6e", "muted = #ff5555"])
+
+    def test_an_override_whose_package_is_not_stowed_is_left_alone(self):
+        for app in ("tmux", "app"):
+            shutil.rmtree(self.config / app)
+
+        output = self.theme_sync()
+
+        self.assertFalse((self.config / "tmux").exists())
+        self.assertFalse((self.config / "app").exists())
+        self.assertIn(f"no {self.config / 'tmux'}", output)
+        self.assertTrue((self.config / "fish/config-local.fish").exists())
+
+    def test_a_block_without_its_end_is_left_as_it_is(self):
+        broken = "# >>> theme-sync\nset -g status-style bg=red\n"
+        (self.config / "tmux/tmux.local.conf").write_text(broken)
+
+        result = subprocess.run([sys.executable, "-B", str(self.repo / "theme-sync")], env=self.env,
+                                capture_output=True, text=True)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("tmux.local.conf", result.stderr)
+        self.assertEqual(self.read("tmux/tmux.local.conf"), broken)
 
 
 class RootScriptsTest(unittest.TestCase):

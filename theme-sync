@@ -8,16 +8,26 @@ files outside the repository or ignored by git:
   ~/.local/share/theme-sync/palette.json   named colors for every variant, and
                                             the package's other values (for the guards)
   ~/.config/ghostty/themes/Dracula-*       the package's Ghostty themes
+  ~/.config/ghostty/config.local.ghostty   a block choosing the variant's theme
   ~/.local/share/nvim/site/pack/themes/start/dracula-pro   the package's Vim theme
-  each target in theme-templates.txt       its template with {{names}} filled in
+  each target in theme-templates.txt       its template with {{names}} filled in:
+                                            the whole file (->), or a block in a
+                                            local override (>>), such as tmux's
   ~/Library/Fonts/HerdrSpritesPixel-*.ttf   Herdr's state-colored sprite fonts
                                             (named for their drawings; old ones go)
 
+The tracked configs carry the free Dracula theme. A block in a local override
+puts Dracula PRO over it: theme-sync writes the block after the file's
+opening comment, rewrites it in place on each run, and keeps every other
+line, so a setting after the block wins over it. A file goes into a package's
+folder only where that folder exists: an app whose package is not stowed is
+left alone.
+
 To theme another app, write its config in this repository with color names in
 double braces ({{orange}}, {{bgdark}}; `theme-sync --names` lists them), add a
-`template -> target` line to theme-templates.txt, and run theme-sync.
-For a shade between two colors, {{comment+foreground:40}} is comment with 40%
-foreground mixed in.
+`template -> target` line (or `template >> local override`) to
+theme-templates.txt, and run theme-sync. For a shade between two colors,
+{{comment+foreground:40}} is comment with 40% foreground mixed in.
 
 Run it after downloading a new package, on a new machine, after editing a
 template, or after switching the Ghostty theme variant: the last `theme =`
@@ -26,7 +36,8 @@ line of Ghostty's config or, read after it, of config.local.ghostty.
 Package: $DRACULA_PRO_DIR, else the newest dracula-pro-v* directory under
 ~/Documents/Resources/Themes/Dracula Packages. It must contain
 design/palette.md, themes/ghostty and themes/vim (v2.2 or newer). Without a
-package only the templates are written, with stand-in colors.
+package the free Dracula theme stays: no app theme or local override is
+written, and whole-file templates get the free theme's colors.
 
   theme-sync                 install everything
   theme-sync --check         report what would change; write nothing
@@ -59,39 +70,47 @@ TOKEN = re.compile(r"\{\{([a-z_]+)(?:\+([a-z_]+):(\d{1,2}))?\}\}")
 COLOR_VALUE = re.compile(r"(?<![0-9A-Za-z])(#?)([0-9A-Fa-f]{6})(?![0-9A-Za-z])")
 # The name the guards give a package value that no palette names.
 UNNAMED = "unnamed"
+# A local override's block: the lines from the first marker to the second.
+BLOCK_START = "# >>> theme-sync"
+BLOCK_END = "# <<< theme-sync"
 
-# Stand-in colors for templates when no package is installed (One Dark, a
-# free palette). Other names resolve by family: see stand_in().
+# The free Dracula theme (draculatheme.com/spec: standard, ANSI and UI
+# palettes) by the package's names, for templates when no package is
+# installed. Other names resolve by family: see stand_in().
 STAND_INS = {
-    "background": "#282c34",
-    "foreground": "#abb2bf",
-    "comment": "#5c6370",
-    "selection": "#3e4451",
-    "cursor": "#528bff",
-    "black": "#282c34",
-    "white": "#abb2bf",
-    "red": "#e06c75",
-    "green": "#98c379",
-    "yellow": "#e5c07b",
-    "blue": "#61afef",
-    "magenta": "#c678dd",
-    "cyan": "#56b6c2",
-    "orange": "#d19a66",
-    "purple": "#61afef",
-    "pink": "#c678dd",
-    "bg": "#282c34",
-    "bgdark": "#21252b",
-    "bgdarker": "#21252b",
-    "bglight": "#2c313a",
-    "bglighter": "#2c313a",
+    "background": "#282a36",
+    "foreground": "#f8f8f2",
+    "comment": "#6272a4",
+    "selection": "#44475a",
+    "cursor": "#f8f8f2",
+    "black": "#21222c",
+    "white": "#f8f8f2",
+    "red": "#ff5555",
+    "green": "#50fa7b",
+    "yellow": "#f1fa8c",
+    "blue": "#bd93f9",
+    "magenta": "#ff79c6",
+    "cyan": "#8be9fd",
+    "orange": "#ffb86c",
+    "purple": "#bd93f9",
+    "pink": "#ff79c6",
+    "bright_black": "#6272a4",
+    "bright_red": "#ff6e6e",
+    "bright_green": "#69ff94",
+    "bright_yellow": "#ffffa5",
+    "bright_blue": "#d6acff",
+    "bright_magenta": "#ff92df",
+    "bright_cyan": "#a4ffff",
+    "bright_white": "#ffffff",
+    "bg": "#282a36",
+    "bgdark": "#21222c",
+    "bgdarker": "#191a21",
+    "bglight": "#343746",
+    "bglighter": "#424450",
 }
-# The free Dracula theme's published colors (draculatheme.com/spec: standard,
-# ANSI and UI palettes). Dracula PRO shares a few; those are public, not paid.
-FREE_DRACULA = {
-    "282a36", "6272a4", "44475a", "f8f8f2", "ff5555", "ffb86c", "f1fa8c", "50fa7b",
-    "8be9fd", "bd93f9", "ff79c6", "353747", "21222c", "ff6e6e", "69ff94", "ffffa5",
-    "d6acff", "ff92df", "a4ffff", "343746", "424450", "191a21",
-}
+# Every color the free Dracula theme publishes, its line highlight among them.
+# Dracula PRO shares a few; those are public, not paid.
+FREE_DRACULA = {value[1:] for value in STAND_INS.values()} | {"353747"}
 # Target suffixes whose format takes a "#" comment, for the generated-file note.
 HASH_COMMENTS = {".toml", ".yml", ".yaml", ".conf", ".ini", ".fish", ".sh"}
 HOOK = """#!/bin/sh
@@ -221,22 +240,67 @@ def ghostty_variant():
     return names[-1].split("-", 1)[1].lower()
 
 
+def ghostty_theme(variant):
+    """Ghostty's name for a variant's theme: van-helsing -> Dracula-Van-Helsing."""
+    return "Dracula-" + "-".join(part.capitalize() for part in variant.split("-"))
+
+
+def stowed(target):
+    """Whether the folder `target` goes in is there. A package's folder is
+    there once it is stowed; writing into a missing one would make a real
+    folder where stow puts its link."""
+    if target.parent.is_dir():
+        return True
+    print(f"theme-sync: no {target.parent}, so {target.name} is left alone (stow its package first)")
+    return False
+
+
+def with_block(path, block):
+    """The text of the file at `path` with `block` in it: in place of the
+    block it has, or else after its opening comment. Every other line stays."""
+    lines = path.read_text().splitlines(keepends=True) if path.exists() else []
+    if lines and not lines[-1].endswith("\n"):
+        lines[-1] += "\n"
+    start = next((i for i, line in enumerate(lines) if line.startswith(BLOCK_START)), None)
+    if start is not None:
+        end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith(BLOCK_END)), None)
+        if end is None:
+            raise SystemExit(f"theme-sync: {path} has a '{BLOCK_START}' line and no '{BLOCK_END}' line after it; "
+                             "mend it, then run theme-sync")
+        return "".join(lines[:start]) + block + "".join(lines[end + 1:])
+    head = 0
+    while head < len(lines) and lines[head].startswith("#"):
+        head += 1
+    before, after = "".join(lines[:head]), "".join(lines[head:])
+    return before + ("\n" if before else "") + block + ("\n" if after[:1] not in ("", "\n") else "") + after
+
+
+def block(about, text):
+    """A local override's block: its markers, a comment that says what it is, and `text`."""
+    if not text.endswith("\n"):
+        text += "\n"
+    return f"{BLOCK_START}: {about}\n{text}{BLOCK_END}\n"
+
+
 def stand_in(name):
     """Stand-in color for a name: bright_red and dim_red use red's."""
     return STAND_INS.get(name) or STAND_INS.get(re.sub(r"^(bright|dim)_", "", name))
 
 
 def read_templates():
-    """[(template path, target path)] from theme-templates.txt."""
+    """[(template path, target path, whether the target takes a block)] from
+    theme-templates.txt."""
     pairs = []
     for number, line in enumerate(TEMPLATES.read_text().splitlines(), 1):
         line = line.strip()
         if not line or line.startswith("#"):
             continue
-        source, arrow, target = (part.strip() for part in line.partition("->"))
-        if not arrow or not source or not target:
-            raise SystemExit(f"theme-sync: {TEMPLATES.name} line {number}: expected 'template -> target'")
-        pairs.append((REPO / source, Path(target).expanduser()))
+        arrow = ">>" if ">>" in line else "->"
+        source, _, target = (part.strip() for part in line.partition(arrow))
+        if arrow not in line or not source or not target:
+            raise SystemExit(f"theme-sync: {TEMPLATES.name} line {number}: expected 'template -> target' "
+                             "or 'template >> local override'")
+        pairs.append((REPO / source, Path(target).expanduser(), arrow == ">>"))
     return pairs
 
 
@@ -246,7 +310,7 @@ def blend(color, other, percent):
     return "#" + "".join(f"{round(a + (b - a) * percent / 100):02x}" for a, b in channels)
 
 
-def render(template, target, colors):
+def render(template, colors):
     """Template text with each {{name}} replaced; colors=None uses stand-ins."""
     lookup = colors.get if colors is not None else stand_in
     text = template.read_text()
@@ -259,19 +323,20 @@ def render(template, target, colors):
         name, other, percent = match.groups()
         return blend(lookup(name), lookup(other), int(percent)) if other else lookup(name)
 
-    text = TOKEN.sub(color, text)
-    if target.suffix in HASH_COMMENTS:
-        text = f"# GENERATED by theme-sync from {template.relative_to(REPO)}. Edit that file, then run theme-sync.\n" + text
-    return text
+    return TOKEN.sub(color, text)
 
 
 def install_hook(install):
-    """Put the pre-commit guard where this repository's git looks for hooks."""
+    """Put the pre-commit guard where this repository's git looks for hooks.
+    A copy of the repository that is no git checkout gets none."""
     def git(*args):
         return subprocess.run(["git", "-C", str(REPO), *args], capture_output=True, text=True).stdout.strip()
 
+    common = shutil.which("git") and git("rev-parse", "--git-common-dir")
+    if not common:
+        return
     hooks = git("config", "core.hooksPath")
-    hooks = Path(hooks).expanduser() if hooks else Path(git("rev-parse", "--git-common-dir")) / "hooks"
+    hooks = Path(hooks).expanduser() if hooks else Path(common) / "hooks"
     if not hooks.is_absolute():
         hooks = REPO / hooks
     hook = hooks / "pre-commit"
@@ -435,9 +500,10 @@ def install_herdr_fonts(install, colors):
     """Generate color sprites outside git from the same palette as the config.
 
     fontTools is needed only here; uv supplies it if this Python lacks it.
-    The colorless source fonts in git remain untouched."""
+    The colorless source fonts in git remain untouched. Only where Herdr's
+    package is stowed: its config is what shows them."""
     builder = REPO / "herdr/.config/herdr/faces/color_font.py"
-    if not builder.exists() or sys.platform != "darwin":
+    if not builder.exists() or sys.platform != "darwin" or not (HOME / ".config/herdr").is_dir():
         return
     if importlib.util.find_spec("fontTools"):
         python = [sys.executable]
@@ -478,23 +544,38 @@ def main():
         colors = palettes[variant]
         stored = {"package": package.name, "variants": palettes, "other_values": other_values(package, palettes)}
         install.write(PALETTE_JSON, json.dumps(stored, indent=1, sort_keys=True) + "\n")
-        for theme in sorted((package / "themes/ghostty").iterdir()):
-            if theme.is_file() and "." not in theme.name:
-                name = "Dracula-" + "-".join(part.capitalize() for part in theme.name.split("-"))
-                install.write(GHOSTTY / "themes" / name, theme.read_text())
+        override = GHOSTTY / "config.local.ghostty"
+        if stowed(override):
+            for theme in sorted((package / "themes/ghostty").iterdir()):
+                if theme.is_file() and "." not in theme.name:
+                    install.write(GHOSTTY / "themes" / ghostty_theme(theme.name), theme.read_text())
+            choice = ("# Choose another variant here, or in a `theme =` line after this block, then run theme-sync.\n"
+                      f"theme = {ghostty_theme(variant)}\n")
+            install.write(override, with_block(override, block("Dracula PRO, the variant theme-sync and Neovim use.", choice)))
         install.copy_tree(package / "themes/vim", NVIM_THEME)
         print(f"theme-sync: {package.name}, variant '{variant}'")
     else:
-        print(f"theme-sync: no Dracula PRO package ({why}); app themes left as they are")
+        print(f"theme-sync: no Dracula PRO package ({why}); the free Dracula theme stays: "
+              "app themes and local overrides left as they are")
 
     # Prepare the color font before a generated config can refer to it.
     install_herdr_fonts(install, colors)
-    for template, target in read_templates():
+    for template, target, in_block in read_templates():
+        if (in_block and colors is None) or not stowed(target):
+            continue
+        source = template.relative_to(REPO)
+        if in_block:
+            about = f"Dracula PRO from {source}. Edit that, not this block, then run theme-sync."
+            install.write(target, with_block(target, block(about, render(template, colors))))
+            continue
         stray = template.with_name(target.name)
         if stray.exists() and stray.resolve() != target.resolve():
             print(f"theme-sync: {stray.relative_to(REPO)} is not read by anything; edit {template.name} instead and delete it")
+        text = render(template, colors)
+        if target.suffix in HASH_COMMENTS:
+            text = f"# GENERATED by theme-sync from {source}. Edit that file, then run theme-sync.\n" + text
         before = len(install.changed)
-        install.write(target, render(template, target, colors))
+        install.write(target, text)
         if target.parent.name == "herdr" and len(install.changed) > before and not install.check and shutil.which("herdr"):
             subprocess.run(["herdr", "server", "reload-config"], capture_output=True, timeout=10)
     install_hook(install)

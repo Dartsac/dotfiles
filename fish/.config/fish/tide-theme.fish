@@ -5,6 +5,8 @@
 #
 # Tide's Lean style on one line, without the time, in the free Dracula
 # theme's colors (https://draculatheme.com/contribute#color-palette).
+# theme-sync puts Dracula PRO over these colors in config-local.fish
+# (tide-dracula-pro.fish.template).
 # Tide shows a Python virtualenv's name itself; activate.fish must not add it.
 set -U VIRTUAL_ENV_DISABLE_PROMPT true
 set -U tide_aws_bg_color normal

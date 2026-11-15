@@ -2,8 +2,11 @@
 # reads it after the whole of config, so a setting here wins over config's.
 # Reload with Command+Shift+, (macOS) or Ctrl+Shift+, (Linux).
 
-# Dracula PRO, a paid theme: theme-sync installs its variants into themes/.
-# theme-sync and Neovim take the variant from the last `theme =` line here.
+# Dracula PRO, a paid theme: theme-sync installs its variants into themes/
+# and writes a block here, after the opening comment, that chooses one
+# (Dracula-Pro at first). theme-sync and Neovim take the variant from the last
+# `theme =` line: change it in the block, or name it after the block, then run
+# theme-sync.
 # theme = Dracula-Pro
 # theme = Dracula-Alucard
 # theme = Dracula-Blade

@@ -26,7 +26,10 @@ working tree, runs `./install <package>` into an empty home directory with
 only the package's declared dependencies on PATH, starts the tool, and fails
 on any error. It also removes each dependency in turn and checks that
 `./install` names it with its hint, and starts a tool that has optional
-dependencies once more with only the required ones. The dependencies must be
+dependencies once more with only the required ones. For Ghostty, tmux, fish
+and Neovim it then runs `theme-sync` with a made-up Dracula PRO package
+(`.tests/synthetic_theme.py`) and checks that the tool shows its colors
+and still keeps the local override's own settings. The dependencies must be
 installed where it runs: a font in your own font folder (`~/Library/Fonts`,
 `~/.local/share/fonts`), since one installed for every user cannot be hidden.
 Nor can a command that an app keeps in a folder of its own, as `Ghostty.app`
@@ -167,9 +170,10 @@ downloaded package (v2.2 or newer) in
 - Otherwise it uses the folder with the highest version number among the
   `dracula-pro-v*` folders in `~/Documents/Resources/Themes/Dracula Packages`.
 - The folder must contain `design/palette.md`, `themes/ghostty` and
-  `themes/vim/colors`. If one is missing, `theme-sync` names it, leaves the
-  installed app themes alone, and fills templates with stand-in colors. It
-  does not try an older version.
+  `themes/vim/colors`. If one is missing, `theme-sync` names it and does not
+  try an older version. The free Dracula theme then stays: it writes no app
+  theme and no local override, and fills templates with the free theme's
+  colors.
 
 It installs the package's Ghostty and Neovim themes, writes the palette the
 Hammerspoon dictation card reads, fills in the templates listed in
@@ -177,11 +181,22 @@ Hammerspoon dictation card reads, fills in the templates listed in
 containing the theme's color values (the same hook runs the Pi extension
 tests and `theme-sync`'s own tests, and lints staged Python: see Lint). Run it again after downloading a new
 package, editing a template, or switching the Ghostty theme variant.
-Ghostty's tracked config uses the free Dracula theme: name a Dracula PRO
-variant, such as `theme = Dracula-Pro`, in its local override
-(`~/.config/ghostty/config.local.ghostty`; see
-`config.local.example.ghostty` beside it). theme-sync and Neovim take the
-variant from there.
+
+The tracked configs of Ghostty, tmux and fish's Tide prompt use the free
+Dracula theme. `theme-sync` puts Dracula PRO over it in each one's local
+override, in a block of its own after the file's opening comment:
+
+| Local override                            | Block                                                     |
+| ----------------------------------------- | --------------------------------------------------------- |
+| `~/.config/ghostty/config.local.ghostty`  | `theme = Dracula-Pro`, the variant                        |
+| `~/.config/tmux/tmux.local.conf`          | tmux's colors, from `dracula-pro.conf.template`           |
+| `~/.config/fish/config-local.fish`        | Tide's colors, from `tide-dracula-pro.fish.template`      |
+
+Each run rewrites the block and keeps every other line, so a setting after
+the block wins over it. A package that is not stowed is left alone. To switch
+variants, change the block's `theme =` line, or add one after the block, then
+run `theme-sync` and reload each app. theme-sync and Neovim take the variant
+from Ghostty's last `theme =` line.
 `theme-sync --check` reports what would change without writing.
 `theme-sync --check-history` fails if any commit holds one of the theme's
 color values.
@@ -205,5 +220,7 @@ To theme another app:
    shade between two colors, `{{comment+foreground:40}}` is `comment` with 40%
    `foreground` mixed in.
 2. Add a `template -> target` line to `theme-templates.txt`. The target must be
-   outside this repository or ignored by git.
+   outside this repository or ignored by git. For an offered package, whose
+   tracked config carries the free theme, add `template >> local override`
+   instead: the template holds only the settings Dracula PRO changes.
 3. Run `theme-sync`.

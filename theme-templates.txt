@@ -1,5 +1,13 @@
 # Files theme-sync fills with Dracula PRO colors.
-#   template in this repository -> generated file
 # A template names colors in double braces; `theme-sync --names` lists them.
+#
+#   template in this repository -> generated file
+# The whole file, from the free Dracula theme's colors when there is no package.
 herdr/.config/herdr/config.base.toml -> ~/.config/herdr/config.toml
 pi/.pi/agent/themes/dracula-pro.json.template -> ~/.pi/agent/themes/dracula-pro.json
+#
+#   template in this repository >> local override
+# A block in the local override, over the tracked config's free Dracula theme;
+# the override's other lines stay. Only with a package.
+tmux/.config/tmux/dracula-pro.conf.template >> ~/.config/tmux/tmux.local.conf
+fish/.config/fish/tide-dracula-pro.fish.template >> ~/.config/fish/config-local.fish

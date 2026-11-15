@@ -1,0 +1,15 @@
+# theme-sync fills this in from the Dracula PRO package and writes it into
+# tmux.local.conf: tmux.conf's colors, with Dracula PRO's orange for the
+# current window and its green for the active pane and the prefix.
+set -g mode-style "fg={{foreground}},bg={{comment}}"
+set -g message-style "fg={{foreground}},bg={{comment}}"
+set -g message-command-style "fg={{foreground}},bg={{comment}}"
+set -g @pane_clarity_border_style "fg={{comment}}"
+set -g pane-active-border-style "fg={{green}}"
+set -g status-style "fg={{background}},bg={{bglight}}"
+set -g status-left "#[fg={{bglighter}},bg={{foreground}},bold]#{?client_prefix,#[bg={{green}}],} #S #[fg={{foreground}},bg={{bglighter}}]#{?client_prefix,#[fg={{green}}],}#[fg={{foreground}},bg={{bglighter}},bold] #(whoami) #[fg={{bglighter}},bg={{bglight}}]"
+set -g status-right "#[fg={{background}},bg={{bglight}},nobold,nounderscore,noitalics]#[fg={{bglighter}},bg={{background}}]#[fg={{bglight}},bg={{background}},nobold,nounderscore,noitalics]#[fg={{bglighter}},bg={{bglight}}]#[fg={{bglighter}},bg={{bglight}},nobold,nounderscore,noitalics]#[fg={{foreground}},bg={{bglighter}},bold] #h "
+setw -g window-status-activity-style "underscore,fg={{bglight}},bg={{bglight}}"
+setw -g window-status-style "NONE,fg={{foreground}},bg={{bglight}}"
+setw -g window-status-format "#[fg={{bglight}},bg={{bglight}}]#[default] #I  #{window_name} #[fg={{bglight}},bg={{bglight}},nobold,nounderscore,noitalics]"
+setw -g window-status-current-format "#[fg={{bglight}},bg={{foreground}}]#[fg={{background}},bg={{foreground}},bold] *#I #[fg={{foreground}},bg={{orange}}]#[fg={{background}},bg={{orange}},bold] #{window_name} #[fg={{orange}},bg={{bglight}},nobold]"

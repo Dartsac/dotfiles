@@ -1,0 +1,48 @@
+# theme-sync fills this in from the Dracula PRO package and writes it into
+# config-local.fish: Tide's colors in Dracula PRO. They are global variables,
+# which hide Tide's own universal ones (tide-theme.fish, `tide configure`)
+# while this block is there. Quoted: a bare # starts a comment.
+set -g tide_aws_color '{{orange}}'
+set -g tide_character_color '{{green}}'
+set -g tide_character_color_failure '{{red}}'
+set -g tide_chruby_color '{{pink}}'
+set -g tide_cmd_duration_color '{{foreground}}'
+set -g tide_context_color_default '{{comment}}'
+set -g tide_context_color_root '{{orange}}'
+set -g tide_context_color_ssh '{{cyan}}'
+set -g tide_crystal_color '{{yellow}}'
+set -g tide_docker_color '{{cyan}}'
+set -g tide_git_color_branch '{{green}}'
+set -g tide_git_color_conflicted '{{red}}'
+set -g tide_git_color_dirty '{{orange}}'
+set -g tide_git_color_operation '{{red}}'
+set -g tide_git_color_staged '{{green}}'
+set -g tide_git_color_stash '{{purple}}'
+set -g tide_git_color_untracked '{{comment}}'
+set -g tide_git_color_upstream '{{green}}'
+set -g tide_go_color '{{cyan}}'
+set -g tide_java_color '{{orange}}'
+set -g tide_jobs_color '{{selection}}'
+set -g tide_kubectl_color '{{cyan}}'
+set -g tide_nix_shell_color '{{bglighter}}'
+set -g tide_node_color '{{green}}'
+set -g tide_php_color '{{purple}}'
+set -g tide_private_mode_color '{{foreground}}'
+set -g tide_prompt_color_frame_and_connection '{{bglight}}'
+set -g tide_prompt_color_separator_same_color '{{selection}}'
+set -g tide_pwd_color_anchors '{{purple}}'
+set -g tide_pwd_color_dirs '{{comment}}'
+set -g tide_pwd_color_truncated_dirs '{{selection}}'
+set -g tide_rustc_color '{{orange}}'
+set -g tide_shlvl_color '{{comment}}'
+set -g tide_status_color '{{green}}'
+set -g tide_status_color_failure '{{red}}'
+set -g tide_terraform_color '{{purple}}'
+set -g tide_time_color '{{dim_white}}'
+set -g tide_toolbox_color '{{bglighter}}'
+# The terminal's own colors, which Ghostty's Dracula PRO theme sets.
+set -g tide_vi_mode_color_default white
+set -g tide_vi_mode_color_insert cyan
+set -g tide_vi_mode_color_replace green
+set -g tide_vi_mode_color_visual yellow
+set -g tide_virtual_env_color cyan
