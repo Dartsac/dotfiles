@@ -6,7 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Supervision, asyncRunsRoot, clean, hasChildIssue, pendingRequests, supervisorRoot } from "./supervision.mjs";
+import { Supervision, asyncRunsRoot, clean, hasChildIssue, nestedRunsRoot, pendingRequests, supervisorRoot } from "./supervision.mjs";
 import { ChildTabs, isLive, readChild, scanChildren, treeTokens, viewerSessionRoots } from "./children.mjs";
 import { request } from "./rpc.mjs";
 import { TOPIC_ATTEMPTS, generateTopic, messageText } from "./topic.mjs";
@@ -120,6 +120,7 @@ export default function (pi) {
   let known; // the background children the last scan listed; unset until the first scan
   const channels = supervisorRoot();
   const asyncRoot = asyncRunsRoot();
+  const nestedRoot = nestedRunsRoot();
   const runner = path.join(agentDir(), "local-packages/pi-subagents/inspector-runner.mjs");
   let tabs;
   let syncing; // the tabs.sync() pass in flight
@@ -258,7 +259,7 @@ export default function (pi) {
   // children as they are then, not as the last poll left them.
   function scan() {
     policy.requests = pendingRequests(channels, sessionId, policy.requests);
-    const all = scanChildren(asyncRoot, [sessionFile, sessionId]);
+    const all = scanChildren(asyncRoot, [sessionFile, sessionId], nestedRoot);
     // A foreground workflow's children run inside the parent's tool call: they
     // are in the tree, but neither count as background work nor get tabs. A
     // subagent's own subagents count, so the job waits for them; they get no

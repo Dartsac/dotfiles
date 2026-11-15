@@ -552,7 +552,7 @@ def run(socket_path, config, state_dir, sleep=time.sleep, clock=time.monotonic, 
 
 def keep_current(socket_path, config, state_dir, sleep, clock, git, now=time.time):
     log(state_dir, "started for " + socket_path)
-    sent, frame, failures = {}, 0, 0
+    sent, frame, failures, last_socket_id = {}, 0, 0, None
     # Sessions can reuse workspace and pane ids: keep separate files per socket.
     session = hashlib.sha1(socket_path.encode()).hexdigest()[:12]
     colors = TitleColors(os.path.join(config, "workspace-colors-%s.json" % session))
@@ -561,6 +561,11 @@ def keep_current(socket_path, config, state_dir, sleep, clock, git, now=time.tim
     while True:
         started = clock()
         try:
+            # A restarted server makes a new socket file and holds none of the tokens sent to the old one.
+            socket_file = os.stat(socket_path)
+            socket_id = (socket_file.st_ino, socket_file.st_ctime_ns)
+            if socket_id != last_socket_id:
+                last_socket_id, sent = socket_id, {}
             snapshot = call(socket_path, "session.snapshot", {})["snapshot"]
             failures = 0
         except (OSError, ValueError, KeyError, HerdrError) as error:

@@ -27,21 +27,29 @@ function readStatus(dir) {
 
 const nonEmpty = value => typeof value === "string" && value ? value : undefined;
 
+// None when `parent` is missing or was not given.
+const subfolders = parent => {
+  try { return fs.readdirSync(parent, { withFileTypes: true }).filter(d => d.isDirectory()).map(d => path.join(parent, d.name)); } catch { return []; }
+};
+// [run folder, status] for each run in `parent`.
+const statusesIn = parent => subfolders(parent).map(dir => [dir, readStatus(dir)]).filter(([, s]) => s);
+
 // Children of this parent session, read from pi-subagents' lifecycle files,
 // each with its depth: 1 for the parent's own subagents, 2 for theirs, which
 // also name the subagent they belong to (`parent`, its key). A subagent's Pi
 // takes its session file as its session id (pi-subagents'
 // resolveCurrentSessionId), so its own runs name that file as their session.
-// Depth stops at 2, pi-subagents' default nesting limit.
-export function scanChildren(asyncRoot, sessionIds) {
-  let dirs;
-  try { dirs = fs.readdirSync(asyncRoot, { withFileTypes: true }).filter(d => d.isDirectory()); } catch { return []; }
-  const statuses = dirs.map(dir => [dir, readStatus(path.join(asyncRoot, dir.name))]).filter(([, s]) => s);
+// Depth stops at 2, pi-subagents' default nesting limit. A subagent's own
+// background runs are not beside the parent's: pi-subagents writes them under
+// `nestedRoot`, as <root run>/<run> (supervision.mjs nestedRunsRoot).
+export function scanChildren(asyncRoot, sessionIds, nestedRoot) {
+  const statuses = statusesIn(asyncRoot);
+  const allRuns = [...statuses, ...subfolders(nestedRoot).flatMap(statusesIn)];
   const owned = new Set(sessionIds.filter(Boolean));
-  const top = childrenOf(asyncRoot, statuses, owned).map(c => ({ ...c, depth: 1 }));
+  const top = childrenOf(statuses, owned).map(c => ({ ...c, depth: 1 }));
   const keyBySessionFile = new Map(top.filter(c => c.sessionFile && !owned.has(c.sessionFile)).map(c => [c.sessionFile, c.key]));
   const keys = new Set(top.map(c => c.key));
-  const nested = childrenOf(asyncRoot, statuses, new Set(keyBySessionFile.keys()))
+  const nested = childrenOf(allRuns, new Set(keyBySessionFile.keys()))
     .filter(c => !keys.has(c.key)).map(c => ({ ...c, depth: 2, parent: keyBySessionFile.get(c.session) }));
   return [...top, ...nested].sort((a, b) => a.key.localeCompare(b.key));
 }
@@ -53,22 +61,24 @@ export function scanChildren(asyncRoot, sessionIds) {
 // A foreground workflow has no root here, only its children's own runs, each
 // naming the workflow in parentWorkflowRunId: those come back marked
 // `foreground`, for the sidebar tree only (the parent is busy in that tool call).
-function childrenOf(asyncRoot, all, owned) {
+// Each run's own runs (a workflow's children) are in the same folder as it.
+function childrenOf(all, owned) {
   const statuses = all.filter(([, s]) => owned.has(s.sessionId));
   // A workflow child's first status lacks parentWorkflowRunId, so for a
   // moment it also looks like a run of its own: list it once, by its workflow.
   const inWorkflow = new Set(statuses.flatMap(([, s]) => s.mode === "workflow" ? (s.steps ?? []).map(step => step.runId) : []));
   const children = [];
   for (const [dir, root] of statuses) {
+    const runsFolder = path.dirname(dir);
     if (inWorkflow.has(root.runId)) continue;
     const parent = root.parentWorkflowRunId;
-    if (parent && (!RUN_ID.test(parent) || readStatus(path.join(asyncRoot, parent)))) continue; // listed by its root
+    if (parent && (!RUN_ID.test(parent) || readStatus(path.join(runsFolder, parent)))) continue; // listed by its root
     const foreground = !!parent;
     const roots = typeof root.sessionRoot === "string" ? [root.sessionRoot] : [];
     (root.steps ?? []).forEach((step, index) => {
       if (root.mode === "workflow") {
         if (typeof step.runId !== "string" || !RUN_ID.test(step.runId)) return;
-        const asyncDir = path.join(asyncRoot, step.runId);
+        const asyncDir = path.join(runsFolder, step.runId);
         const child = readStatus(asyncDir);
         const state = child?.state ?? step.status ?? "queued";
         children.push({
@@ -87,7 +97,7 @@ function childrenOf(asyncRoot, all, owned) {
         const state = several ? (step.status ?? root.state) : root.state;
         children.push({
           key: several ? `${root.runId}#${index}` : root.runId, runId: root.runId,
-          asyncDir: path.join(asyncRoot, dir.name), roots, index, session: root.sessionId,
+          asyncDir: dir, roots, index, session: root.sessionId,
           sessionFile: nonEmpty(step.sessionFile) ?? (several ? undefined : nonEmpty(root.sessionFile)),
           name: clean((!several && root.workflowKey) || step.agent || "subagent", 40) + (several ? `-${index + 1}` : ""),
           agent: clean(step.agent || "subagent", 40), title: clean(step.label, 60),
