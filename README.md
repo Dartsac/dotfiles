@@ -173,7 +173,8 @@ downloaded package (v2.2 or newer) in
   `themes/vim/colors`. If one is missing, `theme-sync` names it and does not
   try an older version. The free Dracula theme then stays: it writes no app
   theme and no local override, and fills templates with the free theme's
-  colors.
+  colors. A block an earlier run wrote into a local override stays, and
+  `theme-sync` names each such file: delete the block for the free theme.
 
 It installs the package's Ghostty and Neovim themes, writes the palette the
 Hammerspoon dictation card reads, fills in the templates listed in

@@ -1,8 +1,6 @@
 """theme-sync's guards against theme package colors in git, and the pre-commit
 hook it installs, run against throwaway repositories with a made-up palette
 (never the paid one)."""
-from importlib.machinery import SourceFileLoader
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -14,6 +12,7 @@ import tempfile
 import unittest
 
 import synthetic_theme
+from synthetic_theme import load_theme_sync
 
 THEME_SYNC = Path(__file__).resolve().parents[1] / "theme-sync"
 # Made-up "package" colors. Greys and free Dracula colors are public.
@@ -25,14 +24,6 @@ FAILING_TEST = "import unittest\nclass T(unittest.TestCase):\n    def test_it(se
 # macOS's own Python is 3.9: it has no tomllib, which came with 3.11.
 SYSTEM_PYTHON_LACKS_TOMLLIB = os.access("/usr/bin/python3", os.X_OK) and subprocess.run(
     ["/usr/bin/python3", "-c", "import tomllib"], capture_output=True).returncode != 0
-
-
-def load_theme_sync():
-    """theme-sync as a module."""
-    loader = SourceFileLoader("theme_sync", str(THEME_SYNC))
-    module = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
-    loader.exec_module(module)
-    return module
 
 
 class ThrowawayRepo(unittest.TestCase):
@@ -234,11 +225,12 @@ class OverlayTest(unittest.TestCase):
         self.env = {"HOME": str(self.home), "PATH": os.environ["PATH"], "DRACULA_PRO_DIR": str(package)}
         self.pro, self.van_helsing = synthetic_theme.PALETTES["pro"], synthetic_theme.PALETTES["van-helsing"]
 
-    def theme_sync(self, *args):
+    def theme_sync(self, *args, fails=False):
+        """theme-sync's output; it must exit 0, or with `fails` fail."""
         result = subprocess.run([sys.executable, "-B", str(self.repo / "theme-sync"), *args], env=self.env,
                                 capture_output=True, text=True)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        return result.stdout
+        self.assertEqual(result.returncode != 0, fails, result.stdout + result.stderr)
+        return result.stdout + result.stderr if fails else result.stdout
 
     def owner_overrides(self):
         """Local overrides as the owner keeps them: an opening comment, then
@@ -301,7 +293,7 @@ class OverlayTest(unittest.TestCase):
             self.assertEqual(self.read(name), text)
         self.assertFalse((self.config / "fish/config-local.fish").exists())
 
-    def test_without_a_package_the_overrides_are_left_alone_and_the_free_theme_stays(self):
+    def test_without_a_theme_package_the_overrides_are_left_alone_and_the_free_theme_stays(self):
         overrides = self.owner_overrides()
         self.env["DRACULA_PRO_DIR"] = str(self.home / "no-package")
 
@@ -315,6 +307,19 @@ class OverlayTest(unittest.TestCase):
         # Templates of owner packages get the free Dracula theme's colors.
         self.assertEqual(self.read("app/colors.conf").splitlines()[1:],
                          ["background = #282a36", "alert = #ff6e6e", "muted = #ff5555"])
+
+    def test_without_a_theme_package_a_block_left_by_an_earlier_run_is_named(self):
+        self.owner_overrides()
+        self.theme_sync()
+        written = self.read("tmux/tmux.local.conf")
+        self.env["DRACULA_PRO_DIR"] = str(self.home / "no-package")
+
+        output = self.theme_sync()
+
+        self.assertEqual(self.read("tmux/tmux.local.conf"), written)
+        self.assertNotIn("the free Dracula theme stays", output)
+        for name in ("tmux/tmux.local.conf", "fish/config-local.fish", "ghostty/config.local.ghostty"):
+            self.assertIn(str(self.config / name), output)
 
     def test_an_override_whose_package_is_not_stowed_is_left_alone(self):
         for app in ("tmux", "app"):
@@ -331,11 +336,9 @@ class OverlayTest(unittest.TestCase):
         broken = "# >>> theme-sync\nset -g status-style bg=red\n"
         (self.config / "tmux/tmux.local.conf").write_text(broken)
 
-        result = subprocess.run([sys.executable, "-B", str(self.repo / "theme-sync")], env=self.env,
-                                capture_output=True, text=True)
+        output = self.theme_sync(fails=True)
 
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("tmux.local.conf", result.stderr)
+        self.assertIn("tmux.local.conf", output)
         self.assertEqual(self.read("tmux/tmux.local.conf"), broken)
 
 

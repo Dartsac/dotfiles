@@ -36,8 +36,9 @@ line of Ghostty's config or, read after it, of config.local.ghostty.
 Package: $DRACULA_PRO_DIR, else the newest dracula-pro-v* directory under
 ~/Documents/Resources/Themes/Dracula Packages. It must contain
 design/palette.md, themes/ghostty and themes/vim (v2.2 or newer). Without a
-package the free Dracula theme stays: no app theme or local override is
-written, and whole-file templates get the free theme's colors.
+theme package the free Dracula theme stays: no app theme or local override is
+written, and whole-file templates get the free theme's colors. A block an
+earlier run wrote stays, and theme-sync names its file.
 
   theme-sync                 install everything
   theme-sync --check         report what would change; write nothing
@@ -76,8 +77,8 @@ BLOCK_END = "# <<< theme-sync"
 
 # The free Dracula theme (draculatheme.com/spec: standard, ANSI and UI
 # palettes) by the package's names, for templates when no package is
-# installed. Other names resolve by family: see stand_in().
-STAND_INS = {
+# installed. Other names resolve by family: see free_color().
+FREE_THEME = {
     "background": "#282a36",
     "foreground": "#f8f8f2",
     "comment": "#6272a4",
@@ -110,7 +111,7 @@ STAND_INS = {
 }
 # Every color the free Dracula theme publishes, its line highlight among them.
 # Dracula PRO shares a few; those are public, not paid.
-FREE_DRACULA = {value[1:] for value in STAND_INS.values()} | {"353747"}
+FREE_DRACULA = {value[1:] for value in FREE_THEME.values()} | {"353747"}
 # Target suffixes whose format takes a "#" comment, for the generated-file note.
 HASH_COMMENTS = {".toml", ".yml", ".yaml", ".conf", ".ini", ".fish", ".sh"}
 HOOK = """#!/bin/sh
@@ -275,16 +276,22 @@ def with_block(path, block):
     return before + ("\n" if before else "") + block + ("\n" if after[:1] not in ("", "\n") else "") + after
 
 
-def block(about, text):
-    """A local override's block: its markers, a comment that says what it is, and `text`."""
+def write_block(install, path, about, text):
+    """Write the block into the local override at `path`: its markers, a
+    comment that says what it is (`about`), and `text`."""
     if not text.endswith("\n"):
         text += "\n"
-    return f"{BLOCK_START}: {about}\n{text}{BLOCK_END}\n"
+    install.write(path, with_block(path, f"{BLOCK_START}: {about}\n{text}{BLOCK_END}\n"))
 
 
-def stand_in(name):
-    """Stand-in color for a name: bright_red and dim_red use red's."""
-    return STAND_INS.get(name) or STAND_INS.get(re.sub(r"^(bright|dim)_", "", name))
+def with_blocks(paths):
+    """Those of `paths` that hold a block."""
+    return [path for path in paths if path.is_file() and BLOCK_START in path.read_text()]
+
+
+def free_color(name):
+    """The free theme's color for a name: dim_red uses red's."""
+    return FREE_THEME.get(name) or FREE_THEME.get(re.sub(r"^(bright|dim)_", "", name))
 
 
 def read_templates():
@@ -311,8 +318,8 @@ def blend(color, other, percent):
 
 
 def render(template, colors):
-    """Template text with each {{name}} replaced; colors=None uses stand-ins."""
-    lookup = colors.get if colors is not None else stand_in
+    """Template text with each {{name}} replaced; colors=None uses the free theme's."""
+    lookup = colors.get if colors is not None else free_color
     text = template.read_text()
     used = {name for match in TOKEN.findall(text) for name in match[:2] if name}
     unknown = sorted(name for name in used if not lookup(name))
@@ -514,8 +521,8 @@ def install_herdr_fonts(install, colors):
     args = python + ["-B", str(builder), "--output", str(HOME / "Library/Fonts")]
     if install.check:
         args.append("--check")
-    # Include aliases such as dim_green even with the stand-in palette.
-    palette = colors if colors is not None else {n: stand_in(n) for n in set(STAND_INS) | {"dim_green", "bright_blue", "dim_white"}}
+    # Include aliases such as dim_green even with the free theme.
+    palette = colors if colors is not None else {n: free_color(n) for n in set(FREE_THEME) | {"dim_green", "bright_blue", "dim_white"}}
     result = subprocess.run(args, input=json.dumps(palette), capture_output=True, text=True, timeout=120)
     if result.returncode:
         raise SystemExit("theme-sync: color font generation failed:\n" + result.stderr)
@@ -530,11 +537,13 @@ def main():
     if sys.argv[1:] not in ([], ["--check"], ["--names"]):
         raise SystemExit(__doc__)
     install = Installer(check=sys.argv[1:] == ["--check"])
+    templates = read_templates()
     package, why = find_package()
     colors = None
     if sys.argv[1:] == ["--names"]:
-        print("\n".join(sorted(read_palettes(package)["pro"] if package else STAND_INS)))
+        print("\n".join(sorted(read_palettes(package)["pro"] if package else FREE_THEME)))
         return
+    override = GHOSTTY / "config.local.ghostty"
     if package:
         palettes = read_palettes(package)
         variant = ghostty_variant()
@@ -544,29 +553,34 @@ def main():
         colors = palettes[variant]
         stored = {"package": package.name, "variants": palettes, "other_values": other_values(package, palettes)}
         install.write(PALETTE_JSON, json.dumps(stored, indent=1, sort_keys=True) + "\n")
-        override = GHOSTTY / "config.local.ghostty"
         if stowed(override):
             for theme in sorted((package / "themes/ghostty").iterdir()):
                 if theme.is_file() and "." not in theme.name:
                     install.write(GHOSTTY / "themes" / ghostty_theme(theme.name), theme.read_text())
             choice = ("# Choose another variant here, or in a `theme =` line after this block, then run theme-sync.\n"
                       f"theme = {ghostty_theme(variant)}\n")
-            install.write(override, with_block(override, block("Dracula PRO, the variant theme-sync and Neovim use.", choice)))
+            write_block(install, override, "Dracula PRO, the variant theme-sync and Neovim use.", choice)
         install.copy_tree(package / "themes/vim", NVIM_THEME)
         print(f"theme-sync: {package.name}, variant '{variant}'")
     else:
-        print(f"theme-sync: no Dracula PRO package ({why}); the free Dracula theme stays: "
-              "app themes and local overrides left as they are")
+        earlier = with_blocks([override] + [target for _, target, in_block in templates if in_block])
+        if earlier:
+            print(f"theme-sync: no Dracula PRO package ({why}); app themes and local overrides left as they are. "
+                  "These keep Dracula PRO from an earlier run; delete their theme-sync block for the free Dracula theme:")
+            print("\n".join(f"  {path}" for path in earlier))
+        else:
+            print(f"theme-sync: no Dracula PRO package ({why}); the free Dracula theme stays: "
+                  "app themes and local overrides left as they are")
 
     # Prepare the color font before a generated config can refer to it.
     install_herdr_fonts(install, colors)
-    for template, target, in_block in read_templates():
+    for template, target, in_block in templates:
         if (in_block and colors is None) or not stowed(target):
             continue
         source = template.relative_to(REPO)
         if in_block:
             about = f"Dracula PRO from {source}. Edit that, not this block, then run theme-sync."
-            install.write(target, with_block(target, block(about, render(template, colors))))
+            write_block(install, target, about, render(template, colors))
             continue
         stray = template.with_name(target.name)
         if stray.exists() and stray.resolve() != target.resolve():

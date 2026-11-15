@@ -11,6 +11,7 @@ from pathlib import Path
 
 
 def load_theme_sync():
+    """theme-sync as a module, loaded afresh."""
     loader = SourceFileLoader("theme_sync", str(Path(__file__).resolve().parents[1] / "theme-sync"))
     module = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
     loader.exec_module(module)
@@ -31,8 +32,9 @@ ROWS = [
 ]
 # The background shades, which only the Vim theme names.
 SHADES = ["bg", "bglight", "bglighter", "bgdark", "bgdarker"]
-# Variant -> its name in palette.md, and the stem of its Ghostty and Vim themes.
-VARIANTS = {"pro": ("Base", "pro", "dracula-pro"), "van-helsing": ("Van Helsing", "van-helsing", "dracula-pro-van-helsing")}
+# Variant (the name of its Ghostty theme) -> its name in palette.md, and the
+# stem of its Vim theme.
+VARIANTS = {"pro": ("Base", "dracula-pro"), "van-helsing": ("Van Helsing", "dracula-pro-van-helsing")}
 
 
 def made_up_palettes():
@@ -57,7 +59,7 @@ def made_up_palettes():
 PALETTES = made_up_palettes()
 
 
-def ghostty_theme(colors):
+def ghostty_theme_text(colors):
     terminal = [snake(row) for row in ROWS[:16]]
     lines = [f"palette = {i}={colors[name]}" for i, name in enumerate(terminal)]
     lines += [f"background = {colors['background']}", f"foreground = {colors['foreground']}",
@@ -87,12 +89,12 @@ def write_package(folder):
     """Write the package into `folder` (a new directory); return it."""
     folder = Path(folder)
     sections = ["# Dracula PRO, made up for tests", "", "# Color Palette - Terminal Standard", ""]
-    for variant, (title, ghostty, stem) in VARIANTS.items():
+    for variant, (title, stem) in VARIANTS.items():
         colors = PALETTES[variant]
         sections += [f"## Dracula PRO - {title}", "", "| Palette | Hex |", "| --- | --- |"]
         sections += [f"| {row} | `{colors[snake(row)]}` |" for row in ROWS] + [""]
         (folder / "themes/ghostty").mkdir(parents=True, exist_ok=True)
-        (folder / "themes/ghostty" / ghostty).write_text(ghostty_theme(colors))
+        (folder / "themes/ghostty" / variant).write_text(ghostty_theme_text(colors))
         (folder / "themes/vim/colors").mkdir(parents=True, exist_ok=True)
         (folder / "themes/vim/colors" / f"{stem}.vim").write_text(vim_theme(colors, stem))
     (folder / "design").mkdir(parents=True, exist_ok=True)
