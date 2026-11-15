@@ -25,6 +25,11 @@ PRESENT_EVERYWHERE = {"sh", "bash"}
 USER_FONTS = {"macos": "Library/Fonts", "linux": ".local/share/fonts"}
 
 
+def repository_manifests():
+    """Each of the repository's packages and its manifest, by name."""
+    return {p.parent.name: json.loads(p.read_text()) for p in sorted(REPO.glob("*/README.package.json"))}
+
+
 def dependency(name, required=True, kind="command"):
     """A command, or with kind "font" a font's family, and its hints."""
     return {kind: name, "required": required, "hint": {p: h.format(name) for p, h in HINTS.items()}}
@@ -284,7 +289,7 @@ class ManifestsTest(unittest.TestCase):
     """The repository's own dependency manifests, checked before CI sees them."""
 
     def setUp(self):
-        self.manifests = {p.parent.name: json.loads(p.read_text()) for p in sorted(REPO.glob("*/README.package.json"))}
+        self.manifests = repository_manifests()
 
     def test_every_manifest_is_complete_for_each_platform_it_lists(self):
         self.assertTrue(self.manifests)
@@ -337,6 +342,67 @@ class ManifestsTest(unittest.TestCase):
         offered = {name for name, manifest in self.manifests.items() if manifest["role"] in ("core", "optional")}
 
         self.assertEqual(sorted(standalone.CHECKS), sorted(offered))
+
+
+class ReadmeTest(unittest.TestCase):
+    """README.md, as an adopter reads it: its package catalog against the
+    manifests ./install reads, and the repository paths it names."""
+
+    def setUp(self):
+        self.readme = (REPO / "README.md").read_text()
+        self.manifests = repository_manifests()
+
+    def table(self, heading):
+        """The rows of the first table under the `## heading`, as lists of
+        cells without backticks."""
+        section = re.search(rf"^## {re.escape(heading)}\n(.*?)(?=^## |\Z)", self.readme, re.M | re.S)
+        self.assertIsNotNone(section, f"README.md has no '## {heading}'")
+        lines = [line for line in section.group(1).splitlines() if line.startswith("|")]
+        rows = [[cell.strip().replace("`", "") for cell in line.strip("|").split("|")] for line in lines]
+        return [row for row in rows[1:] if not set(row[0]) <= set("-: ")]
+
+    @staticmethod
+    def names(cell):
+        return set() if cell in ("", "—") else {name.strip() for name in cell.split(",")}
+
+    def test_the_catalog_lists_each_offered_package_as_its_manifest_declares_it(self):
+        rows = {row[0].replace("(optional)", "").strip(): row for row in self.table("Packages")}
+        offered = {name: m for name, m in self.manifests.items() if m["role"] in ("core", "optional")}
+        self.assertEqual(sorted(rows), sorted(offered))
+        platform_names = {"macos": "macOS", "linux": "Linux"}
+        for name, manifest in offered.items():
+            package, _, platforms, needs, optional = rows[name]
+            with self.subTest(package=name):
+                self.assertEqual("(optional)" in package, manifest["role"] == "optional",
+                                 f"the catalog marks a package (optional) when its role is optional: {package}")
+                self.assertEqual(self.names(platforms), {platform_names[p] for p in manifest["platforms"]})
+                required = {d.get("font") or d["command"]: d["required"] for d in manifest["dependencies"]}
+                self.assertEqual(self.names(needs), {dep for dep, r in required.items() if r})
+                self.assertEqual(self.names(optional), {dep for dep, r in required.items() if not r})
+
+    def test_lists_the_owner_packages_apart_from_the_catalog(self):
+        owner = sorted(name for name, m in self.manifests.items() if m["role"] == "owner")
+        self.assertEqual(sorted(row[0] for row in self.table("Owner packages")), owner)
+
+    @unittest.skipUnless(shutil.which("git"), "needs git")
+    def test_every_repository_path_it_names_is_tracked(self):
+        """A path into a package (`nvim/.config/nvim`) or a root folder
+        (`.tests/`), or a relative link, names a file in git: not a package
+        that does not exist, nor a file git ignores, which a clone lacks."""
+        tracked = subprocess.run(["git", "ls-files", "-z"], cwd=REPO, capture_output=True, text=True, check=True)
+        files = set(filter(None, tracked.stdout.split("\0")))
+        folders = {str(Path(*Path(f).parts[:i])) for f in files for i in range(1, len(Path(f).parts))}
+        known = files | folders
+        root = {path.name for path in REPO.iterdir()}
+        spans = re.findall(r"`([^`\n]+)`", self.readme)
+        cells = [cell.strip() for line in self.readme.splitlines() if line.startswith("|") for cell in line.split("|")]
+        links = re.findall(r"\]\(([^)#:]+)\)", self.readme)
+        paths = [s for s in spans + cells if re.fullmatch(r"[\w.-]+/[\w./-]*", s)
+                 and (s.split("/")[0] in root or re.match(r"[\w-]+/\.", s))]
+        self.assertTrue(paths)
+        for path in paths + links:
+            with self.subTest(path=path):
+                self.assertTrue(path.rstrip("/") in known, f"README.md names {path}, which git does not track")
 
 
 if __name__ == "__main__":
