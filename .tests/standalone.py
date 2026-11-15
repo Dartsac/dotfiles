@@ -16,15 +16,23 @@ fails the check.
 
 Then, for each declared dependency, it runs `./install <package>` again into
 another empty home without that dependency on PATH, and checks that ./install
-names it with its hint for this platform and still stows the package.
+names it with its hint for this platform and still stows the package. A
+font dependency is likewise linked into, or left out of, the home's own font
+folder. A command an app keeps in a folder of its own (a manifest's also_in,
+such as /Applications/Ghostty.app) cannot be left out, so that run is skipped
+for it.
 
 A package with optional dependencies may also be started on a machine that
 has only its required ones: the tool must still start cleanly.
 
-The dependencies must be installed where this runs: they are taken from PATH.
+The dependencies must be installed where this runs: commands are taken from
+PATH or from where their app keeps them, and fonts from this user's own font
+folder.
 """
 
 import fcntl
+from importlib.machinery import SourceFileLoader
+import importlib.util
 import json
 import os
 import platform
@@ -44,6 +52,17 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 MANIFEST = "README.package.json"
 PLATFORM = {"Darwin": "macos", "Linux": "linux"}[platform.system()]
+
+
+def load_install():
+    """./install as a module: how it names a dependency and finds a font."""
+    loader = SourceFileLoader("install", str(REPO / "install"))
+    module = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+    loader.exec_module(module)
+    return module
+
+
+INSTALL = load_install()
 SYSTEM_PATH = ["/usr/bin", "/bin", "/usr/sbin", "/sbin"]
 COLOR_CODE = re.compile(r"\x1b\[[0-9;]*m")
 # direnv reports each file and `use` it loads as error output. Some versions
@@ -92,6 +111,8 @@ TMUX_PLUGINS = ["tpm", "tmux-sensible", "tmux-yank", "tmux-pane-clarity", "tmux-
 # purple (#BD93F9), as tmux draws it in a terminal that shows 24-bit color.
 DRACULA_CURRENT_WINDOW = (re.compile(rb"\x1b\[(?:[0-9;]*;)?48;2;189;147;249m"),
                           "status line with the current window in Dracula purple")
+# Ghostty's built-in free Dracula theme, by the background it sets.
+DRACULA_BACKGROUND = "#282a36"
 # Inactive pane borders in the free Dracula theme's comment color.
 DRACULA_PANE_BORDER = "fg=#6272a4"
 # The current window in grey (#808080), as the check's local override colors it.
@@ -320,6 +341,36 @@ def check_eza(machine):
     listing = run(["eza", "--icons=always", "--color=always", str(folder)], machine.env, machine.home, "eza")
     if "\uf1c1" not in listing:
         raise Failed(f"eza did not read theme.yml: no document icon for diagram.puml in {listing!r}")
+
+
+def ghostty_settings(machine, what):
+    """The settings Ghostty resolves from the config it would start with
+    (+show-config: every setting, the theme's colors among them), once
+    +validate-config has found no error in it."""
+    run(["ghostty", "+validate-config"], machine.env, machine.home, f"{what}: ghostty +validate-config")
+    return run(["ghostty", "+show-config"], machine.env, machine.home, f"{what}: ghostty +show-config").splitlines()
+
+
+def check_ghostty(machine):
+    settings = ghostty_settings(machine, "ghostty")
+    for expected in ("theme = Dracula", f"background = {DRACULA_BACKGROUND}", "font-family = Hack Nerd Font Mono"):
+        if expected not in settings:
+            raise Failed(f"Ghostty did not read the package's config: no {expected!r} in +show-config")
+    # The owner's own entries live in the local override's example.
+    leaked = [s for s in settings if s.startswith("keybind = super+m=") or re.match(r"font-codepoint-map = \S", s)]
+    if leaked:
+        raise Failed(f"Ghostty's tracked config holds the owner's own entries: {leaked}")
+
+    # A local override that sets again the last setting the tracked config makes.
+    override = machine.clone / "ghostty/.config/ghostty/config.local.ghostty"
+    override.write_text("keybind = shift+enter=text:local\n")
+    try:
+        settings = ghostty_settings(machine, "ghostty with a local override")
+    finally:
+        override.unlink()
+    if "keybind = shift+enter=text:local" not in settings:
+        shift_enter = [s for s in settings if s.startswith("keybind = shift+enter=")]
+        raise Failed(f"Ghostty's config won over its local override: {shift_enter}")
 
 
 def check_fish_first_start(machine, what, env):
@@ -694,8 +745,8 @@ def check_tmux_with_required_only(machine):
                           "fzf is not installed", "the sessionizer without fzf")
 
 
-CHECKS = {"direnv": check_direnv, "eza": check_eza, "fish": check_fish, "lazygit": check_lazygit,
-          "nvim": check_nvim, "tmux": check_tmux}
+CHECKS = {"direnv": check_direnv, "eza": check_eza, "fish": check_fish, "ghostty": check_ghostty,
+          "lazygit": check_lazygit, "nvim": check_nvim, "tmux": check_tmux}
 # For a package with optional dependencies: its tool on a machine that has
 # only the required ones.
 REQUIRED_ONLY_CHECKS = {"fish": check_fish_with_required_only, "nvim": check_nvim_with_required_only,
@@ -721,14 +772,33 @@ def copy_tree(clone):
             shutil.copy2(source, target)
 
 
-def link_commands(folder, commands):
-    """A folder of links to each command as found on this PATH."""
+def link_commands(folder, dependencies):
+    """A folder of links to each command dependency, found as ./install finds
+    it: on this PATH, or where its app keeps it."""
     folder.mkdir(parents=True)
-    for command in commands:
-        found = shutil.which(command)
+    for dependency in dependencies:
+        found = INSTALL.find_command(dependency)
         if not found:
-            raise Failed(f"{command} is not installed here, so the check cannot run")
-        os.symlink(found, folder / command)
+            raise Failed(f"{dependency['command']} is not installed here, so the check cannot run")
+        os.symlink(found, folder / dependency["command"])
+
+
+def link_fonts(home, families):
+    """Links in `home`'s own font folder to each family's files, as this user
+    installed them. A font installed for every user is in every machine, so a
+    check could not hide it."""
+    own = INSTALL.FONT_FOLDERS[PLATFORM][0]
+    for family in families:
+        found = INSTALL.font_files(family)
+        if not found:
+            raise Failed(f"{family} is not installed here, so the check cannot run")
+        shared = [f for f in found if not f.is_relative_to(Path.home())]
+        if shared:
+            raise Failed(f"{family} is installed for every user ({shared[0]}), so the check cannot hide it: "
+                         f"install it in ~/{own} instead")
+        (home / own).mkdir(parents=True, exist_ok=True)
+        for file in found:
+            os.symlink(file, home / own / file.name)
 
 
 def system_tools(folder, hidden):
@@ -748,15 +818,18 @@ def system_tools(folder, hidden):
 
 class Machine:
     """A fresh machine in a temporary directory: a copy of the clone, an empty
-    home, and a PATH of the system tools, stow, and the given commands."""
+    home, and of the given dependencies (as a manifest lists them) the
+    commands on a PATH with the system tools and stow, and the fonts in the
+    home's own font folder."""
 
-    def __init__(self, root, clone, commands, hidden):
+    def __init__(self, root, clone, dependencies, hidden):
         self.root = root
         self.home = root / "home"
         self.home.mkdir()
         (root / "tmp").mkdir()
         system_tools(root / "system", hidden)
-        link_commands(root / "deps", ["stow", *commands])
+        link_commands(root / "deps", [{"command": "stow"}, *(d for d in dependencies if "command" in d)])
+        link_fonts(self.home, [d["font"] for d in dependencies if "font" in d])
         self.clone = clone
         self.env = {
             "HOME": str(self.home),
@@ -792,9 +865,9 @@ class Machine:
 
 
 def check(package, manifest, clone, hidden):
-    commands = [d["command"] for d in manifest["dependencies"]]
+    dependencies = manifest["dependencies"]
     with tempfile.TemporaryDirectory() as temp:
-        machine = Machine(Path(temp).resolve(), clone, commands, hidden)
+        machine = Machine(Path(temp).resolve(), clone, dependencies, hidden)
         # With every dependency present, ./install has nothing to report.
         reported = run(machine.install_command(package), machine.env, machine.home, f"./install {package}")
         if reported.strip():
@@ -805,7 +878,7 @@ def check(package, manifest, clone, hidden):
         CHECKS[package](machine)
 
     if package in REQUIRED_ONLY_CHECKS:
-        required = [d["command"] for d in manifest["dependencies"] if d["required"]]
+        required = [d for d in dependencies if d["required"]]
         with tempfile.TemporaryDirectory() as temp:
             machine = Machine(Path(temp).resolve(), clone, required, hidden)
             result = machine.install(package)
@@ -814,10 +887,15 @@ def check(package, manifest, clone, hidden):
                              f"{result.stdout}{result.stderr}".rstrip())
             REQUIRED_ONLY_CHECKS[package](machine)
 
-    for dependency in manifest["dependencies"]:
-        missing = dependency["command"]
+    for dependency in dependencies:
+        # A command its app keeps in a folder of its own, such as
+        # /Applications/Ghostty.app, is on every machine here: the check
+        # cannot take it away. .tests/test_install.py covers that lookup.
+        if "command" in dependency and INSTALL.outside_path(dependency):
+            continue
+        missing = INSTALL.dependency_name(dependency)
         with tempfile.TemporaryDirectory() as temp:
-            others = [c for c in commands if c != missing]
+            others = [d for d in dependencies if d is not dependency]
             machine = Machine(Path(temp).resolve(), clone, others, hidden)
             result = machine.install(package)
             output = result.stdout + result.stderr
@@ -841,7 +919,7 @@ def main(args):
         return 2
     # Every declared dependency is hidden from the system tools, so each
     # package sees only its own.
-    hidden = {d["command"] for m in known.values() for d in m["dependencies"]}
+    hidden = {d["command"] for m in known.values() for d in m["dependencies"] if "command" in d}
     failures = 0
     with tempfile.TemporaryDirectory() as temp:
         clone = Path(temp).resolve() / "dotfiles"

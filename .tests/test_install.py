@@ -21,10 +21,13 @@ SHEBANG = re.compile(r"#!\s*(?:\S*/env\s+(?:-S\s+)?)?(\S+)")
 # Interpreters a manifest need not list: macOS and every mainstream Linux
 # distribution install them with the system.
 PRESENT_EVERYWHERE = {"sh", "bash"}
+# Where a user installs a font of their own.
+USER_FONTS = {"macos": "Library/Fonts", "linux": ".local/share/fonts"}
 
 
-def dependency(command, required=True):
-    return {"command": command, "required": required, "hint": {p: h.format(command) for p, h in HINTS.items()}}
+def dependency(name, required=True, kind="command"):
+    """A command, or with kind "font" a font's family, and its hints."""
+    return {kind: name, "required": required, "hint": {p: h.format(name) for p, h in HINTS.items()}}
 
 
 @unittest.skipUnless(shutil.which("stow"), "needs stow")
@@ -119,6 +122,43 @@ class InstallTest(unittest.TestCase):
         self.assertIn(HINTS[PLATFORM].format("alpha-extra"), extra)
         self.assertIn("optional", extra)
         self.assertNotIn("alpha-present", result.stdout)
+
+    def test_names_a_font_that_is_not_installed_with_its_hint(self):
+        deps = [dependency("Alpha Mono", kind="font"), dependency("Alpha Sans", required=False, kind="font")]
+        self.package("alpha", {".config/alpha/alpharc": ""}, dependencies=deps)
+        # Fonts are named by family: Alpha Mono's files are AlphaMono-<style>.
+        fonts = self.home / USER_FONTS[PLATFORM] / "Alpha"
+        fonts.mkdir(parents=True)
+        (fonts / "AlphaMono-Regular.ttf").write_text("")
+
+        result = self.install("alpha")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue((self.home / ".config/alpha/alpharc").exists())
+        sans = next(line for line in result.stdout.splitlines() if "Alpha Sans" in line)
+        self.assertIn(HINTS[PLATFORM].format("Alpha Sans"), sans)
+        self.assertIn("optional", sans)
+        self.assertNotIn("Alpha Mono", result.stdout)
+
+    def test_finds_a_command_an_app_keeps_outside_path(self):
+        # As Ghostty.app keeps ghostty: in a folder of its own, absolute or in the home directory.
+        bundle = self.home.parent / "Alpha.app/Contents/MacOS"
+        deps = [dict(dependency("alpha-app"), also_in={PLATFORM: [str(bundle)]}),
+                dict(dependency("alpha-home"), also_in={PLATFORM: ["Applications/Alpha.app/Contents/MacOS"]}),
+                dict(dependency("alpha-absent"), also_in={PLATFORM: [str(bundle)]}),
+                dict(dependency("alpha-elsewhere"), also_in={next(p for p in HINTS if p != PLATFORM): [str(bundle)]})]
+        self.package("alpha", {".config/alpha/alpharc": ""}, dependencies=deps)
+        for folder, command in ((bundle, "alpha-app"), (bundle, "alpha-elsewhere"),
+                                (self.home / "Applications/Alpha.app/Contents/MacOS", "alpha-home")):
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / command).write_text("#!/bin/sh\n")
+            (folder / command).chmod(0o755)
+
+        result = self.install("alpha")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        named = [line.split()[0] for line in result.stdout.splitlines() if line.startswith("  ")]
+        self.assertEqual(named, ["alpha-absent", "alpha-elsewhere"], result.stdout)
 
     def test_refuses_an_owner_package_and_stows_nothing(self):
         self.package("alpha", {".config/alpha/alpharc": ""})
@@ -260,9 +300,13 @@ class ManifestsTest(unittest.TestCase):
                     for path, path_platforms in manifest.get(field, {}).items():
                         self.assertTrue(path_platforms and set(path_platforms) <= set(platforms), f"{field}: {path}")
                 for dep in manifest["dependencies"]:
-                    self.assertIsInstance(dep["required"], bool, dep["command"])
+                    kinds = [kind for kind in ("command", "font") if kind in dep]
+                    self.assertEqual(len(kinds), 1, f"a dependency is a command or a font: {dep}")
+                    what = dep[kinds[0]]
+                    self.assertIsInstance(dep["required"], bool, what)
+                    self.assertTrue(set(dep.get("also_in", {})) <= set(platforms), f"{what}: also_in")
                     for platform_name in platforms:
-                        self.assertTrue(dep["hint"].get(platform_name, "").strip(), f"{dep['command']}: no {platform_name} hint")
+                        self.assertTrue(dep["hint"].get(platform_name, "").strip(), f"{what}: no {platform_name} hint")
 
     @unittest.skipUnless(shutil.which("git"), "needs git")
     def test_every_script_an_offered_package_tracks_runs_with_a_declared_dependency(self):
@@ -274,7 +318,7 @@ class ManifestsTest(unittest.TestCase):
         for name, manifest in self.manifests.items():
             if manifest["role"] == "owner":
                 continue
-            available = PRESENT_EVERYWHERE | {dep["command"] for dep in manifest["dependencies"]}
+            available = PRESENT_EVERYWHERE | {dep["command"] for dep in manifest["dependencies"] if "command" in dep}
             for path in filter(None, tracked.stdout.split("\0")):
                 script = REPO / path
                 if not path.startswith(name + "/") or not script.is_file():

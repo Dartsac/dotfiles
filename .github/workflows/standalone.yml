@@ -25,7 +25,9 @@ jobs:
 
       - name: Install the packages' dependencies (macOS)
         if: runner.os == 'macOS'
-        run: brew install stow direnv eza fish tmux fzf zoxide lazygit git neovim ripgrep tree-sitter-cli
+        run: |
+          brew install stow direnv eza fish tmux fzf zoxide lazygit git neovim ripgrep tree-sitter-cli
+          brew install --cask ghostty font-hack-nerd-font
 
       - name: Install the packages' dependencies (Ubuntu)
         if: runner.os == 'Linux'

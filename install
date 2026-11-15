@@ -21,6 +21,14 @@ links a package's top-level README.*):
   platforms       ["macos", "linux"]
   dependencies    [{"command", "required": true|false,
                     "hint": {"macos": ..., "linux": ...}}]
+                  A command an app keeps outside PATH also takes
+                  "also_in": the folders to look in too, such as {"macos":
+                  ["/Applications/Ghostty.app/Contents/MacOS"]}; a
+                  relative one is in the home directory.
+                  A font takes "font": its family, such as "Hack Nerd Font
+                  Mono", in place of "command". It is installed when a font
+                  folder holds a file named for the family without spaces,
+                  such as HackNerdFontMono-Regular.ttf.
   stow_flags      extra stow options, such as ["--no-folding"] (optional)
   platform_paths  top-level paths stowed only on some platforms, such as
                   {"Library": ["macos"]} (optional)
@@ -31,6 +39,7 @@ links a package's top-level README.*):
 """
 
 import json
+import os
 import platform
 import re
 import shutil
@@ -48,6 +57,11 @@ OFFERED = ("core", "optional")
 SHARED = {".config", ".local", ".local/share", ".local/state", ".local/bin", "Library", "Library/Application Support"}
 HOME = Path.home()
 THIS_PLATFORM = {"Darwin": "macos", "Linux": "linux"}.get(platform.system(), "")
+# Where fonts are installed: the user's own folders (in the home directory),
+# then everyone's.
+FONT_FOLDERS = {"macos": ["Library/Fonts", "/Library/Fonts", "/System/Library/Fonts"],
+                "linux": [".local/share/fonts", ".fonts", "/usr/local/share/fonts", "/usr/share/fonts"]}
+FONT_FILES = (".ttf", ".otf", ".ttc", ".otc", ".dfont")
 STOW_HINT = {"macos": "brew install stow", "linux": "sudo apt install stow, or your distribution's stow package"}
 
 
@@ -115,15 +129,52 @@ def refusal(name, manifest, force):
     return None
 
 
+def font_files(family):
+    """The files of `family` in the font folders, named for it without
+    spaces: HackNerdFontMono-Regular.ttf for Hack Nerd Font Mono."""
+    stem = family.replace(" ", "").lower()
+    found = []
+    for folder in FONT_FOLDERS.get(THIS_PLATFORM, []):
+        for parent, _, files in os.walk(HOME / folder):
+            for file in files:
+                base, suffix = os.path.splitext(file.lower())
+                if suffix in FONT_FILES and base.split("-")[0] == stem:
+                    found.append(Path(parent) / file)
+    return found
+
+
+def dependency_name(dependency):
+    """A command's name, or a font's family."""
+    return dependency.get("font") or dependency["command"]
+
+
+def outside_path(dependency):
+    """Where a command is among the folders its manifest says to look in too
+    (also_in), or None."""
+    folders = [str(HOME / folder) for folder in dependency.get("also_in", {}).get(THIS_PLATFORM, [])]
+    return shutil.which(dependency["command"], path=os.pathsep.join(folders)) if folders else None
+
+
+def find_command(dependency):
+    """Where a command is: on PATH, or where its app keeps it."""
+    return shutil.which(dependency["command"]) or outside_path(dependency)
+
+
+def installed(dependency):
+    if "font" in dependency:
+        return bool(font_files(dependency["font"]))
+    return find_command(dependency) is not None
+
+
 def report_missing(name, manifest):
-    missing = [d for d in manifest["dependencies"] if not shutil.which(d["command"])]
+    missing = [d for d in manifest["dependencies"] if not installed(d)]
     if not missing:
         return
     print(f"{name}: not installed (stowed anyway; install them to use the package):")
     for dep in missing:
         need = "required" if dep["required"] else "optional"
         hint = dep["hint"].get(THIS_PLATFORM, "")
-        print(f"  {dep['command']} ({need}): {hint}")
+        print(f"  {dependency_name(dep)} ({need}): {hint}")
 
 
 def report_overridden(name, manifest):

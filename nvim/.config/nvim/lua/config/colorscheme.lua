@@ -9,7 +9,8 @@
 -- palette, so they apply only with one of the two Dracula themes.
 local M = {}
 
-local GHOSTTY_CONFIG = "~/.config/ghostty/config"
+-- Ghostty reads its local override after the whole of its config.
+local GHOSTTY_CONFIGS = { "~/.config/ghostty/config", "~/.config/ghostty/config.local.ghostty" }
 
 -- Ghostty theme name -> Dracula PRO colorscheme.
 local PRO_THEMES = {
@@ -25,14 +26,13 @@ local FREE_THEME = "dracula"
 
 ---@return string?
 local function ghostty_theme()
-	local ok, lines = pcall(vim.fn.readfile, vim.fn.expand(GHOSTTY_CONFIG))
-	if not ok then
-		return
-	end
 	-- The last `theme =` line, the one Ghostty uses.
 	local found
-	for _, line in ipairs(lines) do
-		found = line:match("^theme%s*=%s*(.+)$") or found
+	for _, config in ipairs(GHOSTTY_CONFIGS) do
+		local ok, lines = pcall(vim.fn.readfile, vim.fn.expand(config))
+		for _, line in ipairs(ok and lines or {}) do
+			found = line:match("^theme%s*=%s*(.+)$") or found
+		end
 	end
 	return found and vim.trim(found)
 end

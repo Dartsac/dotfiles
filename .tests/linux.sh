@@ -19,11 +19,13 @@ echo "linux.sh: $image"
 docker run --rm -v "$repo":/dotfiles:ro "$image" sh -c '
     set -eu
     export DEBIAN_FRONTEND=noninteractive
-    sh /dotfiles/.tests/ubuntu-deps.sh >/dev/null 2>&1
+    useradd -m runner
+    # The fonts go to the user the tests run as, as they do on the runner.
+    FONTS_DIR=/home/runner/.local/share/fonts sh /dotfiles/.tests/ubuntu-deps.sh >/dev/null 2>&1
+    chown -R runner: /home/runner/.local
     # The tests themselves need git, python3, and ps and pkill (procps). The
     # runner image has them all; a bare container has none.
     apt-get install -y -qq git python3 procps >/dev/null 2>&1
-    useradd -m runner
     su runner -c "git config --global --add safe.directory /dotfiles &&
         cd /dotfiles &&
         python3 -B .tests/test_install.py &&

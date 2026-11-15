@@ -1,0 +1,24 @@
+{
+  "description": "Ghostty: free Dracula theme, Hack Nerd Font, a translucent window, macOS-style keys",
+  "role": "core",
+  "platforms": ["macos", "linux"],
+  "dependencies": [
+    {
+      "command": "ghostty",
+      "also_in": {"macos": ["/Applications/Ghostty.app/Contents/MacOS", "Applications/Ghostty.app/Contents/MacOS"]},
+      "required": true,
+      "hint": {
+        "macos": "brew install --cask ghostty",
+        "linux": "sudo apt install ghostty (Ubuntu 26.04 or newer), or your distribution's package: https://ghostty.org/docs/install/binary"
+      }
+    },
+    {
+      "font": "Hack Nerd Font Mono",
+      "required": false,
+      "hint": {
+        "macos": "brew install --cask font-hack-nerd-font (Ghostty's font; without it Ghostty uses its own)",
+        "linux": "Hack from https://www.nerdfonts.com/font-downloads, unpacked into ~/.local/share/fonts (Ghostty's font; without it Ghostty uses its own)"
+      }
+    }
+  ]
+}

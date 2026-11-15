@@ -23,6 +23,14 @@ SYSTEM_PYTHON_LACKS_TOMLLIB = os.access("/usr/bin/python3", os.X_OK) and subproc
     ["/usr/bin/python3", "-c", "import tomllib"], capture_output=True).returncode != 0
 
 
+def load_theme_sync():
+    """theme-sync as a module."""
+    loader = SourceFileLoader("theme_sync", str(THEME_SYNC))
+    module = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+    loader.exec_module(module)
+    return module
+
+
 class ThrowawayRepo(unittest.TestCase):
     """A git repository and home directory in a temporary directory, with a made-up palette installed."""
 
@@ -168,6 +176,28 @@ class ThemeSyncGuardTest(ThrowawayRepo):
         self.assertEqual(self.theme_sync("--check-staged").returncode, 1)
 
 
+class GhosttyVariantTest(unittest.TestCase):
+    """The Dracula PRO variant theme-sync fills templates with: the one Ghostty
+    uses, named by the last `theme =` line of its config or, read after it, of
+    the local override."""
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.theme_sync = load_theme_sync()
+        self.theme_sync.GHOSTTY = Path(temp.name)
+        (self.theme_sync.GHOSTTY / "config").write_text(
+            "theme = Dracula\nconfig-file = ?config.local.ghostty\nfont-size = 14\n")
+
+    def test_the_free_theme_alone_leaves_the_pro_variant(self):
+        self.assertEqual(self.theme_sync.ghostty_variant(), "pro")
+
+    def test_the_local_override_names_the_variant(self):
+        (self.theme_sync.GHOSTTY / "config.local.ghostty").write_text(
+            "theme = Dracula-Van-Helsing\n# theme = Dracula-Buffy\n")
+        self.assertEqual(self.theme_sync.ghostty_variant(), "van-helsing")
+
+
 class PreCommitHookTest(ThrowawayRepo):
     """The hook theme-sync installs, run by a real commit in a copy of the repository layout."""
 
@@ -178,11 +208,8 @@ class PreCommitHookTest(ThrowawayRepo):
         # installed here applies its own defaults, which fault the sample files
         # below before the hook reaches the tests it is asked about.
         shutil.copy2(THEME_SYNC.parent / "ruff.toml", self.repo / "ruff.toml")
-        loader = SourceFileLoader("theme_sync", str(THEME_SYNC))
-        module = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
-        loader.exec_module(module)
         hook = self.repo / ".git/hooks/pre-commit"
-        hook.write_text(module.HOOK)
+        hook.write_text(load_theme_sync().HOOK)
         hook.chmod(0o755)
         self.commit({"README.md": "hello\n"})
 

@@ -27,7 +27,7 @@ class MachineGitTest(unittest.TestCase):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         root = Path(temp.name).resolve()
-        self.machine = standalone.Machine(root, root / "dotfiles", ["git"], {"git"})
+        self.machine = standalone.Machine(root, root / "dotfiles", [{"command": "git"}], {"git"})
         # A helper of the machine's own, as any config file could name one.
         self.called = root / "helper-called"
         (self.machine.home / ".gitconfig").write_text(

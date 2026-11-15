@@ -34,8 +34,9 @@ HERE = Path(__file__).resolve().parent
 # A running Ghostty keeps the font it has loaded: a changed file under the
 # same family name is not read again, and a sprite added since shows as "?".
 # So the name carries a tag that changes with the drawings and their colors'
-# names. Ghostty's config names the family (a test checks it is the current
-# one); reloading that config then loads the new font, with nothing restarted.
+# names. Ghostty's local override names the family (a test checks that it and
+# its example name the current one); reloading Ghostty's config then loads the
+# new font, with nothing restarted.
 TAG = hashlib.sha1(repr((sorted(COLORS.items()), CHARACTERS)).encode()).hexdigest()[:4]
 FAMILY = "Herdr Sprites Pixel " + TAG
 FILES = "HerdrSpritesPixel-%s-%%s.ttf" % TAG

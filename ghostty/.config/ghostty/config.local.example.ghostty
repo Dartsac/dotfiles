@@ -1,0 +1,24 @@
+# Copy to config.local.ghostty (git ignores it) and keep what applies. Ghostty
+# reads it after the whole of config, so a setting here wins over config's.
+# Reload with Command+Shift+, (macOS) or Ctrl+Shift+, (Linux).
+
+# Dracula PRO, a paid theme: theme-sync installs its variants into themes/.
+# theme-sync and Neovim take the variant from the last `theme =` line here.
+# theme = Dracula-Pro
+# theme = Dracula-Alucard
+# theme = Dracula-Blade
+# theme = Dracula-Buffy
+# theme = Dracula-Lincoln
+# theme = Dracula-Morbius
+# theme = Dracula-Van-Helsing
+
+# Command+M opens Pi's model picker: send tmux a chord nothing else uses.
+# This replaces Ghostty's Minimize action.
+# keybind = super+m=text:\x1b[109;8u
+
+# Herdr's sidebar characters (the herdr package). theme-sync generates the
+# font from Dracula PRO into ~/Library/Fonts. Its name ends in a tag that
+# changes with the drawings (faces/color_font.py): a running Ghostty does not
+# read a changed font file again under a name it has loaded. After changing
+# the sprites, put the new name here and in your copy, then reload.
+# font-codepoint-map = U+100000-U+10007F=Herdr Sprites Pixel bb2d

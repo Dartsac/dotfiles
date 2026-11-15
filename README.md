@@ -27,7 +27,10 @@ only the package's declared dependencies on PATH, starts the tool, and fails
 on any error. It also removes each dependency in turn and checks that
 `./install` names it with its hint, and starts a tool that has optional
 dependencies once more with only the required ones. The dependencies must be
-installed where it runs.
+installed where it runs: a font in your own font folder (`~/Library/Fonts`,
+`~/.local/share/fonts`), since one installed for every user cannot be hidden.
+Nor can a command that an app keeps in a folder of its own, as `Ghostty.app`
+keeps `ghostty` on macOS: the check skips removing that one.
 
 ```sh
 python3 .tests/standalone.py        # every package it covers
@@ -165,6 +168,11 @@ Hammerspoon dictation card reads, fills in the templates listed in
 containing the theme's color values (the same hook runs the Pi extension
 tests and `theme-sync`'s own tests, and lints staged Python: see Lint). Run it again after downloading a new
 package, editing a template, or switching the Ghostty theme variant.
+Ghostty's tracked config uses the free Dracula theme: name a Dracula PRO
+variant, such as `theme = Dracula-Pro`, in its local override
+(`~/.config/ghostty/config.local.ghostty`; see
+`config.local.example.ghostty` beside it). theme-sync and Neovim take the
+variant from there.
 `theme-sync --check` reports what would change without writing.
 `theme-sync --check-history` fails if any commit holds one of the theme's
 color values.
@@ -173,9 +181,10 @@ On macOS it also generates Herdr's state-colored character fonts into
 `~/Library/Fonts/HerdrSpritesPixel-*.ttf`. The source fonts in
 `herdr/.config/herdr/faces/fonts/` contain only outlines; the generated ones
 contain palette colors and never belong in git. This step needs Python
-`fonttools`, or `uv` to supply it. Ghostty maps the sprite codepoints to that
-font, so the pixel-aligned characters keep state colors beside text in the
-workspace's color: a space and its agents share one distinct Dracula PRO hue.
+`fonttools`, or `uv` to supply it. Ghostty's local override maps the sprite
+codepoints to that font (`config.local.example.ghostty` shows the line), so
+the pixel-aligned characters keep state colors beside text in the workspace's
+color: a space and its agents share one distinct Dracula PRO hue.
 The font's name ends in a tag that changes with the drawings, because a
 running Ghostty does not reload a changed font under a name it has loaded;
 see `herdr/.config/herdr/README.md` before changing a sprite.

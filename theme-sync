@@ -20,7 +20,8 @@ For a shade between two colors, {{comment+foreground:40}} is comment with 40%
 foreground mixed in.
 
 Run it after downloading a new package, on a new machine, after editing a
-template, or after switching the Ghostty theme variant.
+template, or after switching the Ghostty theme variant: the last `theme =`
+line of Ghostty's config or, read after it, of config.local.ghostty.
 
 Package: $DRACULA_PRO_DIR, else the newest dracula-pro-v* directory under
 ~/Documents/Resources/Themes/Dracula Packages. It must contain
@@ -204,11 +205,14 @@ def read_palettes(package):
 
 
 def ghostty_variant():
-    """Variant named by Ghostty's last `theme =` line: Dracula-Van-Helsing -> van-helsing."""
-    try:
-        lines = (GHOSTTY / "config").read_text().splitlines()
-    except OSError:
-        return "pro"
+    """Variant named by Ghostty's last `theme =` line: Dracula-Van-Helsing -> van-helsing.
+    Ghostty reads the local override after the whole of its config."""
+    lines = []
+    for name in ("config", "config.local.ghostty"):
+        try:
+            lines += (GHOSTTY / name).read_text().splitlines()
+        except OSError:
+            pass
     names = [m.group(1) for m in (re.match(r"\s*theme\s*=\s*(\S+)", line) for line in lines) if m]
     if not names or "-" not in names[-1]:
         return "pro"
