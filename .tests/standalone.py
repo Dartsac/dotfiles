@@ -20,7 +20,9 @@ names it with its hint for this platform and still stows the package. A
 font dependency is likewise linked into, or left out of, the home's own font
 folder. A command an app keeps in a folder of its own (a manifest's also_in,
 such as /Applications/Ghostty.app) cannot be left out: that run is skipped
-for it, and the package's line says so.
+for it, and the package's line says so. A tool the check cannot start
+(Karabiner, which would take this machine's keyboard) is checked another way,
+and the package's line says that too.
 
 A package with optional dependencies may also be started on a machine that
 has only its required ones: the tool must still start cleanly.
