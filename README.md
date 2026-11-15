@@ -106,10 +106,10 @@ beside it and uncomment what you need:
 | `tmux`    | `~/.config/tmux/projects.local.txt`      | `tmux/.config/tmux/projects.local.example.txt`            |
 | `ghostty` | `~/.config/ghostty/config.local.ghostty` | `ghostty/.config/ghostty/config.local.example.ghostty`    |
 
-They hold what is one person's or one machine's: the name fish's greeting
-says hello to, the default multiplexer, a pinned Python,
-Neovim's notes vault and Python, the projects tmux's sessionizer (prefix
-Ctrl-f) offers, extra keys. Each example says what goes in it.
+They hold what is one person's or one machine's: the name fish's greeting says
+hello to, the default multiplexer, a pinned Python, Neovim's notes vault and
+Python, the projects tmux's sessionizer (prefix Ctrl-f) offers, extra keys.
+Each example says what goes in it.
 
 Overrides are never committed. `~/.config/<tool>` is a link into your clone,
 so an override sits in the clone beside the tracked files, and `.gitignore`
@@ -164,29 +164,28 @@ its own otherwise.
 
 How the owner's machines are set up. An adopter needs none of this.
 
-The owner has two Macs, and the clone is at `~/dotfiles` on both, which owner
-packages assume. The Personal machine, where agents are allowed, stows every
-package, owner packages with `--force`:
+The owner works on two Macs, and the clone is at `~/dotfiles` on both, which
+owner packages assume. The Personal machine, where agents are allowed, stows
+every package, owner packages with `--force`:
 
 ```sh
 ./install fish nvim tmux lazygit direnv eza ghostty karabiner
 ./install --force herdr pi hammerspoon
 ```
 
-The Work machine allows no AI tools: Pi is not there, and tmux, not herdr,
-is its multiplexer.
+The Work machine allows no AI tools: Pi is not there, and tmux, not herdr, is
+its multiplexer.
 
 Each machine has its local overrides, made from the examples: the greeting's
 name, Perl's `local::lib`, the notes vault, Neovim's automatic
 `lazy-lock.json` commit, and the projects list that tmux's sessionizer (and
 herdr's project picker, where herdr is) offers. Only the Personal machine's
-name herdr as the default multiplexer and give Ghostty the Command+M chord
-for Pi's model picker. On the Work machine the overrides are written by hand.
-Karabiner's profile stays on each machine, with its device, and on the
-Personal machine a Command+M rule. Hammerspoon reads `~/.config/hammerspoon` because its
-`MJConfigFile` setting points there; the first lines of
-`hammerspoon/.config/hammerspoon/init.lua` give the command. Then
-`theme-sync` puts Dracula PRO over the free theme.
+overrides name herdr as the default multiplexer and give Ghostty the Command+M
+chord for Pi's model picker. On the Work machine the overrides are written by
+hand. Karabiner's profile, with the machine's device, stays on each machine.
+Hammerspoon reads `~/.config/hammerspoon` because its `MJConfigFile` setting
+points there; the first lines of `hammerspoon/.config/hammerspoon/init.lua`
+give the command. Then `theme-sync` puts Dracula PRO over the free theme.
 
 ### Dracula PRO and theme-sync
 
