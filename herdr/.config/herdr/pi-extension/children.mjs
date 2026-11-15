@@ -1,6 +1,7 @@
-// Background subagents as Herdr tabs: one read-only pi-subagents viewer per
-// child while it runs. The tab is not a Herdr agent: the sidebar shows the
-// child in a tree under its parent instead (treeTokens, faces.py).
+// A parent's subagents, read from pi-subagents' files and the parent's tool
+// events, for the sidebar tree under the parent (treeTokens, faces.py), and
+// background subagents as Herdr tabs: one read-only pi-subagents viewer per
+// child while it runs. The tab is not a Herdr agent.
 import fs from "node:fs";
 import path from "node:path";
 import { clean } from "./supervision.mjs";
@@ -112,14 +113,125 @@ function childrenOf(all, owned) {
 }
 
 export const isLive = state => LIVE.has(state);
+// An ended child that the parent's last finished job, at `doneAt` (0: none
+// yet), has left behind: it ended by then. One with no end time recorded is
+// left behind by the first finished job.
+const leftBehind = (c, doneAt) => !isLive(c.state) && (c.endedAt === undefined ? doneAt !== 0 : c.endedAt <= doneAt);
+
+// A subagent's foreground runs (async: false), at depth 2. They have no status
+// file: pi-subagents writes an event for each as it starts and as it returns,
+// in nested-subagent-events/<root run>-<token>/events/<ts>-<id>.json, naming
+// the subagent that called it (parentRunId, its run id, and parentStepIndex,
+// its step), as pi-subagents' writeNestedForegroundEvent writes them
+// (foreground/subagent-executor.js). It looks under the subagents among
+// `children` that the tree may still show: those the parent's last finished
+// job has not left behind (leftBehind; a succeeded one stays to hold a failed
+// run of its own). Event folders last written before the first of them
+// started are skipped: pi-subagents never prunes them. Background runs'
+// events (with an asyncDir) are left to their status files. A run whose
+// subagent ended without reporting its end has stopped.
+export function nestedForeground(eventsRoot, children, doneAt = 0) {
+  const parents = children.filter(c => topLevel(c) && !leftBehind(c, doneAt));
+  if (!parents.length) return [];
+  // A step as the events name it: unlike a child's key, a single run's
+  // has "#0".
+  const stepOf = (runId, index) => `${runId}#${index ?? 0}`;
+  const byStep = new Map(parents.map(p => [stepOf(p.runId, p.index), p]));
+  const since = Math.min(...parents.map(p => p.startedAt ?? 0)) - 1000;
+  const runs = new Map(); // run id -> [its subagent, its latest summary]
+  for (const route of subfolders(eventsRoot)) {
+    const folder = path.join(route, "events");
+    let names;
+    try {
+      if (fs.statSync(folder).mtimeMs < since) continue;
+      names = fs.readdirSync(folder).filter(n => n.endsWith(".json")).sort(); // in time order
+    } catch { continue; }
+    for (const name of names) {
+      let lines;
+      try { lines = fs.readFileSync(path.join(folder, name), "utf8").split("\n").filter(Boolean); } catch { continue; }
+      for (const line of lines) {
+        let event;
+        try { event = JSON.parse(line); } catch { continue; }
+        const run = event?.child, parent = byStep.get(stepOf(event?.parentRunId, event?.parentStepIndex));
+        if (!parent || typeof run?.id !== "string" || run.asyncDir || run.mode !== "single") continue;
+        const earlier = runs.get(run.id)?.[1];
+        if (earlier && !isLive(earlier.state) && isLive(run.state)) continue; // an end is final
+        runs.set(run.id, [parent, run]);
+      }
+    }
+  }
+  return [...runs.values()].map(([parent, run]) => {
+    const orphaned = isLive(run.state) && !isLive(parent.state);
+    const state = orphaned ? "stopped" : typeof run.state === "string" ? run.state : "running";
+    const agent = clean(run.agent || "subagent", 40);
+    return {
+      key: run.id, runId: run.id, index: 0, depth: 2, parent: parent.key, foreground: true, name: agent, agent, title: "",
+      state, startedAt: run.startedAt,
+      endedAt: orphaned ? parent.endedAt : isLive(state) ? undefined : run.endedAt ?? run.lastUpdate,
+    };
+  }).sort((a, b) => a.key.localeCompare(b.key));
+}
+
+// The parent's own foreground single runs, from Pi's tool events: they run in
+// the parent's process and write no status file. A subagent call counts once
+// pi-subagents streams its progress (details.mode "single" with the run's id),
+// which a background launch, a workflow or a management call never does; it
+// ends with the call: stopped, paused, failed on an error or a non-zero exit,
+// else complete. One detached from its call (/subagents-detach) goes on
+// running, marked `detached`, until pi-subagents reports its end
+// (detachedEnded): no tool call holds the parent any more, so the parent's
+// job waits for it as for a background child. What the parent will no longer
+// show (forget) is dropped.
+export class ForegroundRuns {
+  constructor() { this.calls = new Map(); } // tool call id -> its start time, then its child
+
+  start(event) {
+    if (event.toolName === "subagent") this.calls.set(event.toolCallId, { startedAt: Date.now() });
+  }
+
+  update(event) {
+    const call = this.calls.get(event.toolCallId), details = event.partialResult?.details;
+    if (!call || call.child || details?.mode !== "single" || typeof details.runId !== "string" || !details.runId) return;
+    const agent = clean(event.args?.agent || details.results?.[0]?.agent || "subagent", 40);
+    call.child = { key: details.runId, runId: details.runId, index: 0, depth: 1, foreground: true,
+      name: agent, agent, title: "", state: "running", startedAt: call.startedAt };
+  }
+
+  end(event) {
+    const call = this.calls.get(event.toolCallId);
+    if (!call) return;
+    if (!call.child) { this.calls.delete(event.toolCallId); return; }
+    const results = event.result?.details?.results ?? [];
+    if (results.some(r => r.detached)) { call.child.detached = true; return; }
+    const failed = event.isError || event.result?.isError || results.some(r => r.exitCode !== undefined && r.exitCode !== 0);
+    const state = results.some(r => r.stopped) ? "stopped" : results.some(r => r.interrupted) ? "paused" : failed ? "failed" : "complete";
+    Object.assign(call.child, { state, endedAt: Date.now() });
+  }
+
+  // pi-subagents' subagent:foreground-complete, sent only for a detached run.
+  detachedEnded(data) {
+    const child = this.list().find(c => c.runId === data?.runId && isLive(c.state));
+    if (!child) return;
+    const state = ["complete", "failed", "paused", "stopped"].includes(data.state) ? data.state : data.success ? "complete" : "failed";
+    Object.assign(child, { state, endedAt: Number.isFinite(data.timestamp) ? data.timestamp : Date.now() });
+  }
+
+  // The runs that streamed progress, live or ended.
+  list() { return [...this.calls.values()].flatMap(c => c.child ? [c.child] : []); }
+
+  // Drop the runs the parent's last finished job, at `doneAt`, left behind:
+  // the tree no longer shows them, nor looks under them.
+  forget(doneAt) {
+    for (const [id, c] of this.calls) if (c.child && leftBehind(c.child, doneAt)) this.calls.delete(id);
+  }
+}
 
 // Shown in the tree: a live child, and one that ended without success (failed,
 // paused, stopped) after `doneAt`, the last moment the parent's whole job was
 // seen finished (0: not yet). A succeeded child leaves as soon as it ends.
 // One with no end time is kept only until the first finished job. The same at
 // depth 2; a subagent is also kept while one of its own is shown (treeTokens).
-const shownInTree = (c, doneAt) => isLive(c.state)
-  || (!SUCCEEDED.has(c.state) && (c.endedAt === undefined ? doneAt === 0 : c.endedAt > doneAt));
+const shownInTree = (c, doneAt) => isLive(c.state) || (!SUCCEEDED.has(c.state) && !leftBehind(c, doneAt));
 
 // The parent's tree tokens, child1..child<rows>: "<face state> <name>", or
 // "sub <face state> <name>" for a subagent's own subagent, or "more <n>" in the

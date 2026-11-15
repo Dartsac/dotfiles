@@ -24,6 +24,9 @@ export const supervisorRoot = env => path.join(subagentsRoot(env), "supervisor-c
 export const asyncRunsRoot = env => path.join(subagentsRoot(env), "async-subagent-runs");
 // A subagent's own background runs: <root run>/<run> (pi-subagents' shared/nested-events.js).
 export const nestedRunsRoot = env => path.join(subagentsRoot(env), "nested-subagent-runs");
+// Events of a subagent's own runs: <root run>-<token>/events
+// (pi-subagents' shared/nested-events.js, NESTED_EVENTS_DIR).
+export const nestedEventsRoot = env => path.join(subagentsRoot(env), "nested-subagent-events");
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : word === "child" ? "ren" : "s"}`;
 
 // Request/reply files, not control-notice delivery or parent activity, decide

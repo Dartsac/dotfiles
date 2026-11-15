@@ -6,8 +6,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Supervision, asyncRunsRoot, clean, hasChildIssue, nestedRunsRoot, pendingRequests, supervisorRoot } from "./supervision.mjs";
-import { ChildTabs, isLive, readChild, scanChildren, treeTokens, viewerSessionRoots } from "./children.mjs";
+import { Supervision, asyncRunsRoot, clean, hasChildIssue, nestedEventsRoot, nestedRunsRoot, pendingRequests, supervisorRoot } from "./supervision.mjs";
+import { ChildTabs, ForegroundRuns, isLive, nestedForeground, readChild, scanChildren, treeTokens, viewerSessionRoots } from "./children.mjs";
 import { request } from "./rpc.mjs";
 import { TOPIC_ATTEMPTS, generateTopic, messageText } from "./topic.mjs";
 
@@ -121,6 +121,8 @@ export default function (pi) {
   const channels = supervisorRoot();
   const asyncRoot = asyncRunsRoot();
   const nestedRoot = nestedRunsRoot();
+  const eventsRoot = nestedEventsRoot();
+  const foregroundRuns = new ForegroundRuns(); // the parent's own, from its tool events
   const runner = path.join(agentDir(), "local-packages/pi-subagents/inspector-runner.mjs");
   let tabs;
   let syncing; // the tabs.sync() pass in flight
@@ -259,12 +261,18 @@ export default function (pi) {
   // children as they are then, not as the last poll left them.
   function scan() {
     policy.requests = pendingRequests(channels, sessionId, policy.requests);
-    const all = scanChildren(asyncRoot, [sessionFile, sessionId], nestedRoot);
-    // A foreground workflow's children run inside the parent's tool call: they
-    // are in the tree, but neither count as background work nor get tabs. A
-    // subagent's own subagents count, so the job waits for them; they get no
-    // tab (ChildTabs.sync).
-    const children = all.filter(c => !c.foreground);
+    foregroundRuns.forget(doneAt);
+    // From status files and the parent's tool calls; then, under each
+    // subagent among them, its foreground runs.
+    const recorded = [...scanChildren(asyncRoot, [sessionFile, sessionId], nestedRoot), ...foregroundRuns.list()];
+    const all = [...recorded, ...nestedForeground(eventsRoot, recorded, doneAt)];
+    // Foreground runs (the parent's own, a foreground workflow's children, a
+    // subagent's own) run inside a tool call of the parent or of a subagent:
+    // they are in the tree, but neither count as background work nor get tabs.
+    // One the parent detached from its call counts: nothing else holds the
+    // parent. A subagent's own background subagents count too, so the job
+    // waits for them. Neither gets a tab (ChildTabs.sync).
+    const children = all.filter(c => !c.foreground || c.detached);
     const live = children.filter(c => isLive(c.state)).length;
     // A child that started and ended between two scans was never counted:
     // count it for a moment, so that its end is seen like any other.
@@ -327,6 +335,8 @@ export default function (pi) {
   // Capture restored overlays even if pi-subagents' session_start handler runs
   // before ours. Headless children never reach the TUI-only activation below.
   subscriptions.push(pi.events.on("herdr:busy", data => { policy.setBusy(data?.active === true); publish(); }));
+  // Before the handler below, which reports: the run has ended by then.
+  subscriptions.push(pi.events.on("subagent:foreground-complete", data => foregroundRuns.detachedEnded(data)));
   for (const name of ["subagent:async-complete", "subagent:foreground-complete"]) {
     subscriptions.push(pi.events.on(name, data => {
       if (hasChildIssue(data)) setChildIssues(true);
@@ -357,7 +367,9 @@ export default function (pi) {
   }));
   pi.on("tool_execution_start", event => {
     if (event.toolName === "ask_user_question" || event.toolName === "quiz") humanTools.add(event.toolCallId);
+    foregroundRuns.start(event);
   });
+  pi.on("tool_execution_update", event => foregroundRuns.update(event));
   pi.on("ui_prompt_start", event => {
     // A fleet inspector is also custom UI, but isn't a question. The known
     // questionnaire/quiz tools have lifecycle coverage; ordinary native
@@ -443,6 +455,7 @@ export default function (pi) {
   });
   pi.on("tool_execution_end", event => {
     humanTools.delete(event.toolCallId);
+    foregroundRuns.end(event);
     if (!root) return;
     if (event.toolName === "ask_user_question") policy.setHuman("questionnaire", false);
     poll();
