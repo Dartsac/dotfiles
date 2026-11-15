@@ -40,14 +40,21 @@ under the package's `ok`.
 python3 .tests/standalone.py        # every package it covers
 python3 .tests/standalone.py eza    # one package
 .tests/linux.sh                     # the same on Ubuntu, in Docker
+.tests/all.sh                       # every suite this checkout holds
 ```
+
+`.tests/all.sh` runs the lint, the tests below (also on a bare PATH with the
+system's Python, as a commit from a GUI git client runs them), this check, and
+each package's own tests where a checkout has them. It names every suite it
+skips; `.tests/all.sh nvim` runs the suites with that word in their name.
 
 GitHub Actions runs it on macOS and Ubuntu on every push
 (`.github/workflows/standalone.yml`), with `./install`'s own tests
 (`.tests/test_install.py`), `theme-sync`'s and its pre-commit hook's
 (`.tests/test_theme_sync.py`), `./land`'s (`.tests/test_land.py`) and the
 check's (`.tests/test_standalone.py`: git on its machines never reaches your
-credentials). `.tests/linux.sh` runs that Ubuntu job on a Mac: the Ubuntu
+credentials); the macOS job runs those tests once more on a bare PATH.
+`.tests/linux.sh` runs that Ubuntu job on a Mac: the Ubuntu
 release the workflow names and the same dependencies
 (`.tests/ubuntu-deps.sh`). Tool versions there differ from Homebrew's, so run
 it before pushing a change that Linux could take differently.

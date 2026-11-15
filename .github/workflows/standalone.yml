@@ -40,6 +40,13 @@ jobs:
       - name: theme-sync and the pre-commit hook
         run: ${{ matrix.python }} -B .tests/test_theme_sync.py -v
 
+      # As a commit from a GUI git client runs them (the pre-commit hook): the
+      # system's own Python on a PATH without Homebrew. A test must skip there,
+      # not fail, when a tool it needs is missing.
+      - name: The tests on a bare PATH (macOS)
+        if: runner.os == 'macOS'
+        run: FAIL_LINES=100000 .tests/all.sh tests-bare
+
       - name: ./land
         run: ${{ matrix.python }} -B .tests/test_land.py -v
 
