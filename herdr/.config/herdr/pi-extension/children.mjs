@@ -180,9 +180,9 @@ export function nestedForeground(eventsRoot, children, doneAt = 0) {
 // else complete. One detached from its call (/subagents-detach) goes on
 // running, marked `detached`, until pi-subagents reports its end
 // (detachedEnded): no tool call holds the parent any more, so the parent's
-// job waits for it as for a background child. One the session recorded before
-// a /reload comes back ended (restore). What the parent will no longer show
-// (forget) is dropped.
+// job waits for it as for a background child. pi-subagents stops it when its
+// runtime shuts down (detachedStopped). One the session recorded before a /reload comes back
+// ended (restore). What the parent will no longer show (forget) is dropped.
 export class ForegroundRuns {
   constructor() { this.calls = new Map(); } // tool call id (or saved:<run id>) -> its start time, then its child
 
@@ -219,8 +219,16 @@ export class ForegroundRuns {
     return Object.assign(child, { state, endedAt: Number.isFinite(data.timestamp) ? data.timestamp : Date.now() });
   }
 
-  // An ended run the session recorded before a /reload, as `end` or
-  // `detachedEnded` returned it.
+  // The detached runs still going, marked stopped: pi-subagents (0.77 on)
+  // stops each one when its runtime shuts down, and reports the end to
+  // neither runtime. The runs this marked.
+  detachedStopped() {
+    const endedAt = Date.now();
+    return this.list().filter(c => c.detached && isLive(c.state)).map(c => Object.assign(c, { state: "stopped", endedAt }));
+  }
+
+  // An ended run the session recorded before a /reload, as `end`,
+  // `detachedEnded` or `detachedStopped` returned it.
   restore(child) { this.calls.set(`saved:${child.key}`, { child }); }
 
   // The runs that streamed progress, live or ended.

@@ -477,6 +477,11 @@ export default function (pi) {
   pi.on("session_shutdown", async () => {
     for (const unsubscribe of subscriptions) unsubscribe();
     if (!root) return;
+    // Recorded while the session can be written, for the next runtime. Nothing
+    // here may keep the rest of this shutdown from running.
+    try {
+      for (const child of foregroundRuns.detachedStopped()) foregroundEnded(child);
+    } catch { /* a session write failed: the stop goes unrecorded */ }
     root = false;
     // Child tabs stay open; the next runtime adopts them. Finish a tab step in
     // flight first, so its tag lands before that runtime looks, then go silent.
