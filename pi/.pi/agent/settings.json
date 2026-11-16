@@ -8,7 +8,7 @@
     "anthropicExtraUsage": false
   },
   "packages": [
-    "npm:pi-mcp-adapter@2.36.0",
+    "npm:pi-mcp-adapter@7.0.1",
     "./local-packages/pi-subagents",
     {
       "source": "./local-packages/rpiv-ask-user-question",
@@ -37,7 +37,7 @@
   ],
   "extensionChangelogVersions": {
     "{\"source\":\"npm:pi-mcp-adapter@2.36.0\",\"scope\":\"user\"}": "2.36.0",
-    "{\"source\":\"./local-packages/pi-subagents\",\"scope\":\"user\"}": "0.70.1",
+    "{\"source\":\"./local-packages/pi-subagents\",\"scope\":\"user\"}": "0.88.1",
     "{\"source\":\"./local-packages/pi-web-access\",\"scope\":\"user\"}": "0.30.0"
   },
   "defaultThinkingLevel": "high"
