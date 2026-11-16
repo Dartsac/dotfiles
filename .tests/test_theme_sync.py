@@ -356,7 +356,7 @@ class OverlayTest(unittest.TestCase):
 
 class RootScriptsTest(unittest.TestCase):
     """A root script or a test file added without its wiring: nothing else
-    fails. `land` went unlinted until its ruff.toml entry was noticed missing."""
+    fails. A root script went unlinted until its ruff.toml entry was noticed missing."""
 
     def setUp(self):
         self.repo = THEME_SYNC.parent
@@ -423,15 +423,15 @@ class PreCommitHookTest(ThrowawayRepo):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("broken on purpose", result.stdout + result.stderr)
 
-    def test_hook_lints_the_land_script_and_runs_the_root_tests_when_it_is_staged(self):
+    def test_hook_lints_a_root_script_and_runs_the_root_tests_when_it_is_staged(self):
         seen = self.fake_ruff(0)
         self.commit({".tests/test_example.py": FAILING_TEST})
 
-        result = self.commit_with_hook({"land": "#!/usr/bin/env python3\n"})
+        result = self.commit_with_hook({"install": "#!/usr/bin/env python3\n"})
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("broken on purpose", result.stdout + result.stderr)
-        self.assertEqual(seen.read_text().split(), ["check", "--quiet", "land"])
+        self.assertEqual(seen.read_text().split(), ["check", "--quiet", "install"])
 
     def test_hook_runs_the_root_tests_when_a_package_manifest_is_staged(self):
         self.commit({".tests/test_example.py": FAILING_TEST})

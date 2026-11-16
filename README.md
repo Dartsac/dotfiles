@@ -386,9 +386,9 @@ skips; `.tests/all.sh nvim` runs the suites with that word in their name.
 GitHub Actions runs it on macOS and Ubuntu on every push
 (`.github/workflows/standalone.yml`), with `./install`'s own tests and this
 README's catalog (`.tests/test_install.py`), `theme-sync`'s and its pre-commit hook's
-(`.tests/test_theme_sync.py`), `./land`'s (`.tests/test_land.py`) and the
-check's (`.tests/test_standalone.py`: git on its machines never reaches your
-credentials); the macOS job runs those tests once more on a bare PATH.
+(`.tests/test_theme_sync.py`) and the check's (`.tests/test_standalone.py`:
+git on its machines never reaches your credentials); the macOS job runs those
+tests once more on a bare PATH.
 `.tests/linux.sh` runs that Ubuntu job on a Mac: the Ubuntu
 release the workflow names and the same dependencies
 (`.tests/ubuntu-deps.sh`). Tool versions there differ from Homebrew's, so run
@@ -408,14 +408,6 @@ Herdr's own Python tests stay out of git, so neither workflow sees them. When
 a Herdr file is staged the hook checks them itself, before it runs them: with
 ruff, and by loading each with `/usr/bin/python3`, which fails on a module
 that Python 3.9 does not have.
-
-### Landing
-
-`main` moves when a branch's runs on GitHub are green. `./land <branch>`
-pushes the branch, waits for its runs, fast-forwards `main`, pushes it and
-deletes the branch. It stops at the first step that cannot finish, and
-deletes nothing before `main` is on GitHub. `./land --help` describes the
-steps, which also run one at a time.
 
 ## License
 

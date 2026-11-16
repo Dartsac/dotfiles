@@ -124,7 +124,7 @@ top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 grep -q -e --check-staged "$top/theme-sync" || exit 0
 "$top/theme-sync" --check-staged || exit 1
 # The root scripts, Python without the suffix (ruff.toml lists them too).
-scripts='theme-sync|install|land'
+scripts='theme-sync|install'
 # Lint for the staged Python, where ruff is installed. ruff.toml has the rules;
 # CI runs them on every push (.github/workflows/lint.yml).
 python=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '(\\.py|^('"$scripts"'))$')

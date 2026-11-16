@@ -4,7 +4,7 @@
 # files where ruff is installed; .github/workflows/lint.yml on every push.
 target-version = "py39"
 # The root scripts are Python without the suffix.
-extend-include = ["theme-sync", "install", "land"]
+extend-include = ["theme-sync", "install"]
 # Outside the checkout, so a run leaves no folder for git to report.
 cache-dir = "~/.cache/ruff"
 

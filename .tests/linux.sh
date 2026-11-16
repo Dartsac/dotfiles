@@ -30,7 +30,6 @@ docker run --rm -v "$repo":/dotfiles:ro "$image" sh -c '
         cd /dotfiles &&
         python3 -B .tests/test_install.py &&
         python3 -B .tests/test_theme_sync.py &&
-        python3 -B .tests/test_land.py &&
         python3 -B .tests/test_standalone.py &&
         python3 -B .tests/standalone.py $*"
 ' sh "$@"

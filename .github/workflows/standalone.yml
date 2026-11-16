@@ -47,9 +47,6 @@ jobs:
         if: runner.os == 'macOS'
         run: FAIL_LINES=100000 .tests/all.sh tests-bare
 
-      - name: ./land
-        run: ${{ matrix.python }} -B .tests/test_land.py -v
-
       - name: The standalone check's machine
         run: ${{ matrix.python }} -B .tests/test_standalone.py -v
 
