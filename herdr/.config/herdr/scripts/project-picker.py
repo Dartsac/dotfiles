@@ -6,10 +6,11 @@ the common code folders' subfolders (tmux/.config/tmux/scripts/sessionizer.py).
 Inside herdr (Ctrl-t Ctrl-f, or plain Ctrl-f in fish) it opens or focuses the
 chosen project's workspace in the current session. A folder in a main checkout
 whose main space is open gets no workspace of its own: the picker offers that
-main space or a new worktree space. A new worktree space branches from the
-repository's default branch (origin's HEAD), names the folder's area (its
-first folder below the checkout) and opens there, or in the deepest of those
-folders the new checkout has. Outside herdr it refuses unless
+main space, at a tab in the picked folder, or a new worktree space. A new
+worktree space branches from the repository's default branch (origin's HEAD),
+names the folder's area (its first folder below the checkout) and opens there,
+or in the deepest of those folders the new checkout has. Outside herdr it
+refuses unless
 --default-session or --attach names the default session explicitly.
 --list only prints candidate directories. An optional directory skips fzf.
 """
@@ -129,12 +130,31 @@ GO_TO_MAIN_SPACE = "Go to the main space"
 NEW_WORKTREE_SPACE = "New worktree space"
 
 
+def go_to_main_space(path, main_space_id, checkout, binary):
+    """Focus the main space. For a folder below its root, focus a tab there:
+    one with a pane in that folder, else a new one, whose root pane is
+    returned. (workspace id, root pane id or None)."""
+    if path == checkout:
+        herdr(binary, "workspace", "focus", main_space_id)
+        return main_space_id, None
+    panes = herdr(binary, "api", "snapshot")["snapshot"]["panes"]
+    there = next((pane["tab_id"] for pane in panes if pane.get("workspace_id") == main_space_id
+                  and any(same_directory(pane.get(key), path) for key in ("cwd", "foreground_cwd"))), None)
+    if there:
+        herdr(binary, "tab", "focus", there)
+        return main_space_id, None
+    # The server can retain a symlink in its inherited PWD: set it, as for a new workspace.
+    created = herdr(binary, "tab", "create", "--workspace", main_space_id, "--cwd", str(path),
+                    "--env", f"PWD={path}", "--focus")
+    return main_space_id, created["root_pane"]["pane_id"]
+
+
 def open_folder(selected, binary):
     """Open the folder the picker was given: its checkout's main space or a new
     worktree space when that main space is open, else its own workspace.
 
-    Returns (workspace id, the new workspace's root pane id or None), or None
-    when the question was cancelled.
+    Returns (workspace id, the root pane id of a new workspace, worktree space
+    or main-space tab, else None), or None when the question was cancelled.
     """
     path = resolved_folder(selected)
     found = find_main_space(path, binary)
@@ -149,8 +169,7 @@ def open_folder(selected, binary):
     if choice == NEW_WORKTREE_SPACE:
         return new_worktree_space(path, main_space_id, checkout, binary)
     if choice == GO_TO_MAIN_SPACE:
-        herdr(binary, "workspace", "focus", main_space_id)
-        return main_space_id, None
+        return go_to_main_space(path, main_space_id, checkout, binary)
     return None
 
 
@@ -222,7 +241,7 @@ def main():
                         help="like --default-session, then attach to it (outside herdr only)")
     parser.add_argument("--json", action="store_true",
                         help='print {"workspace_id", "root_pane_id"}; root_pane_id is null '
-                             "unless the workspace or worktree space was just created; "
+                             "unless the workspace, worktree space or main-space tab was just created; "
                              "nothing when the question is cancelled")
     args = parser.parse_args()
     if args.list:
