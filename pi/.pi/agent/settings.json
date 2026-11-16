@@ -20,7 +20,8 @@
       "source": "npm:@mtrojnar/pi-usage",
       "extensions": []
     },
-    "npm:pi-rewind"
+    "npm:pi-rewind",
+    "git:github.com/nicobailon/visual-explainer"
   ],
   "subagents": {
     "watchdog": {
@@ -35,7 +36,7 @@
   ],
   "extensionChangelogVersions": {
     "{\"source\":\"./local-packages/pi-subagents\",\"scope\":\"user\"}": "0.88.1",
-    "{\"source\":\"./local-packages/pi-web-access\",\"scope\":\"user\"}": "0.30.0"
+    "{\"source\":\"./local-packages/pi-web-access\",\"scope\":\"user\"}": "0.48.0"
   },
   "defaultThinkingLevel": "high"
 }
