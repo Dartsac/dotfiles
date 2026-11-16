@@ -1,7 +1,7 @@
 #!/bin/sh
 # Every suite this checkout holds, one after the other: the tracked tests, the
-# standalone check, and each package's own tests, which git excludes and only
-# the owner's machines have.
+# standalone check, and those only the owner's machines have, which are each
+# package's own tests and the tests of the owner's own scripts (.owner/).
 #
 #   .tests/all.sh              every suite
 #   .tests/all.sh nvim herdr   the suites whose name holds one of these words
@@ -28,6 +28,8 @@ tests|.|python3|python3 -B -m unittest discover -s .tests -p 'test_*.py'
 tests-bare|.|/usr/bin/python3|$bare -B -m unittest discover -s .tests -p 'test_*.py'
 standalone|.|python3|python3 -B .tests/standalone.py
 pi|.|node|node .tests/pi-extensions.mjs
+owner|.|.owner/ python3|python3 -B -m unittest discover -s .owner -p 'test_*.py'
+owner-bare|.|.owner/ /usr/bin/python3|$bare -B -m unittest discover -s .owner -p 'test_*.py'
 fish|fish/.config/fish|tests/ python3 fish|python3 -B -m unittest discover -s tests -p '*_test.py'
 tmux|tmux/.config/tmux|tests/ python3 tmux|python3 -B -m unittest discover -s tests -p '*_test.py'
 herdr|herdr/.config/herdr|tests/ python3|python3 -B -m unittest discover -s tests -p '*_test.py'

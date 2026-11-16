@@ -380,8 +380,8 @@ python3 .tests/standalone.py eza    # one package
 
 `.tests/all.sh` runs the lint, the tests below (also on a bare PATH with the
 system's Python, as a commit from a GUI git client runs them), this check, and
-each package's own tests where a checkout has them. It names every suite it
-skips; `.tests/all.sh nvim` runs the suites with that word in their name.
+what only the owner's machines have: each package's own tests, and those of
+the owner's own scripts. It names every suite it skips; `.tests/all.sh nvim` runs the suites with that word in their name.
 
 GitHub Actions runs it on macOS and Ubuntu on every push
 (`.github/workflows/standalone.yml`), with `./install`'s own tests and this
