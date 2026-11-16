@@ -189,12 +189,20 @@ def creation_order(pane_id):
 
 
 def space_name(workspace, snapshot, git_line):
-    """The name on a space's line 1. A worktree space is named after its job."""
+    """The name on a space's line 1. A worktree space is named after its job,
+    after the area the project picker made it for (`herdr/sidebar-names`)."""
     label = workspace.get("label") or ""
     checkout = linked_checkout(workspace)
     # Herdr labels a worktree space after its checkout's folder; any other label is the owner's own.
     if not checkout or label != os.path.basename(checkout.rstrip("/")):
         return label
+    area = (workspace.get("tokens") or {}).get("area")
+    job = job_name(workspace, snapshot, git_line, checkout, label)
+    return f"{area}/{job}" if area else job
+
+
+def job_name(workspace, snapshot, git_line, checkout, label):
+    """A worktree space's job: its first agent's task, else its branch without Herdr's prefix."""
     agents = [a for a in snapshot.get("agents") or [] if a.get("workspace_id") == workspace["workspace_id"]]
     if agents:
         first = min(agents, key=lambda a: creation_order(a.get("pane_id")))

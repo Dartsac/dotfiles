@@ -6,7 +6,10 @@ the common code folders' subfolders (tmux/.config/tmux/scripts/sessionizer.py).
 Inside herdr (Ctrl-t Ctrl-f, or plain Ctrl-f in fish) it opens or focuses the
 chosen project's workspace in the current session. A folder in a main checkout
 whose main space is open gets no workspace of its own: the picker offers that
-main space or a new worktree space. Outside herdr it refuses unless
+main space or a new worktree space. A new worktree space branches from the
+repository's default branch (origin's HEAD), names the folder's area (its
+first folder below the checkout) and opens there, or in the deepest of those
+folders the new checkout has. Outside herdr it refuses unless
 --default-session or --attach names the default session explicitly.
 --list only prints candidate directories. An optional directory skips fzf.
 """
@@ -15,6 +18,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import sys
 import time
@@ -67,8 +71,9 @@ def resolved_folder(selected):
 
 
 def find_main_space(path, binary):
-    """The main space of the main checkout that holds `path`, and the repo's
-    name, as Herdr knows them; None when no main space is open there."""
+    """The main space of the main checkout that holds `path`, the repo's name
+    and the checkout's folder, as Herdr knows them; None when no main space is
+    open there."""
     try:
         listing = herdr(binary, "worktree", "list", "--cwd", str(path))
     except HerdrError as error:
@@ -86,7 +91,38 @@ def find_main_space(path, binary):
     checkout = checkouts[max(holding, key=lambda root: len(root.parts))]
     if checkout["is_linked_worktree"] or not checkout.get("open_workspace_id"):
         return None
-    return checkout["open_workspace_id"], listing["source"]["repo_name"]
+    return checkout["open_workspace_id"], listing["source"]["repo_name"], Path(checkout["path"]).resolve()
+
+
+def default_branch(checkout):
+    """The repository's default branch, origin's HEAD, when there is a local
+    branch of that name; else None, and Herdr branches from the main checkout's
+    HEAD, which another session may have on a branch of its own."""
+    found = subprocess.run(["git", "-C", str(checkout), "rev-parse", "--abbrev-ref", "origin/HEAD"],
+                           capture_output=True, text=True)
+    name = found.stdout.strip().removeprefix("origin/") if found.returncode == 0 else ""
+    if name and subprocess.run(["git", "-C", str(checkout), "rev-parse", "--verify", "-q", f"refs/heads/{name}"],
+                               capture_output=True).returncode == 0:
+        return name
+    return None
+
+
+def new_worktree_space(path, main_space_id, checkout, binary):
+    """A worktree space from the main space, for the folder `path` of its
+    checkout: (its workspace id, its root pane id)."""
+    base = default_branch(checkout)
+    created = herdr(binary, "worktree", "create", "--workspace", main_space_id,
+                    *(["--base", base] if base else []), "--focus")
+    workspace_id, root_pane = created["workspace"]["workspace_id"], created["root_pane"]["pane_id"]
+    below = path.relative_to(checkout)
+    if below.parts:
+        herdr(binary, "workspace", "report-metadata", workspace_id, "--source", "project-picker",
+              "--token", f"area={below.parts[0]}")
+        # The deepest of those folders the new checkout has: git keeps no empty or ignored one.
+        made = Path(created["worktree"]["path"])
+        there = next((made / part for part in [below, *below.parents] if (made / part).is_dir()), made)
+        herdr(binary, "pane", "run", root_pane, f"cd {shlex.quote(str(there))}")
+    return workspace_id, root_pane
 
 
 GO_TO_MAIN_SPACE = "Go to the main space"
@@ -104,15 +140,14 @@ def open_folder(selected, binary):
     found = find_main_space(path, binary)
     if not found:
         return open_project(path, binary)
-    main_space_id, repo_name = found
+    main_space_id, repo_name, checkout = found
     # Only a terminal can answer (Ctrl-f's popup, fish); Neovim's <leader>Tc
     # cannot, and gets the main space.
     choice = GO_TO_MAIN_SPACE
     if sys.stdin.isatty():
         choice = choose([GO_TO_MAIN_SPACE, NEW_WORKTREE_SPACE], prompt=f"{repo_name}> ", preview=False)
     if choice == NEW_WORKTREE_SPACE:
-        created = herdr(binary, "worktree", "create", "--workspace", main_space_id, "--focus")
-        return created["workspace"]["workspace_id"], created["root_pane"]["pane_id"]
+        return new_worktree_space(path, main_space_id, checkout, binary)
     if choice == GO_TO_MAIN_SPACE:
         herdr(binary, "workspace", "focus", main_space_id)
         return main_space_id, None
