@@ -260,6 +260,22 @@ def progress_text(progress, changes):
     return "↑%d" % ahead if ahead else None
 
 
+def space_and_folder(agent, labels, snapshot):
+    """An agent's space, and the first folder below the space's project folder
+    that the agent works in (`dotfiles/herdr`): the space alone at the project
+    folder, outside it, or in a space with no project folder."""
+    label = labels.get(agent.get("workspace_id")) or ""
+    workspace = next((w for w in snapshot.get("workspaces") or [] if w["workspace_id"] == agent.get("workspace_id")), {})
+    project = (workspace.get("tokens") or {}).get("project_path")
+    folder = agent.get("foreground_cwd") or agent.get("cwd")
+    if not (label and project and folder):
+        return label
+    project, folder = os.path.normpath(project), os.path.normpath(folder)
+    if not folder.startswith(project + os.sep):
+        return label
+    return f"{label}/{folder[len(project) + 1:].split(os.sep)[0]}"
+
+
 def described(snapshot, choice, git_line, awake=frozenset(), progress_of=lambda checkout: None):
     """{("pane"|"workspace", id): {"detail": text or None, "note": text or None, "alert": text or None}}: lines 2 and 3.
 
@@ -280,7 +296,7 @@ def described(snapshot, choice, git_line, awake=frozenset(), progress_of=lambda 
     for agent in snapshot.get("agents") or []:
         tokens, kind = agent.get("tokens") or {}, agent.get("agent") or ""
         character = character_for(choice, kind)
-        where = " · ".join(part for part in (labels.get(agent.get("workspace_id")), kind) if part)
+        where = " · ".join(part for part in (space_and_folder(agent, labels, snapshot), kind) if part)
         activity = tokens.get("activity") or ""
         activity = under(character, "" if activity in QUIET else activity)
         urgent = bool(activity) and any(words in activity for words in NEEDS_YOU)
