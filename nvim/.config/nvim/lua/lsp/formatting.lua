@@ -43,17 +43,12 @@ function M.route(bufnr)
 	return in_buffer(bufnr, function()
 		-- Same client query vim.lsp.buf.format() makes before applying the filter.
 		local capable = vim.lsp.get_clients({ bufnr = bufnr, method = METHOD })
-		local prefer_null_ls = false
-		for _, client in ipairs(capable) do
-			if client.name == "null-ls" then
-				prefer_null_ls = true
-			end
+		local function is_null_ls(client)
+			return client.name == "null-ls"
 		end
+		local prefer_null_ls = vim.iter(capable):any(is_null_ls)
 		local function filter(client)
-			if prefer_null_ls then
-				return client.name == "null-ls"
-			end
-			return true
+			return not prefer_null_ls or is_null_ls(client)
 		end
 		return {
 			bufnr = bufnr,

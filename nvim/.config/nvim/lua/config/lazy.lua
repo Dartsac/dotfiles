@@ -48,25 +48,16 @@ vim.fn.mkdir(vim.fn.stdpath("data") .. "/site", "p")
 
 -- Make sure to setup `mapleader` and `maplocalleader` before
 -- loading lazy.nvim so that mappings are correct.
--- This is also a good place to setup other settings (vim.opt)
 vim.g.mapleader = " "
 vim.g.maplocalleader = "\\"
 
--- Install your plugins here
 require("lazy").setup({
 	spec = {
 		{ import = "plugins" },
 		{ "google/vim-searchindex" },
-		-- { "christoomey/vim-tmux-navigator" },
 	},
-	change_detection = {
-		enabled = true,
-		notify = false,
-	},
-	cache = {
-		enabled = true,
-		-- path = vim.fn.stdpath("cache") .. "/lazy/cache",
-	},
+	-- Watch the config files for changes, without a notification for each.
+	change_detection = { notify = false },
 	performance = {
 		rtp = {
 			-- lazy.nvim drops Neovim's site packages from the runtime path. Keep

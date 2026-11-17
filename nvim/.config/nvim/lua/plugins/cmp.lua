@@ -18,10 +18,8 @@ return {
 		},
 		{
 			"mattn/emmet-vim",
+			-- Its default leader key, <C-y>, triggers it.
 			ft = { "html", "css", "javascriptreact", "typescriptreact", "vue", "svelte", "xml" }, -- Enable for specific filetypes
-			config = function()
-				vim.g.user_emmet_leader_key = "<C-y>" -- Set the emmet trigger key
-			end,
 		},
 		{
 			"dsznajder/vscode-es7-javascript-react-snippets",
@@ -69,11 +67,6 @@ return {
 			}),
 		})
 
-		local check_backspace = function()
-			local col = vim.fn.col(".") - 1
-			return col == 0 or vim.fn.getline("."):sub(col, col):match("%s")
-		end
-
 		cmp.setup({
 			snippet = {
 				expand = function(args)
@@ -90,8 +83,6 @@ return {
 						luasnip.expand()
 					elseif luasnip.expand_or_jumpable() then
 						luasnip.expand_or_jump()
-					elseif check_backspace() then
-						fallback()
 					else
 						fallback()
 					end
@@ -115,9 +106,8 @@ return {
 			formatting = {
 				fields = { "kind", "abbr", "menu" },
 				format = function(entry, vim_item)
-					-- Kind icons
-					-- vim_item.kind = string.format("%s", kind_icons[vim_item.kind])
-					vim_item.kind = string.format("%s %s", icons.kind[vim_item.kind], vim_item.kind) -- This concatonates the icons with the name of the item kind
+					-- Kind icon, then the kind's name
+					vim_item.kind = string.format("%s %s", icons.kind[vim_item.kind], vim_item.kind)
 					vim_item.menu = ({
 						nvim_lsp = "[LSP]",
 						luasnip = "[Snippet]",

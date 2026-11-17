@@ -28,7 +28,6 @@ return {
 		Property = "",
 		References = "",
 		Snippet = "",
-		-- Snippet = "",
 		String = "",
 		Struct = "",
 		Text = "",

@@ -17,19 +17,6 @@ return {
 					show_start = false,
 					show_end = false,
 				},
-				-- exclude = {
-				-- 	buftypes = { "terminal", "nofile" },
-				-- 	filetypes = {
-				-- 		"help",
-				-- 		"startify",
-				-- 		"dashboard",
-				-- 		"packer",
-				-- 		"neogitstatus",
-				-- 		"NvimTree",
-				-- 		"Trouble",
-				-- 		"dbout",
-				-- 	},
-				-- },
 			})
 		end,
 	},

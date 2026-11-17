@@ -111,18 +111,20 @@ return {
 						:with_del(cond.none()),
 				})
 
-				-- Handle brackets with custom space rules
+				-- A space typed between a pair of brackets is paired: ( | )
 				local brackets = { { "(", ")" }, { "[", "]" }, { "{", "}" } }
+				local empty_pairs = {}
+				for _, bracket in ipairs(brackets) do
+					empty_pairs[bracket[1] .. bracket[2]] = true
+				end
+				npairs.add_rules({
+					Rule(" ", " "):with_pair(function(opts)
+						return empty_pairs[opts.line:sub(opts.col - 1, opts.col)] == true
+					end),
+				})
+				-- The closing bracket moves past the paired space.
 				for _, bracket in ipairs(brackets) do
 					npairs.add_rules({
-						Rule(" ", " "):with_pair(function(opts)
-							local pair = opts.line:sub(opts.col - 1, opts.col)
-							return vim.tbl_contains({
-								brackets[1][1] .. brackets[1][2],
-								brackets[2][1] .. brackets[2][2],
-								brackets[3][1] .. brackets[3][2],
-							}, pair)
-						end),
 						Rule(bracket[1] .. " ", " " .. bracket[2])
 							:with_pair(function()
 								return false

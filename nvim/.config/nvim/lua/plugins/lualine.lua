@@ -15,12 +15,16 @@ return {
 			-- before other plugins); nil leaves lualine's own color.
 			local palette = require("config.colorscheme").palette()
 			local fg = palette and palette.fg[1]
+			-- That foreground in normal mode; lualine's mode color otherwise.
+			local function normal_fg()
+				return { fg = vim.fn.mode() == "n" and fg or nil }
+			end
 
 			local hide_in_width = function()
 				return vim.fn.winwidth(0) > 80
 			end
 
-			-- cool function for progress
+			-- Where the cursor is in the file, as a bar that fills up.
 			local progress = function()
 				local current_line = vim.fn.line(".")
 				local total_lines = vim.fn.line("$")
@@ -65,9 +69,7 @@ return {
 							fmt = function(str)
 								return str:sub(1, 1)
 							end,
-							color = function()
-								return { fg = vim.fn.mode() == "n" and fg or nil } -- White in normal mode, default otherwise
-							end,
+							color = normal_fg,
 						},
 					},
 					lualine_c = {
@@ -75,14 +77,8 @@ return {
 							"filename",
 							file_status = true, -- Displays file status (readonly status, modified status)
 							newfile_status = false, -- Display new file status (new file means no write after created)
-							path = 1,
-							-- 0: Just the filename
-							-- 1: Relative path
-							-- 2: Absolute path
-							-- 3: Absolute path, with tilde as the home directory
-							-- 4: Filename and parent dir, with tilde as the home directory
-							shorting_target = 0, -- Shortens path to leave 40 spaces in the window
-							-- for other components. (terrible name, any suggestions?)
+							path = 1, -- relative path
+							shorting_target = 0, -- never shorten the path
 							symbols = {
 								modified = "[+]", -- Text to show when the file is modified.
 								readonly = "[-]", -- Text to show when the file is non-modifiable or readonly.
@@ -154,18 +150,14 @@ return {
 						{
 							"location",
 							padding = 0,
-							color = function()
-								return { fg = vim.fn.mode() == "n" and fg or nil }
-							end,
+							color = normal_fg,
 						},
 					},
 					lualine_z = {
 						{
 							progress,
 							cond = hide_in_width,
-							color = function()
-								return { fg = vim.fn.mode() == "n" and fg or nil } -- White in normal mode, default otherwise
-							end,
+							color = normal_fg,
 						},
 					},
 				},

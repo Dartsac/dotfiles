@@ -26,8 +26,6 @@ local CONFIG = {
 	targetPollSecs = 0.3, -- how often the card rechecks where the text would go
 }
 
--- Floating 8-bit level meter shown only while dictating.
-
 -- Hammerspoon draws RGB components in the "generic RGB" color space (gamma
 -- 1.8), which shows hex colors lighter and washed out. Re-encode each sRGB
 -- component for that space so the card matches the same hex in other apps.
@@ -41,6 +39,7 @@ local function rgb(hex, alpha)
 	return { red = channel(hex, 1), green = channel(hex, 3), blue = channel(hex, 5), alpha = alpha or 1 }
 end
 
+-- Floating 8-bit level meter shown only while dictating.
 local HUD = {
 	cols = 12, -- meter width, in columns
 	rows = 6, -- meter height, in LED blocks
@@ -135,7 +134,7 @@ local function dims(textW)
 	local fit = math.ceil((textW or 0) + 4 + 2 * (px + HUD.pad))
 	local w = math.min(math.max(rowW, fit), HUD.maxW)
 	local h = px + HUD.pad + meterH + HUD.lineGap + HUD.lineH + HUD.pad + px
-	return w, h, labelW, meterH, rowW, meterW
+	return w, h, labelW, meterH, meterW
 end
 
 local function rowColor(r)
@@ -153,7 +152,7 @@ end
 
 local function buildHud(w)
 	local px = HUD.px
-	local minW, h, labelW, meterH, _, meterW = dims()
+	local minW, h, labelW, meterH, meterW = dims()
 	w = math.max(w or minW, minW)
 	-- Centre REC + meter; the status dot hangs to the left of REC.
 	local gx = math.floor((w - (labelW + HUD.pad + meterW)) / 2)

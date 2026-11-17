@@ -1,17 +1,10 @@
-# Set a variable to store the path to the file containing the last run date
+# The date the greeting last showed. It shows once a day: when this file holds
+# another date.
 set last_run_file ~/.config/fish/fish_greeting_last_run
 
 function fish_greeting
-    # Check if the file containing the last run date exists
-    if test -e $last_run_file
-        # Read the last run date from the file
-        set -g last_run (cat $last_run_file)
-    else
-        # Set the last run date to today's date if the file doesn't exist
-        set -g last_run (date +%Y-%m-%d)
-    end
-    # Check if the current date is the same as the last time the function was run
-    if test (date +%Y-%m-%d) != $last_run
+    set -l today (date +%Y-%m-%d)
+    if test -e $last_run_file; and test $today != (cat $last_run_file)
         echo "                       .,,uod8b8bou,,."
         echo "              ..,uod8bbbbbbbbbbbbbbbbrpft?l!i:."
         echo "         ,=m8bbbbbbbbbbbbbbbrpft?!||||||||||||||"
@@ -36,13 +29,7 @@ function fish_greeting
         echo "    `........::::::::::::::::;iof688888888888888888888b.     `"
         echo "      `......:::::::::;iof688888888888888888888888888b."
         echo "        `....:::;iof688888888888888888888888888888899ft!"
-        # echo "          `..::!8888888888888888888888888888888899ft|!^\""
-        # echo "            `' !!988888888888888888888888899ft|!^\""
-        # echo "                `!!8888888888888888899ft|!^\""
-        # echo "                  `!988888888899ft|!^\""
-        # echo "                    `!9899ft|!^\""
-        # Update the last run date to the current date
-        echo (date +%Y-%m-%d) >$last_run_file
+        echo $today >$last_run_file
     end
 end
 
@@ -91,12 +78,8 @@ set -gx HOMEBREW_NO_ASK 1
 fish_add_path --path ~/bin
 fish_add_path --path ~/.local/bin
 
-# theme
-set -g theme_color_scheme terminal-dark
+# prompt_pwd shortens each parent folder to one letter.
 set -g fish_prompt_pwd_dir_length 1
-set -g theme_display_user yes
-set -g theme_hide_hostname no
-set -g theme_hostname always
 
 # Syntax-highlighting colors (moved from conf.d/fish_frozen_theme.fish, which
 # fish 4.3 generated for the universal -> global migration)

@@ -1,6 +1,5 @@
 return {
 	"NvChad/nvim-colorizer.lua",
-	enabled = true,
 	-- Loaded only for files it colours (the filetypes below), before their
 	-- FileType; `ft` covers those buffers without a matching file name.
 	event = {

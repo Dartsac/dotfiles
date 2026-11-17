@@ -496,6 +496,15 @@ def report(socket_path, key, tokens):
 
 
 # ---- the choice -------------------------------------------------------------
+def write_setting(config_dir, name, text):
+    """Replace the file `name` in the config folder in one step."""
+    os.makedirs(config_dir, exist_ok=True)
+    tmp = os.path.join(config_dir, name + ".tmp")
+    with open(tmp, "w") as f:
+        f.write(text)
+    os.replace(tmp, os.path.join(config_dir, name))
+
+
 def read_choice(config_dir):
     try:
         with open(os.path.join(config_dir, "character")) as f:
@@ -508,11 +517,7 @@ def read_choice(config_dir):
 def write_choice(config_dir, choice):
     if choice not in CHOICES:
         raise SystemExit("faces: choose one of: " + ", ".join(CHOICES))
-    os.makedirs(config_dir, exist_ok=True)
-    tmp = os.path.join(config_dir, "character.tmp")
-    with open(tmp, "w") as f:
-        f.write(choice + "\n")
-    os.replace(tmp, os.path.join(config_dir, "character"))
+    write_setting(config_dir, "character", choice + "\n")
 
 
 def read_minutes(config_dir):
@@ -532,11 +537,7 @@ def write_minutes(config_dir, text):
         minutes = -1
     if not 0 <= minutes < float("inf"):
         raise SystemExit("faces: awake takes a number of minutes, 0 or more")
-    os.makedirs(config_dir, exist_ok=True)
-    tmp = os.path.join(config_dir, "awake-minutes.tmp")
-    with open(tmp, "w") as f:
-        f.write("%g\n" % minutes)
-    os.replace(tmp, os.path.join(config_dir, "awake-minutes"))
+    write_setting(config_dir, "awake-minutes", "%g\n" % minutes)
 
 
 def config_dir():
@@ -552,6 +553,11 @@ def config_dir():
 
 
 # ---- run --------------------------------------------------------------------
+def session_key(socket_path):
+    """A short name for the Herdr session a socket belongs to."""
+    return hashlib.sha1(socket_path.encode()).hexdigest()[:12]
+
+
 def log(state_dir, message):
     path = os.path.join(state_dir, "faces.log")
     try:
@@ -566,7 +572,7 @@ def log(state_dir, message):
 def run(socket_path, config, state_dir, sleep=time.sleep, clock=time.monotonic, git=None, now=time.time):
     os.makedirs(state_dir, exist_ok=True)
     # One updater per server: sessions have their own sockets and share this folder.
-    with open(os.path.join(state_dir, "run-%s.lock" % hashlib.sha1(socket_path.encode()).hexdigest()[:12]), "w") as lock:
+    with open(os.path.join(state_dir, "run-%s.lock" % session_key(socket_path)), "w") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
@@ -578,7 +584,7 @@ def keep_current(socket_path, config, state_dir, sleep, clock, git, now=time.tim
     log(state_dir, "started for " + socket_path)
     sent, frame, failures, last_socket_id = {}, 0, 0, None
     # Sessions can reuse workspace and pane ids: keep separate files per socket.
-    session = hashlib.sha1(socket_path.encode()).hexdigest()[:12]
+    session = session_key(socket_path)
     colors = TitleColors(os.path.join(config, "workspace-colors-%s.json" % session))
     awake = Awake(os.path.join(state_dir, "awake-%s.json" % session), now)
     renewed = {kind: clock() for kind in REFRESH_SECONDS}

@@ -1,10 +1,7 @@
 -- lua/config/attach.lua
 
--- Only auto-attach to harpoon if no file was explicitly opened
-local has_file_arg = vim.fn.argc() > 0
-
-if has_file_arg then
-	-- User opened a specific file, don't auto-attach to harpoon
+-- Started without a file to open: go to the project's first Harpoon entry.
+if vim.fn.argc() > 0 then
 	return
 end
 

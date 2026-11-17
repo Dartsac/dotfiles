@@ -33,14 +33,8 @@ local git_settings = vim.api.nvim_create_augroup("_git", { clear = true })
 vim.api.nvim_create_autocmd("FileType", {
 	group = git_settings,
 	pattern = "gitcommit",
-	command = "setlocal wrap",
-	desc = "Enable wrap for gitcommit",
-})
-vim.api.nvim_create_autocmd("FileType", {
-	group = git_settings,
-	pattern = "gitcommit",
-	command = "setlocal spell",
-	desc = "Enable spell checking for gitcommit",
+	command = "setlocal wrap spell",
+	desc = "Enable wrap and spell checking for gitcommit",
 })
 
 -- Markdown settings
@@ -99,22 +93,10 @@ vim.api.nvim_create_autocmd("BufEnter", {
 	end,
 })
 
--- Force-refresh lualine when mode changes
--- vim.api.nvim_create_autocmd("ModeChanged", {
--- 	pattern = "*",
--- 	callback = function()
--- 		require("lualine").refresh()
--- 	end,
--- })
-
--- recognize plantuml files
 -- Filetype detection for PlantUML files
 vim.filetype.add({
 	extension = {
 		puml = "plantuml",
 		plantuml = "plantuml",
-	},
-	filename = {
-		["*.puml"] = "plantuml",
 	},
 })

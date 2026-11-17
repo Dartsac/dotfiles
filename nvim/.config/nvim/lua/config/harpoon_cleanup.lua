@@ -17,10 +17,6 @@ local M = {}
 
 local uv = vim.uv
 
-local function normalize(path)
-	return vim.fs.normalize(path)
-end
-
 local function under(path, root)
 	return path == root or vim.startswith(path, root .. "/")
 end
@@ -35,7 +31,7 @@ function M.resolve(key, value)
 	if value:sub(1, 1) ~= "/" then
 		value = key .. "/" .. value
 	end
-	return normalize(value)
+	return vim.fs.normalize(value)
 end
 
 local function harpoon()
@@ -74,6 +70,12 @@ end
 ---@field item table HarpoonItem
 ---@field index integer
 ---@field path string resolved entry path
+
+--- Whether a candidate's target does not exist right now.
+---@param candidate HarpoonCandidate
+local function gone(candidate)
+	return uv.fs_stat(candidate.path) == nil
+end
 
 ---@param h table
 ---@param match fun(path: string, real: string|nil): boolean
@@ -137,7 +139,7 @@ function M.candidates(path)
 	if not h then
 		return {}
 	end
-	local target = normalize(path)
+	local target = vim.fs.normalize(path)
 	local stat = uv.fs_lstat(target)
 	local target_real = stat and stat.type ~= "link" and uv.fs_realpath(target) or nil
 	return collect(h, function(entry, real)
@@ -153,10 +155,7 @@ function M.remove_deleted(candidates)
 	if not h or #candidates == 0 then
 		return 0
 	end
-	local gone = vim.tbl_filter(function(candidate)
-		return uv.fs_stat(candidate.path) == nil
-	end, candidates)
-	local removed = remove(h, gone)
+	local removed = remove(h, vim.tbl_filter(gone, candidates))
 	if removed > 0 then
 		vim.notify(
 			("Harpoon: removed %d entr%s for the deleted path"):format(removed, removed == 1 and "y" or "ies"),
@@ -238,10 +237,7 @@ function M.clean_missing()
 		return 0
 	end
 	-- Re-check: only remove what is still missing now.
-	local still = vim.tbl_filter(function(entry)
-		return uv.fs_stat(entry.path) == nil
-	end, missing)
-	local removed = remove(h, still)
+	local removed = remove(h, vim.tbl_filter(gone, missing))
 	vim.notify(
 		("Harpoon: removed %d missing entr%s"):format(removed, removed == 1 and "y" or "ies"),
 		vim.log.levels.INFO

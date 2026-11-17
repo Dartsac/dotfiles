@@ -34,20 +34,23 @@ const TAB_SHUTDOWN_MS = 12_000;
 const customData = (context, type) => (context.sessionManager.getBranch?.() ?? [])
   .filter(e => e.type === "custom" && e.customType === type).map(e => e.data);
 
-// Steer/stop in a child tab follow pi-subagents' own authority policy.
-function viewerAuthority() {
+// pi-subagents' config; {} when it has none or it can't be read.
+function subagentConfig() {
   try {
-    const policy = JSON.parse(fs.readFileSync(path.join(agentDir(), "extensions/subagent/config.json"), "utf8")).authorityPolicy ?? {};
-    return { steer: (policy.steerRun ?? "auto") === "auto", stop: (policy.stopRun ?? "auto") === "auto" };
-  } catch { return { steer: true, stop: true }; }
+    return JSON.parse(fs.readFileSync(path.join(agentDir(), "extensions/subagent/config.json"), "utf8")) ?? {};
+  } catch { return {}; }
+}
+
+// Steer/stop in a child tab follow pi-subagents' own authority policy.
+function viewerAuthority(config) {
+  const policy = config.authorityPolicy ?? {};
+  return { steer: (policy.steerRun ?? "auto") === "auto", stop: (policy.stopRun ?? "auto") === "auto" };
 }
 
 // pi-subagents' configured session folder, if any (also readable by viewers).
-function defaultSessionDir() {
-  try {
-    const dir = JSON.parse(fs.readFileSync(path.join(agentDir(), "extensions/subagent/config.json"), "utf8")).defaultSessionDir;
-    return typeof dir === "string" && dir ? dir.replace(/^~(?=$|\/)/, os.homedir()) : undefined;
-  } catch { return undefined; }
+function defaultSessionDir(config) {
+  const dir = config.defaultSessionDir;
+  return typeof dir === "string" && dir ? dir.replace(/^~(?=$|\/)/, os.homedir()) : undefined;
 }
 
 // A Pi started from inside another (a bash tool, or a tmux server that tool
@@ -70,7 +73,6 @@ export async function ownsPane(call, pane, env = process.env, pid = process.pid)
   return owner;
 }
 
-// The node that runs pi-subagents' viewer in a child tab.
 // The pi-coding-agent package of the running Pi, so a child tab's viewer draws
 // with the same Pi version's components. Undefined falls back to the old viewer.
 export function piPackageRoot(entry = process.argv[1]) {
@@ -83,6 +85,7 @@ export function piPackageRoot(entry = process.argv[1]) {
   return undefined;
 }
 
+// The node that runs pi-subagents' viewer in a child tab.
 function viewerNode() {
   const onPath = (process.env.PATH ?? "").split(path.delimiter).map(dir => path.join(dir, "node")).find(file => {
     try { fs.accessSync(file, fs.constants.X_OK); return true; } catch { return false; }
@@ -321,8 +324,9 @@ export default function (pi) {
     const self = await call("pane.get", { pane_id: pane });
     const node = viewerNode();
     const piRoot = piPackageRoot();
-    const authority = viewerAuthority();
-    const sessionDir = defaultSessionDir();
+    const config = subagentConfig();
+    const authority = viewerAuthority(config);
+    const sessionDir = defaultSessionDir(config);
     const opened = customData(context, CHILD_TAB_ENTRY).filter(d => d?.pane === pane && typeof d.key === "string").map(d => d.key);
     tabs = new ChildTabs({
       cli: herdrCli, rpc: call, workspace: self.pane.workspace_id, parentPane: pane, cwd: context.cwd,

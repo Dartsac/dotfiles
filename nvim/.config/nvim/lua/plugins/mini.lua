@@ -26,13 +26,12 @@ return {
 
 		icons.mock_nvim_web_devicons()
 
-		-- Setup mini.indentscope
 		local status_ok_mini, indentscope = pcall(require, "mini.indentscope")
 		if not status_ok_mini then
 			return
 		end
 
-		-- Setup mini.indentscope with default options
+		-- Drawn at once, with no animation.
 		indentscope.setup({
 			draw = {
 				delay = 0,

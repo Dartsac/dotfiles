@@ -437,6 +437,19 @@ function M.resolve_reference(lines, label, in_code)
 	return nil
 end
 
+--- Each match of `pattern` in `line`, left to right: its start, its end and
+--- its captures.
+local function matches(line, pattern)
+	local init = 1
+	return function()
+		local found = { line:find(pattern, init) }
+		if found[1] then
+			init = found[2] + 1
+		end
+		return unpack(found)
+	end
+end
+
 --- The link under the cursor column (0-based), if any.
 ---@param line string
 ---@param col integer
@@ -447,32 +460,20 @@ function M.link_at(line, col)
 		return s and pos >= s and pos <= e
 	end
 	-- [[target#heading|alias]]
-	local init = 1
-	while true do
-		local s, e, inner = line:find("%[%[(.-)%]%]", init)
-		if not s then
-			break
-		end
+	for s, e, inner in matches(line, "%[%[(.-)%]%]") do
 		if covers(s, e) then
 			local target = inner:gsub("|.*$", "")
 			local name, anchor = target:match("^(.-)#(.*)$")
 			return { kind = "wiki", target = name or target, anchor = anchor }
 		end
-		init = e + 1
 	end
 	-- [text](target "title") and <target>
 	-- (An <angle-bracket> destination may contain parentheses.)
 	for _, pattern in ipairs({ "%[[^%]]-%]%((%s*<[^>]*>[^)]*)%)", "%[[^%]]-%]%((.-)%)", "<([^>%s]+)>" }) do
-		init = 1
-		while true do
-			local s, e, inner = line:find(pattern, init)
-			if not s then
-				break
-			end
+		for s, e, inner in matches(line, pattern) do
 			if covers(s, e) then
 				return M.classify_target(inner)
 			end
-			init = e + 1
 		end
 	end
 	-- Reference links, resolved later against the buffer's definitions:
@@ -482,40 +483,22 @@ function M.link_at(line, col)
 	if covers(def_s, def_e) or (def_s and pos > def_e) then
 		return { kind = "reference", label = def_label }
 	end
-	init = 1
-	while true do
-		local s, e, text, label = line:find("%[([^%]]*)%]%[([^%]]*)%]", init)
-		if not s then
-			break
-		end
+	for s, e, text, label in matches(line, "%[([^%]]*)%]%[([^%]]*)%]") do
 		if covers(s, e) then
 			return { kind = "reference", label = label ~= "" and label or text }
 		end
-		init = e + 1
 	end
-	init = 1
-	while true do
-		local s, e, label = line:find("%[([^%]]+)%]", init)
-		if not s then
-			break
-		end
+	for s, e, label in matches(line, "%[([^%]]+)%]") do
 		local after = line:sub(e + 1, e + 1)
 		if covers(s, e) and after ~= "(" and after ~= "[" and line:sub(s - 1, s - 1) ~= "]" then
 			return { kind = "reference", label = label }
 		end
-		init = e + 1
 	end
 	-- bare URL
-	init = 1
-	while true do
-		local s, e = line:find("https?://[^%s<>%)%]]+", init)
-		if not s then
-			break
-		end
+	for s, e in matches(line, "https?://[^%s<>%)%]]+") do
 		if covers(s, e) then
 			return { kind = "url", target = line:sub(s, e) }
 		end
-		init = e + 1
 	end
 	return nil
 end

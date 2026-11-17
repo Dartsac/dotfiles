@@ -56,23 +56,18 @@ return {
 							return {}
 						end
 
-						local marks = harpoon:list().items
 						local ret = {}
-
-						for i, _ in ipairs(marks) do
+						for i, mark in ipairs(harpoon:list().items) do
 							ret[i] = {
 								tostring(i),
 								function()
 									harpoon:list():select(i)
 								end,
-								desc = marks[i].value,
+								desc = mark.value,
 								icon = { icon = "󱡀", hl = "WhichKeyIconBlue" },
+								hidden = i > 1 or nil, -- the popup lists the first entry only
 							}
-							if i > 1 then
-								ret[i]["hidden"] = true
-							end
 						end
-
 						return ret
 					end,
 				},
