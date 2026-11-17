@@ -1,0 +1,51 @@
+#!/bin/sh
+# mosh-server for phone sessions: a new session always binds the address the
+# SSH login came in on (-s, from SSH_CONNECTION), whatever the app asked for
+# (-s, -i ADDRESS or nothing, which would be every network). The phone's SSH
+# server listens on the tailnet only, so mosh does too. `phone.py setup` links
+# this into ~/.local/bin, ahead of Homebrew's on PATH; it runs Homebrew's.
+real=
+for candidate in ${PHONE_MOSH_SERVER:-/opt/homebrew/bin/mosh-server /usr/local/bin/mosh-server}; do
+	if [ -f "$candidate" ] && [ -x "$candidate" ]; then
+		real=$candidate
+		break
+	fi
+done
+if [ -z "$real" ]; then
+	echo "mosh-server: Homebrew's is not installed (brew install mosh)" >&2
+	exit 127
+fi
+if [ "${1:-}" != new ]; then
+	exec "$real" "$@"
+fi
+shift
+# Rotate through the arguments once, dropping the app's bind choice. After
+# --, the command to run is left as it is.
+count=$#
+seen=0
+command=0
+drop=0
+while [ "$seen" -lt "$count" ]; do
+	arg=$1
+	shift
+	seen=$((seen + 1))
+	if [ "$command" = 1 ]; then
+		set -- "$@" "$arg"
+		continue
+	fi
+	if [ "$drop" = 1 ]; then
+		drop=0
+		continue
+	fi
+	case $arg in
+	--)
+		command=1
+		set -- "$@" "$arg"
+		;;
+	-s) ;;
+	-i) drop=1 ;;
+	-i*) ;;
+	*) set -- "$@" "$arg" ;;
+	esac
+done
+exec "$real" new -s "$@"

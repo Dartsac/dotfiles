@@ -1,5 +1,5 @@
 """The herdr binary for project-picker.py and stop-fresh.py, which import it
-from this folder."""
+from this folder, and for phone/alert.py and phone/phone.py, from ../phone."""
 import os
 
 

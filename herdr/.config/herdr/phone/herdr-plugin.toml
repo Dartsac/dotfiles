@@ -1,0 +1,18 @@
+id = "dotfiles.phone"
+name = "Phone"
+version = "0.1.0"
+min_herdr_version = "0.9.5"
+description = "A push to your phone when an agent is done or needs input while you are away from the Mac"
+platforms = ["macos"]
+
+# alert.py sends nothing until `phone.py push` has chosen a service, and
+# nothing while you are at the Mac (README, "From your phone").
+[[events]]
+on = "pane.agent_status_changed"
+command = ["python3", "-B", "alert.py"]
+
+[[actions]]
+id = "test"
+title = "Send a test push to the phone"
+contexts = ["global"]
+command = ["python3", "-B", "alert.py", "--test"]
