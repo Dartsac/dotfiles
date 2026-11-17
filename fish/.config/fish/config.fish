@@ -1,10 +1,12 @@
 # The date the greeting last showed. It shows once a day: when this file holds
-# another date.
+# another date, or there is no file yet (a new machine).
 set last_run_file ~/.config/fish/fish_greeting_last_run
 
 function fish_greeting
     set -l today (date +%Y-%m-%d)
-    if test -e $last_run_file; and test $today != (cat $last_run_file)
+    set -l last_run
+    test -r $last_run_file; and read last_run <$last_run_file
+    if test "$last_run" != $today
         echo "                       .,,uod8b8bou,,."
         echo "              ..,uod8bbbbbbbbbbbbbbbbrpft?l!i:."
         echo "         ,=m8bbbbbbbbbbbbbbbrpft?!||||||||||||||"

@@ -6,20 +6,23 @@ local M = {}
 local HOME = os.getenv("HOME")
 
 M.paletteFile = HOME .. "/.local/share/theme-sync/palette.json"
-M.ghosttyConfig = HOME .. "/.config/ghostty/config"
+-- Ghostty reads its local override, where theme-sync writes the variant,
+-- after the whole of its config.
+M.ghosttyConfigs = { HOME .. "/.config/ghostty/config", HOME .. "/.config/ghostty/config.local.ghostty" }
 
--- Variant named by Ghostty's last `theme =` line:
+-- Variant named by the last `theme =` line Ghostty reads:
 -- "Dracula-Van-Helsing" -> "van-helsing"; none or unreadable -> "pro".
 local function ghosttyVariant()
-	local f = io.open(M.ghosttyConfig, "r")
-	if not f then
-		return "pro"
-	end
 	local name
-	for line in f:lines() do
-		name = line:match("^%s*theme%s*=%s*(%S+)") or name
+	for _, path in ipairs(M.ghosttyConfigs) do
+		local f = io.open(path, "r")
+		if f then
+			for line in f:lines() do
+				name = line:match("^%s*theme%s*=%s*(%S+)") or name
+			end
+			f:close()
+		end
 	end
-	f:close()
 	local variant = name and name:match("^[^-]+%-(.+)$")
 	return variant and variant:lower() or "pro"
 end
