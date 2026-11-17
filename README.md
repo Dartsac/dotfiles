@@ -302,7 +302,7 @@ On a new machine, also:
 - Run `theme-sync`. It writes `~/.pi/agent/themes/dracula-pro.json` from the
   template beside it.
 - Copy `~/.pi/agent/local-packages/` from a machine that has it.
-  `settings.json` loads three customized packages from there. They are local
+  `settings.json` loads two customized packages from there. They are local
   Git repositories and are not part of this one.
 - Log in to Pi. Credentials (`auth.json`), trusted folders (`trust.json`) and
   sessions stay on each machine.

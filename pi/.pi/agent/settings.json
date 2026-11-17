@@ -9,12 +9,7 @@
   },
   "packages": [
     "./local-packages/pi-subagents",
-    {
-      "source": "./local-packages/rpiv-ask-user-question",
-      "extensions": [
-        "+index.ts"
-      ]
-    },
+    "npm:@juicesharp/rpiv-ask-user-question@2.15.0",
     "./local-packages/pi-web-access",
     {
       "source": "npm:@mtrojnar/pi-usage",
@@ -28,6 +23,24 @@
       "enabled": true,
       "main": {
         "enabled": true
+      }
+    },
+    "agentOverrides": {
+      "scout": {
+        "model": "anthropic/claude-haiku-5-5",
+        "thinking": "low"
+      }
+    },
+    "agentOverridesByProvider": {
+      "anthropic": {
+        "reviewer": {
+          "model": "openai-codex/gpt-6.1-sol"
+        }
+      },
+      "openai-codex": {
+        "reviewer": {
+          "model": "anthropic/claude-opus-5-5"
+        }
       }
     }
   },
