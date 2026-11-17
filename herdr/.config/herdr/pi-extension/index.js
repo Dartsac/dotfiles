@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { Supervision, asyncRunsRoot, clean, hasChildIssue, nestedEventsRoot, nestedRunsRoot, pendingRequests, supervisorRoot } from "./supervision.mjs";
 import { ChildTabs, ForegroundRuns, isLive, nestedForeground, readChild, scanChildren, treeTokens, viewerSessionRoots } from "./children.mjs";
 import { request } from "./rpc.mjs";
-import { TOPIC_ATTEMPTS, generateTopic, messageText } from "./topic.mjs";
+import { TOPIC_ATTEMPTS, generateTopic, jobTopic, messageText } from "./topic.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const agentDir = () => process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi/agent");
@@ -251,12 +251,28 @@ export default function (pi) {
     if (engine && root) await pi.exec("bash", [engine, "pane.agent_status_changed"], { timeout: 10_000 }).catch(() => {});
   }
 
-  // Name an unnamed session after its work. A name you set with /name is kept.
-  async function nameSession(context, reply) {
+  // What git says of a folder, for jobTopic; undefined outside git.
+  async function gitOf(cwd) {
+    const result = await pi.exec("git", ["-C", cwd, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir", "--abbrev-ref", "HEAD"],
+      { timeout: 5000 }).catch(() => undefined);
+    const [gitDir, commonDir, branch] = result?.code === 0 ? result.stdout.trim().split("\n") : [];
+    return branch ? { gitDir, commonDir, branch } : undefined;
+  }
+
+  // Name an unnamed session after its job, in a job's worktree, else after its
+  // work; with no work to go on yet (`jobOnly`: a new session as it starts),
+  // only after its job. A name you set with /name is kept.
+  async function nameSession(context, reply, jobOnly = false) {
     if (!root || topicPending || topicTries >= TOPIC_ATTEMPTS || pi.getSessionName()) return;
     topicPending = true;
-    topicTries++;
     const session = sessionId;
+    const job = jobTopic(await gitOf(context.cwd));
+    if (job || jobOnly) {
+      if (job && root && session === sessionId && !pi.getSessionName()) pi.setSessionName(job);
+      topicPending = false;
+      return;
+    }
+    topicTries++;
     try {
       const first = (context.sessionManager.getBranch?.() ?? []).find(e => e.type === "message" && e.message?.role === "user");
       const topic = await generateTopic(context, {
@@ -441,11 +457,12 @@ export default function (pi) {
     // Pi sets its own title once more after a session loads, at a moment no
     // event marks: send ours on the next few polls.
     retitle = 3;
-    // A reloaded or resumed session that already has a conversation is named
-    // from it now, rather than at its next prompt.
+    // A session in a job's worktree takes the job's name now. A reloaded or
+    // resumed one that already has a conversation is named from it now,
+    // rather than at its next prompt.
     const messages = (context.sessionManager.getBranch?.() ?? []).filter(e => e.type === "message").map(e => e.message);
     lastPrompt = messageText(messages.findLast(m => m?.role === "user"));
-    if (lastPrompt) void nameSession(context, messageText(messages.findLast(m => m?.role === "assistant")));
+    void nameSession(context, messageText(messages.findLast(m => m?.role === "assistant")), !lastPrompt);
     poll();
     timer = setInterval(poll, 1000);
     timer.unref?.();

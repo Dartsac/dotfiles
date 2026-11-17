@@ -19,6 +19,7 @@ reads Herdr's own state.
     faces.py pick           choose the character in a picker (bound to prefix i)
     faces.py set <choice>   choose it from the command line: byte, wisp, bit or mixed
     faces.py awake <min>    how long an agent stays ready after its last work (0: never)
+    faces.py view <view>    the Agents panel: inbox (what is not idle, needs-you first), all, or toggle
     faces.py show           print the current choice and every character's faces
     faces.py rules          print the tokens and their color rules, as config.base.toml must have them
 
@@ -27,10 +28,12 @@ once a second (every 0.4s while an agent is working, to step the animation) and
 sets these tokens, which the sidebar rows show:
 
     face     line 1  the character, then the task or the workspace's name; a
-                     worktree space's name is its job (space_name)
-    detail   line 2  workspace and agent; for a workspace, its branch,
-                     ahead/behind counts and changed files; for a worktree
-                     space, its progress or "merged · remove?" (progress_text)
+                     worktree space's name is its job, its branch (space_name)
+    detail   line 2  the agent's space, and its harness unless Pi, left out
+                     when line 1 says the same; for a workspace, its branch,
+                     ahead/behind counts and changed files, left out when that
+                     is a plain main; for a worktree space, its progress or
+                     "merged · remove?" (progress_text)
     note     line 3  the agent's activity, when it says more than the face
     alert    line 3  instead of note, in bold, when the activity needs you
     tree1-6  then    a Pi parent's subagents, one per line, as a tree:
@@ -80,6 +83,7 @@ BRANCH, LAST = "├── ", "└── "
 SUB = "sub "                 # a row one level deeper, under the subagent above it (children.mjs SUB)
 TRUNK, GAP = "│   ", "    "   # before a deeper row: its subagent has a row after it, or not
 QUIET = ("Ready", "Working", "Finished")   # activities the face already shows
+USUAL_HARNESS = "pi"         # line 2 names an agent's harness only when it is another
 NEEDS_YOU = ("Waiting for you", "60s", "Failed", "not done")   # activities shown in bold
 BUSY = ("working", "blocked")             # being given work, or in the middle of it
 AWAKE_MINUTES = 10           # an idle agent stays ready this long after its last work
@@ -164,8 +168,7 @@ class Awake:
         return frozenset(pane for pane, since in rested.items() if now - since < seconds)
 
 
-WORKTREE_BRANCH_PREFIX = "worktree/"   # before the branch name of a worktree Herdr creates
-PANE_NUMBERS = "123456789ABCDEFGHJKMNPQRSTVWXYZ0"   # Herdr's pane ids: "<workspace>:p<n>", n counting up in these digits
+WORKTREE_BRANCH_PREFIX = "worktree/"   # before the branch name of a worktree Herdr names itself
 
 
 def linked_checkout(workspace):
@@ -174,42 +177,29 @@ def linked_checkout(workspace):
     return worktree.get("checkout_path") if worktree.get("is_linked_worktree") else None
 
 
-def creation_order(pane_id):
-    """A pane's place in the order its workspace got its panes (unknown ids last).
-
-    Herdr numbers a pane when it is created in a workspace, or moved into it,
-    and never gives a number out twice."""
-    digits = (pane_id or "").rpartition(":p")[2]
-    if not digits or any(digit not in PANE_NUMBERS for digit in digits):
-        return float("inf")
-    number = 0
-    for digit in digits:
-        number = number * len(PANE_NUMBERS) + PANE_NUMBERS.index(digit) + 1
-    return number
-
-
-def space_name(workspace, snapshot, git_line):
+def space_name(workspace, git_line):
     """The name on a space's line 1. A worktree space is named after its job,
-    after the area the project picker made it for (`herdr/sidebar-names`)."""
+    its branch, after the area the project picker made it for unless the name
+    already starts with it (`herdr/silver-cloud`, `herdr-sidebar`)."""
     label = workspace.get("label") or ""
     checkout = linked_checkout(workspace)
     # Herdr labels a worktree space after its checkout's folder; any other label is the owner's own.
     if not checkout or label != os.path.basename(checkout.rstrip("/")):
         return label
+    job = branch_of(git_line(checkout)).removeprefix(WORKTREE_BRANCH_PREFIX) or label
     area = (workspace.get("tokens") or {}).get("area")
-    job = job_name(workspace, snapshot, git_line, checkout, label)
-    return f"{area}/{job}" if area else job
+    if not area or job == area or job.startswith((area + "-", area + "/")):
+        return job
+    return f"{area}/{job}"
 
 
-def job_name(workspace, snapshot, git_line, checkout, label):
-    """A worktree space's job: its first agent's task, else its branch without Herdr's prefix."""
-    agents = [a for a in snapshot.get("agents") or [] if a.get("workspace_id") == workspace["workspace_id"]]
-    if agents:
-        first = min(agents, key=lambda a: creation_order(a.get("pane_id")))
-        task = (first.get("tokens") or {}).get("topic")
-        if task:
-            return task
-    return branch_of(git_line(checkout)).removeprefix(WORKTREE_BRANCH_PREFIX) or label
+def tab_labels(snapshot):
+    return {t["tab_id"]: t.get("label") or "" for t in snapshot.get("tabs") or []}
+
+
+def agent_name(agent, tabs):
+    """The name on an agent's line 1: its task, else its tab's name, else its kind."""
+    return (agent.get("tokens") or {}).get("topic") or tabs.get(agent.get("tab_id")) or agent.get("agent") or "agent"
 
 
 def wanted(snapshot, choice, frame, awake=frozenset(), git_line=lambda folder: None):
@@ -217,14 +207,13 @@ def wanted(snapshot, choice, frame, awake=frozenset(), git_line=lambda folder: N
 
     None clears the token: the pane has a face but no agent any more.
     `git_line` gives a folder's branch line (git_line below), for the name of
-    a worktree space whose first agent has no task yet."""
-    tabs = {t["tab_id"]: t.get("label") or "" for t in snapshot.get("tabs") or []}
+    a worktree space."""
+    tabs = tab_labels(snapshot)
     want, working = {}, False
     for agent in snapshot.get("agents") or []:
         status = status_of(agent, awake)
         kind = agent.get("agent") or ""
-        name = (agent.get("tokens") or {}).get("topic") or tabs.get(agent.get("tab_id")) or kind or "agent"
-        want[("pane", agent["pane_id"])] = fit(face(character_for(choice, kind), status, frame), name)
+        want[("pane", agent["pane_id"])] = fit(face(character_for(choice, kind), status, frame), agent_name(agent, tabs))
         working = working or status == "working"
     for pane in snapshot.get("panes") or []:
         if TOKEN in (pane.get("tokens") or {}) and ("pane", pane["pane_id"]) not in want:
@@ -234,7 +223,7 @@ def wanted(snapshot, choice, frame, awake=frozenset(), git_line=lambda folder: N
         agents = by_workspace.get(workspace["workspace_id"])
         character, which = workspace_character(workspace, agents, choice)
         # Use the agent frame clock so the working face moves in both panels.
-        want[("workspace", workspace["workspace_id"])] = fit(face(character, which, frame), space_name(workspace, snapshot, git_line))
+        want[("workspace", workspace["workspace_id"])] = fit(face(character, which, frame), space_name(workspace, git_line))
         working = working or which == "working"
     return want, working
 
@@ -260,12 +249,12 @@ def progress_text(progress, changes):
     return "↑%d" % ahead if ahead else None
 
 
-def space_and_folder(agent, labels, snapshot):
-    """An agent's space, and the first folder below the space's project folder
-    that the agent works in (`dotfiles/herdr`): the space alone at the project
-    folder, outside it, or in a space with no project folder."""
-    label = labels.get(agent.get("workspace_id")) or ""
-    workspace = next((w for w in snapshot.get("workspaces") or [] if w["workspace_id"] == agent.get("workspace_id")), {})
+def space_and_folder(agent, workspace, git_line):
+    """An agent's space, named as on the space's own line 1, and the first
+    folder below the space's project folder that the agent works in
+    (`dotfiles/herdr`): the space alone at the project folder, outside it, or
+    in a space with no project folder."""
+    label = space_name(workspace, git_line) if workspace else ""
     project = (workspace.get("tokens") or {}).get("project_path")
     folder = agent.get("foreground_cwd") or agent.get("cwd")
     if not (label and project and folder):
@@ -279,8 +268,9 @@ def space_and_folder(agent, labels, snapshot):
 def described(snapshot, choice, git_line, awake=frozenset(), progress_of=lambda checkout: None):
     """{("pane"|"workspace", id): {"detail": text or None, "note": text or None, "alert": text or None}}: lines 2 and 3.
 
-    Line 2 of a space is its branch (`git_line` gives a folder's), then its
-    changed files. A worktree space has its progress in place of the branch
+    Line 2 of an agent is its space and harness (space_and_folder), unless
+    line 1 says that already. Line 2 of a space is its branch (`git_line`
+    gives a folder's), then its changed files. A worktree space has its progress in place of the branch
     (`progress_of` gives a checkout's worktree_progress), once that is read.
     Line 3 is the activity: `alert` when it needs you, otherwise `note`.
     Each starts with the blank cells that put it under the name. None clears a
@@ -291,12 +281,16 @@ def described(snapshot, choice, git_line, awake=frozenset(), progress_of=lambda 
     def lines(have, **want):
         return {token: text for token, text in want.items() if text is not None or token in have}
 
-    labels = {w["workspace_id"]: w.get("label") or "" for w in snapshot.get("workspaces") or []}
+    workspaces = {w["workspace_id"]: w for w in snapshot.get("workspaces") or []}
+    tabs = tab_labels(snapshot)
     out = {}
     for agent in snapshot.get("agents") or []:
         tokens, kind = agent.get("tokens") or {}, agent.get("agent") or ""
         character = character_for(choice, kind)
-        where = " · ".join(part for part in (space_and_folder(agent, labels, snapshot), kind) if part)
+        where = " · ".join(part for part in (space_and_folder(agent, workspaces.get(agent.get("workspace_id"), {}), git_line),
+                                              "" if kind == USUAL_HARNESS else kind) if part)
+        if where == agent_name(agent, tabs):
+            where = ""                                          # line 1 says it already
         activity = tokens.get("activity") or ""
         activity = under(character, "" if activity in QUIET else activity)
         urgent = bool(activity) and any(words in activity for words in NEEDS_YOU)
@@ -317,6 +311,8 @@ def described(snapshot, choice, git_line, awake=frozenset(), progress_of=lambda 
             folder = folder_of(workspace, snapshot)
             first = git_line(folder) if folder else None
         git = " · ".join(part for part in (first, changes) if part)
+        if git == MAIN_BRANCH:
+            git = ""                                            # nothing to act on
         out[("workspace", workspace["workspace_id"])] = lines(tokens, detail=under(character, git))
     return {key: value for key, value in out.items() if value}
 
@@ -540,6 +536,50 @@ def write_minutes(config_dir, text):
     write_setting(config_dir, "awake-minutes", "%g\n" % minutes)
 
 
+# The Agents panel: an inbox (every agent that is not idle, needs-you first)
+# or Herdr's own list of all of them, grouped by space ([ui] agent_panel_sort).
+# Herdr's "idle" is an agent at rest whose end you have seen; one you have not
+# seen is "done". Herdr keeps a view until its server exits, so `run` sets it
+# again on a new server.
+VIEWS = ("inbox", "all")
+VIEW_SOURCE = "plugin:" + PLUGIN_ID
+INBOX = {
+    "source": VIEW_SOURCE, "label": "inbox",
+    "filter": {"op": "not", "filter": {"op": "eq", "field": "status", "value": "idle"}},
+    "sort": [{"field": "attention", "order": "desc"}, {"field": "workspace_order", "order": "asc"},
+             {"field": "pane_order", "order": "asc"}],
+}
+
+
+def read_view(config_dir):
+    try:
+        with open(os.path.join(config_dir, "agents-view")) as f:
+            view = f.read().strip()
+    except OSError:
+        return VIEWS[0]
+    return view if view in VIEWS else VIEWS[0]
+
+
+def write_view(config_dir, view):
+    if view == "toggle":
+        view = VIEWS[1 - VIEWS.index(read_view(config_dir))]
+    if view not in VIEWS:
+        raise SystemExit("faces: view takes one of: " + ", ".join(VIEWS + ("toggle",)))
+    os.makedirs(config_dir, exist_ok=True)
+    tmp = os.path.join(config_dir, "agents-view.tmp")
+    with open(tmp, "w") as f:
+        f.write(view + "\n")
+    os.replace(tmp, os.path.join(config_dir, "agents-view"))
+
+
+def show_view(socket_path, view):
+    """Make the Agents panel the inbox, or hand it back to Herdr's own order."""
+    if view == "inbox":
+        call(socket_path, "agent.view.set", INBOX)
+    else:
+        call(socket_path, "agent.view.clear", {"source": VIEW_SOURCE})
+
+
 def config_dir():
     """The plugin's config folder. Herdr passes it to plugin commands; the picker asks Herdr."""
     known = os.environ.get("HERDR_PLUGIN_CONFIG_DIR")
@@ -582,7 +622,7 @@ def run(socket_path, config, state_dir, sleep=time.sleep, clock=time.monotonic, 
 
 def keep_current(socket_path, config, state_dir, sleep, clock, git, now=time.time):
     log(state_dir, "started for " + socket_path)
-    sent, frame, failures, last_socket_id = {}, 0, 0, None
+    sent, frame, failures, last_socket_id, shown_view = {}, 0, 0, None, None
     # Sessions can reuse workspace and pane ids: keep separate files per socket.
     session = session_key(socket_path)
     colors = TitleColors(os.path.join(config, "workspace-colors-%s.json" % session))
@@ -595,7 +635,7 @@ def keep_current(socket_path, config, state_dir, sleep, clock, git, now=time.tim
             socket_file = os.stat(socket_path)
             socket_id = (socket_file.st_ino, socket_file.st_ctime_ns)
             if socket_id != last_socket_id:
-                last_socket_id, sent = socket_id, {}
+                last_socket_id, sent, shown_view = socket_id, {}, None
             snapshot = call(socket_path, "session.snapshot", {})["snapshot"]
             failures = 0
         except (OSError, ValueError, KeyError, HerdrError) as error:
@@ -605,7 +645,13 @@ def keep_current(socket_path, config, state_dir, sleep, clock, git, now=time.tim
                 return 0
             sleep(IDLE_SECONDS)
             continue
-        choice = read_choice(config)
+        choice, view = read_choice(config), read_view(config)
+        if view != shown_view:
+            try:
+                show_view(socket_path, view)
+                shown_view = view
+            except (OSError, ValueError, HerdrError) as error:
+                log(state_dir, "could not set the agents panel to %s: %s" % (view, error))
         up = awake.update(snapshot, read_minutes(config) * 60)
         faces, working = wanted(snapshot, choice, frame, up, git.line)
         workspaces = snapshot.get("workspaces") or []
@@ -695,11 +741,15 @@ def main(argv):
     if command == "awake" and len(argv) == 3:
         write_minutes(config_dir(), argv[2])
         return 0
+    if command == "view" and len(argv) == 3:
+        write_view(config_dir(), argv[2])
+        return 0
     if command == "show":
         current = read_choice(config_dir())
         for key, title, faces, about in table():
             print("%s %-6s %s   %s" % ("●" if key == current else " ", title, faces, about))
         print("ready for %g minutes after an agent's last work, then asleep" % read_minutes(config_dir()))
+        print("agents panel: %s" % read_view(config_dir()))
         return 0
     if command == "rules":
         # The same workspace color on every line; Spaces has the first two.

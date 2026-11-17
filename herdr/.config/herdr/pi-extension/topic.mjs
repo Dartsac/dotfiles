@@ -40,6 +40,22 @@ export function normalizeTopic(reply, folder = "") {
   return NO_TOPIC.has(topic) || topic === same ? "" : topic;
 }
 
+// Herdr's name for a worktree it named itself (worktree/silver-cloud-cf8f).
+const HERDR_NAMED = "worktree/";
+
+// The label of a session in a job's worktree: the job's name, its branch, as
+// the job's space shows it (faces.py space_name). "" in a main checkout, on a
+// branch Herdr named, detached, or outside git. `git` is what
+// `git rev-parse --path-format=absolute --git-dir --git-common-dir` and the
+// branch say. A long name loses whole words, as normalizeTopic does.
+export function jobTopic(git) {
+  const branch = git?.branch ?? "";
+  if (!git || git.gitDir === git.commonDir || !branch || branch === "HEAD" || branch.startsWith(HERDR_NAMED)) return "";
+  let topic = branch;
+  while (topic.length > TOPIC_MAX && /[-/]/.test(topic)) topic = topic.replace(/[-/][^-/]*$/, "");
+  return topic.slice(0, TOPIC_MAX);
+}
+
 export function topicContext({ folder, first, latest, reply }) {
   const part = (tag, text) => clean(text, 600) ? `<${tag}>\n${clean(text, 600)}\n</${tag}>` : "";
   const text = [

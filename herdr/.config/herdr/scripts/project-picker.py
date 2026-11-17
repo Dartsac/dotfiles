@@ -8,9 +8,11 @@ chosen project's workspace in the current session. A folder in a main checkout
 whose main space is open gets no workspace of its own: the picker offers that
 main space, at a tab in the picked folder, or a new worktree space. While none
 is open, the main space opens, named for the repository, in the picked folder.
-A new worktree space branches from the repository's default branch (origin's
-HEAD), names the folder's area (its first folder below the checkout) and opens
-there, or in the deepest of those folders the new checkout has. Outside herdr
+A new worktree space asks for its job's name, which names its branch (the
+folder's area typed in first: `herdr-`; Enter alone leaves the name to Herdr),
+branches from the repository's default branch (origin's HEAD), names the
+folder's area (its first folder below the checkout) and opens there, or in the
+deepest of those folders the new checkout has. Outside herdr
 it refuses unless --default-session or --attach names the default session
 explicitly.
 --list only prints candidate directories. An optional directory skips fzf.
@@ -20,6 +22,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import subprocess
 import sys
@@ -110,14 +113,36 @@ def default_branch(checkout):
     return None
 
 
+def job_branch(text):
+    """The branch a typed job name makes: lowercase words joined by hyphens
+    (`Sidebar Inbox` is `sidebar-inbox`); "" for nothing usable."""
+    return re.sub(r"[^a-z0-9/._]+", "-", text.lower()).strip("-/.")
+
+
+def ask_job_name(area):
+    """The new worktree space's job, as a branch name: "" leaves the name to
+    Herdr, None when cancelled. A folder's area is typed in already
+    (`herdr-`), as a job is named for its area and its task."""
+    found = subprocess.run(["fzf", "--print-query", "--no-info", "--prompt=job name (Enter alone: Herdr names it)> ",
+                            f"--query={area + '-' if area else ''}"], input="", stdout=subprocess.PIPE, text=True)
+    if found.returncode not in (0, 1):            # 1: nothing to match, the query printed; 130: Esc
+        return None
+    branch = job_branch(found.stdout.split("\n")[0])
+    return "" if branch == area else branch      # the area alone names no job
+
+
 def new_worktree_space(path, main_space_id, checkout, binary):
     """A worktree space from the main space, for the folder `path` of its
-    checkout: (its workspace id, its root pane id)."""
+    checkout, on a branch named for its job: (its workspace id, its root pane
+    id), or None when the name was not given."""
+    below = path.relative_to(checkout)
+    branch = ask_job_name(below.parts[0] if below.parts else "")
+    if branch is None:
+        return None
     base = default_branch(checkout)
-    created = herdr(binary, "worktree", "create", "--workspace", main_space_id,
+    created = herdr(binary, "worktree", "create", "--workspace", main_space_id, *(["--branch", branch] if branch else []),
                     *(["--base", base] if base else []), "--focus")
     workspace_id, root_pane = created["workspace"]["workspace_id"], created["root_pane"]["pane_id"]
-    below = path.relative_to(checkout)
     if below.parts:
         herdr(binary, "workspace", "report-metadata", workspace_id, "--source", "project-picker",
               "--token", f"area={below.parts[0]}")

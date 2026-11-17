@@ -94,7 +94,9 @@ remove_worktree = "prefix+shift+w"
 
 # Free g for lazygit and o for Finder; retain the displaced Herdr actions.
 goto = "prefix+f"
-# Step through the Agents sidebar in its order: grouped by space, as [ui] sorts it.
+# Step through the Agents sidebar in its order. prefix Shift-i switches it
+# between all agents, grouped by space as [ui] sorts them, and the inbox (the
+# faces plugin's default): the agents that are not idle, needs-you first.
 next_agent = "prefix+a"
 previous_agent = "prefix+shift+a"
 open_notification_target = "prefix+shift+o"
@@ -147,6 +149,13 @@ description = "choose the sidebar character (Byte, Wisp, Bit or mixed)"
 width = 100
 height = 11
 
+# The Agents panel: the inbox, or every agent (faces plugin, `faces.py view`).
+[[keys.command]]
+key = "prefix+shift+i"
+type = "plugin_action"
+command = "dotfiles.faces.view"
+description = "agents panel: inbox or all agents"
+
 [[keys.command]]
 key = "prefix+o"
 type = "shell"
@@ -189,7 +198,8 @@ sidebar_width = 30
 sidebar_min_width = 24
 sidebar_max_width = 36
 # Agents panel grouped by space, so each agent and its subagent tree sit with
-# their space.
+# their space. The faces plugin's inbox replaces this order while it is shown
+# (prefix Shift-i).
 agent_panel_sort = "spaces"
 mouse_capture = true
 copy_on_select = true
@@ -218,9 +228,10 @@ status_indicators = "symbols"
 
 # Both panels use one entry shape, so they read as one list:
 #   line 1  a little character showing the state, then the name you scan for
-#   line 2  where it is, at normal weight, starting under the name
+#   line 2  where it is, at normal weight, starting under the name; left out
+#           when line 1 says it already, or a space is on a plain main
 #   line 3  only for something to act on, also under the name
-# and one blank line between entries.
+# and no gap between entries: an entry is often one line.
 #
 # All three lines are tokens that the faces plugin in this directory keeps
 # current for every agent pane and workspace ($face, $detail, $note or $alert). Herdr
@@ -253,7 +264,7 @@ status_indicators = "symbols"
 # Nothing uses the terminal's dim attribute, which Ghostty draws at half
 # opacity. Line 1 is bold, the others are the same hue at normal weight.
 [ui.sidebar.spaces]
-row_gap = 1
+row_gap = 0
 rows = [
   [{ token = "$face", fg = "{{foreground}}", bold = true, dim = false, rules = [
     { starts_with = "\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060\u2060", fg = "{{green+dim_black:33}}" },
@@ -294,7 +305,7 @@ rows = [
 ]
 
 [ui.sidebar.agents]
-row_gap = 1
+row_gap = 0
 # One layout for every agent, whatever harness runs it. Line 3 is the activity
 # that the dotfiles Pi reporter sets, passed on by the faces plugin only when
 # it says more than the face does: as $alert, in bold, when it needs you, and
