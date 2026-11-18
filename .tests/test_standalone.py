@@ -6,7 +6,10 @@ outside HOME, such as the macOS keychain in Homebrew's or Xcode's gitconfig,
 would otherwise run for them.
 
 Its run(): a command that runs out of time fails and names what is still
-running, so a hang says what it is waiting for."""
+running, so a hang says what it is waiting for.
+
+Its fish check: fish's first start leaves nothing running in the machine,
+which the check removes once it is done."""
 import importlib.util
 import os
 from pathlib import Path
@@ -84,6 +87,38 @@ class RunTest(unittest.TestCase):
         self.assertIn("sleep 302", message)  # the command itself
         self.assertIn("sleep 301", message)  # what the server it started waits on
 
+
+@unittest.skipUnless(shutil.which("fish") and shutil.which("stow") and shutil.which("pgrep"),
+                     "needs fish, stow and pgrep")
+class FishFirstStartTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        temp = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(temp.cleanup)
+        cls.clone = Path(temp.name).resolve() / "dotfiles"
+        standalone.copy_tree(cls.clone)
+
+    def test_starts_nothing_that_outlives_it(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name).resolve()
+        # Before the folder goes: anything the check left running there.
+        self.addCleanup(subprocess.run, ["pkill", "-f", str(root)], capture_output=True)
+        manifest = standalone.manifests()["fish"]
+        required = [d for d in manifest["dependencies"] if d["required"]]
+        machine = standalone.Machine(root, self.clone, required, {d["command"] for d in required})
+        self.assertEqual(machine.install("fish").returncode, 0)
+
+        standalone.check_fish_first_start(machine, "fish's first start", machine.env)
+
+        # fish reads the man pages into completions on its first start, in a
+        # process it leaves running: one that outlives the check writes into
+        # the machine while it is removed. It is done, or never started.
+        running = subprocess.run(["pgrep", "-fl", str(root)], capture_output=True, text=True).stdout
+        self.assertEqual(running, "", "still running in the machine as the check ends")
+        generated = machine.home / ".cache/fish/generated_completions"
+        made = len(list(generated.iterdir())) if generated.exists() else 0
+        self.assertEqual(made, 0, "fish read the man pages into completions on its first start")
 
 if __name__ == "__main__":
     unittest.main()

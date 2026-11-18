@@ -438,6 +438,11 @@ def check_fish_first_start(machine, what, env, prompt=DRACULA_PROMPT_CHARACTER, 
     Dracula colors), type `exit`. Fail on any error output, a prompt that
     never comes, or a greeting without the user's name (or `name`)."""
     (machine.home / ".config/fish/fish_greeting_last_run").write_text("2000-01-01\n")
+    # Without this folder, fish's first start reads the man pages into
+    # completions in a process it leaves running, which on a busy machine is
+    # still writing there as the check removes the machine. Those completions
+    # are fish's own, not the package's.
+    (machine.home / ".cache/fish/generated_completions").mkdir(parents=True, exist_ok=True)
     terminal = dict(env, TERM="xterm-256color", COLORTERM="truecolor")
     screen = run_in_terminal(["fish", "--login"], terminal, machine.home, what, keys=b"exit\r", wait_for=prompt)
     text = TERMINAL_CODE.sub("", screen)
