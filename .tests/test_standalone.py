@@ -14,6 +14,7 @@ import contextlib
 import importlib.util
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import subprocess
@@ -93,12 +94,15 @@ class RunTest(unittest.TestCase):
 
 
 def running_in(folder):
-    """The processes with a path inside `folder` among their arguments: pid
-    to arguments. A path that only begins with the folder's name is not one."""
+    """The processes with `folder`, or a path in it, among their arguments,
+    also as an option's value (--directory=<path>): pid to arguments. A path
+    that only begins or ends with the folder's name is not one."""
     listed = subprocess.run(["ps", "-axww", "-o", "pid=,args="], capture_output=True, text=True, check=True).stdout
-    inside = f"{folder}{os.sep}"
+
+    def names_it(word):
+        return word == str(folder) or word.startswith(f"{folder}{os.sep}")
     return {int(pid): args for pid, _, args in (line.strip().partition(" ") for line in listed.splitlines())
-            if inside in args}
+            if any(names_it(word) for word in re.split(r"[\s=]", args))}
 
 
 def remove_once_nothing_runs(folder, wait=5):
@@ -121,11 +125,9 @@ def remove_once_nothing_runs(folder, wait=5):
 
 @unittest.skipUnless(shutil.which("ps"), "needs ps")
 class RemoveOnceNothingRunsTest(unittest.TestCase):
-    def start_in(self, folder):
-        """A process that runs a script in `folder` until it is ended."""
-        folder.mkdir(exist_ok=True)
-        (folder / "wait.sh").write_text("sleep 300\n")
-        process = subprocess.Popen(["sh", str(folder / "wait.sh")], start_new_session=True)
+    def start(self, *args):
+        """A shell that waits until it is ended, with `args` as its own."""
+        process = subprocess.Popen(["sh", "-c", "while :; do sleep 1; done", "waits", *args], start_new_session=True)
         self.addCleanup(self.end_session, process)
         return process
 
@@ -133,7 +135,8 @@ class RemoveOnceNothingRunsTest(unittest.TestCase):
     def end_session(process):
         """End the process and its sleep, which names no folder: the whole
         session it leads."""
-        with contextlib.suppress(ProcessLookupError):
+        # PermissionError: macOS's, for a session only zombies are left in.
+        with contextlib.suppress(ProcessLookupError, PermissionError):
             os.killpg(process.pid, signal.SIGKILL)
         process.wait()
 
@@ -141,19 +144,21 @@ class RemoveOnceNothingRunsTest(unittest.TestCase):
         self.folder = Path(tempfile.mkdtemp()).resolve()
         self.addCleanup(shutil.rmtree, self.folder, ignore_errors=True)
 
-    def test_ends_what_runs_inside_and_nothing_beside(self):
-        beside = Path(f"{self.folder}-beside")
-        self.addCleanup(shutil.rmtree, beside, ignore_errors=True)
-        inside, outside = self.start_in(self.folder), self.start_in(beside)
+    def test_ends_what_runs_in_the_folder_and_nothing_else(self):
+        inside = [self.start(f"{self.folder}/wait.sh"), self.start(str(self.folder)),
+                  self.start(f"--directory={self.folder}/cache")]
+        outside = [self.start(f"{self.folder}-beside/wait.sh"), self.start(f"/elsewhere{self.folder}/wait.sh")]
 
         remove_once_nothing_runs(self.folder)
 
         self.assertFalse(self.folder.exists())
-        self.assertIsNotNone(inside.wait(timeout=5))
-        self.assertIsNone(outside.poll(), "ended a process outside the folder")
+        for process in inside:
+            self.assertIsNotNone(process.wait(timeout=5), process.args)
+        for process in outside:
+            self.assertIsNone(process.poll(), f"ended a process outside the folder: {process.args}")
 
     def test_keeps_a_folder_something_still_runs_in(self):
-        self.start_in(self.folder)
+        self.start(f"{self.folder}/wait.sh")
 
         # As a process that no signal ends in time.
         with mock.patch.object(os, "kill"), self.assertRaises(AssertionError) as failed:
