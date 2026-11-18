@@ -16,6 +16,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 
 REPO = Path(__file__).resolve().parents[1]
@@ -88,8 +89,20 @@ class RunTest(unittest.TestCase):
         self.assertIn("sleep 301", message)  # what the server it started waits on
 
 
-@unittest.skipUnless(shutil.which("fish") and shutil.which("stow") and shutil.which("pgrep"),
-                     "needs fish, stow and pgrep")
+def stop_running_in(folder):
+    """End every process with `folder` in its arguments, and wait until none
+    is left: a folder is removed only once nothing writes into it."""
+    for signal in ("TERM", "KILL"):
+        subprocess.run(["pkill", f"-{signal}", "-f", str(folder)], capture_output=True)
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            if subprocess.run(["pgrep", "-f", str(folder)], capture_output=True).returncode != 0:
+                return
+            time.sleep(0.1)
+
+
+@unittest.skipUnless(shutil.which("fish") and shutil.which("stow") and shutil.which("pgrep") and shutil.which("pkill"),
+                     "needs fish, stow, pgrep and pkill")
 class FishFirstStartTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -103,7 +116,7 @@ class FishFirstStartTest(unittest.TestCase):
         self.addCleanup(temp.cleanup)
         root = Path(temp.name).resolve()
         # Before the folder goes: anything the check left running there.
-        self.addCleanup(subprocess.run, ["pkill", "-f", str(root)], capture_output=True)
+        self.addCleanup(stop_running_in, root)
         manifest = standalone.manifests()["fish"]
         required = [d for d in manifest["dependencies"] if d["required"]]
         machine = standalone.Machine(root, self.clone, required, {d["command"] for d in required})
@@ -119,6 +132,7 @@ class FishFirstStartTest(unittest.TestCase):
         generated = machine.home / ".cache/fish/generated_completions"
         made = len(list(generated.iterdir())) if generated.exists() else 0
         self.assertEqual(made, 0, "fish read the man pages into completions on its first start")
+
 
 if __name__ == "__main__":
     unittest.main()
