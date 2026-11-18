@@ -20,7 +20,6 @@ macos-non-native-fullscreen = false
 background-blur = 35
 background-opacity = 0.8
 window-vsync = true
-# window-padding-color = extend
 
 # Cursor and Selection
 cursor-style = block
@@ -55,7 +54,6 @@ resize-overlay = after-first
 resize-overlay-position = center
 
 # Quick Terminal settings
-# keybind = global:super+`=toggle_quick_terminal
 quick-terminal-screen = mouse
 quick-terminal-position = bottom
 quick-terminal-animation-duration = 0.2

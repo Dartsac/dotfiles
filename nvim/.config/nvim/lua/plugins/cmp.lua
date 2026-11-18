@@ -21,16 +21,6 @@ return {
 			-- Its default leader key, <C-y>, triggers it.
 			ft = { "html", "css", "javascriptreact", "typescriptreact", "vue", "svelte", "xml" }, -- Enable for specific filetypes
 		},
-		{
-			"dsznajder/vscode-es7-javascript-react-snippets",
-			enabled = false,
-			build = "npm install --legacy-peer-deps", -- Install dependencies
-			config = function()
-				require("luasnip.loaders.from_vscode").lazy_load({
-					paths = { vim.fn.stdpath("data") .. "/lazy/vscode-es7-javascript-react-snippets" },
-				})
-			end,
-		},
 		{ "saadparwaiz1/cmp_luasnip", lazy = true },
 	},
 	config = function()
