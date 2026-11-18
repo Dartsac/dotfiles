@@ -10,14 +10,17 @@ running, so a hang says what it is waiting for.
 
 Its fish check: fish's first start leaves nothing running in the machine,
 which the check removes once it is done."""
+import contextlib
 import importlib.util
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 REPO = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("standalone", REPO / ".tests/standalone.py")
@@ -89,20 +92,78 @@ class RunTest(unittest.TestCase):
         self.assertIn("sleep 301", message)  # what the server it started waits on
 
 
-def stop_running_in(folder):
-    """End every process with `folder` in its arguments, and wait until none
-    is left: a folder is removed only once nothing writes into it."""
-    for signal in ("TERM", "KILL"):
-        subprocess.run(["pkill", f"-{signal}", "-f", str(folder)], capture_output=True)
-        deadline = time.monotonic() + 5
-        while time.monotonic() < deadline:
-            if subprocess.run(["pgrep", "-f", str(folder)], capture_output=True).returncode != 0:
-                return
+def running_in(folder):
+    """The processes with a path inside `folder` among their arguments: pid
+    to arguments. A path that only begins with the folder's name is not one."""
+    listed = subprocess.run(["ps", "-axww", "-o", "pid=,args="], capture_output=True, text=True, check=True).stdout
+    inside = f"{folder}{os.sep}"
+    return {int(pid): args for pid, _, args in (line.strip().partition(" ") for line in listed.splitlines())
+            if inside in args}
+
+
+def remove_once_nothing_runs(folder, wait=5):
+    """End every process running in `folder`, with TERM, then KILL, waiting
+    up to `wait` seconds after each, and remove the folder once none is
+    left. While one is, the folder stays, and this fails naming it: a folder
+    is removed only once nothing writes into it."""
+    for sent in (signal.SIGTERM, signal.SIGKILL):
+        for pid in running_in(folder):
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(pid, sent)
+        deadline = time.monotonic() + wait
+        while running_in(folder) and time.monotonic() < deadline:
             time.sleep(0.1)
+        if not running_in(folder):
+            shutil.rmtree(folder)
+            return
+    raise AssertionError(f"still running in {folder}, which stays:\n" + "\n".join(running_in(folder).values()))
 
 
-@unittest.skipUnless(shutil.which("fish") and shutil.which("stow") and shutil.which("pgrep") and shutil.which("pkill"),
-                     "needs fish, stow, pgrep and pkill")
+@unittest.skipUnless(shutil.which("ps"), "needs ps")
+class RemoveOnceNothingRunsTest(unittest.TestCase):
+    def start_in(self, folder):
+        """A process that runs a script in `folder` until it is ended."""
+        folder.mkdir(exist_ok=True)
+        (folder / "wait.sh").write_text("sleep 300\n")
+        process = subprocess.Popen(["sh", str(folder / "wait.sh")], start_new_session=True)
+        self.addCleanup(self.end_session, process)
+        return process
+
+    @staticmethod
+    def end_session(process):
+        """End the process and its sleep, which names no folder: the whole
+        session it leads."""
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGKILL)
+        process.wait()
+
+    def setUp(self):
+        self.folder = Path(tempfile.mkdtemp()).resolve()
+        self.addCleanup(shutil.rmtree, self.folder, ignore_errors=True)
+
+    def test_ends_what_runs_inside_and_nothing_beside(self):
+        beside = Path(f"{self.folder}-beside")
+        self.addCleanup(shutil.rmtree, beside, ignore_errors=True)
+        inside, outside = self.start_in(self.folder), self.start_in(beside)
+
+        remove_once_nothing_runs(self.folder)
+
+        self.assertFalse(self.folder.exists())
+        self.assertIsNotNone(inside.wait(timeout=5))
+        self.assertIsNone(outside.poll(), "ended a process outside the folder")
+
+    def test_keeps_a_folder_something_still_runs_in(self):
+        self.start_in(self.folder)
+
+        # As a process that no signal ends in time.
+        with mock.patch.object(os, "kill"), self.assertRaises(AssertionError) as failed:
+            remove_once_nothing_runs(self.folder, wait=0.2)
+
+        self.assertIn(f"{self.folder}/wait.sh", str(failed.exception))
+        self.assertTrue(self.folder.exists())
+
+
+@unittest.skipUnless(shutil.which("fish") and shutil.which("stow") and shutil.which("ps"), "needs fish, stow and ps")
 class FishFirstStartTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -112,11 +173,9 @@ class FishFirstStartTest(unittest.TestCase):
         standalone.copy_tree(cls.clone)
 
     def test_starts_nothing_that_outlives_it(self):
-        temp = tempfile.TemporaryDirectory()
-        self.addCleanup(temp.cleanup)
-        root = Path(temp.name).resolve()
-        # Before the folder goes: anything the check left running there.
-        self.addCleanup(stop_running_in, root)
+        root = Path(tempfile.mkdtemp()).resolve()
+        # Anything the check left running there ends before the folder goes.
+        self.addCleanup(remove_once_nothing_runs, root)
         manifest = standalone.manifests()["fish"]
         required = [d for d in manifest["dependencies"] if d["required"]]
         machine = standalone.Machine(root, self.clone, required, {d["command"] for d in required})
@@ -127,8 +186,7 @@ class FishFirstStartTest(unittest.TestCase):
         # fish reads the man pages into completions on its first start, in a
         # process it leaves running: one that outlives the check writes into
         # the machine while it is removed. It is done, or never started.
-        running = subprocess.run(["pgrep", "-fl", str(root)], capture_output=True, text=True).stdout
-        self.assertEqual(running, "", "still running in the machine as the check ends")
+        self.assertEqual(running_in(root), {}, "still running in the machine as the check ends")
         generated = machine.home / ".cache/fish/generated_completions"
         made = len(list(generated.iterdir())) if generated.exists() else 0
         self.assertEqual(made, 0, "fish read the man pages into completions on its first start")
