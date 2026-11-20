@@ -231,6 +231,26 @@ test("a subagent completion that does not wake the parent ends the waiting task"
   assert.equal(h.entries[0].data.outcome, "done");
 });
 
+test("a subagent that starts during the grace keeps the task waiting until it completes", (t) => {
+  const h = harness(t);
+  h.emit("agent_start");
+  h.publish(SUBAGENT_STARTED, { id: "a" });
+  h.advance(10000);
+  h.emit("agent_settled", { aborted: false });
+  h.publish(SUBAGENT_COMPLETE, { runId: "a" });
+  h.advance(1000);
+  h.publish(SUBAGENT_STARTED, { id: "b" });
+  h.advance(WAKE_GRACE_MS + 60000);
+  assert.equal(h.entries.length, 0);
+  h.publish(SUBAGENT_COMPLETE, { runId: "b" });
+  h.emit("before_agent_start", { messageType: "custom" });
+  h.emit("agent_start");
+  h.advance(1000);
+  h.emit("agent_settled", { aborted: false });
+  assert.equal(h.entries.length, 1);
+  assert.equal(h.entries[0].data.durationMs, 10000 + 1000 + WAKE_GRACE_MS + 60000 + 1000);
+});
+
 test("a completion whose wake is still starting after the grace leaves the task to that run", (t) => {
   const h = harness(t);
   h.emit("agent_start");

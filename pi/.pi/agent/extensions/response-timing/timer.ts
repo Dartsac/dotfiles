@@ -146,7 +146,8 @@ export function registerTimer(pi: ExtensionAPI) {
       clearTimeout(wakeCheck);
       wakeCheck = setTimeout(() => {
         wakeCheck = undefined;
-        if (!waiting?.ctx.isIdle()) return;
+        // A subagent started meanwhile keeps the task waiting; its completion checks again.
+        if (subagents.size > 0 || !waiting?.ctx.isIdle()) return;
         finish(stopWaiting()!.ctx, performance.now(), Date.now(), false);
       }, WAKE_GRACE_MS);
       wakeCheck.unref();
