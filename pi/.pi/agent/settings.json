@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "1.5.2",
+  "lastChangelogVersion": "1.6.0",
   "theme": "dracula-pro",
   "defaultProvider": "anthropic",
   "defaultModel": "claude-opus-5-5",
@@ -16,7 +16,8 @@
       "extensions": []
     },
     "npm:pi-rewind",
-    "git:github.com/nicobailon/visual-explainer"
+    "git:github.com/nicobailon/visual-explainer",
+    "npm:pi-schedule-prompt"
   ],
   "subagents": {
     "watchdog": {
@@ -50,7 +51,8 @@
   "extensionChangelogVersions": {
     "{\"source\":\"./local-packages/pi-subagents\",\"scope\":\"user\"}": "0.88.1",
     "{\"source\":\"./local-packages/pi-web-access\",\"scope\":\"user\"}": "0.48.0",
-    "{\"source\":\"git:github.com/nicobailon/visual-explainer\",\"scope\":\"user\"}": "0.15.0"
+    "{\"source\":\"git:github.com/nicobailon/visual-explainer\",\"scope\":\"user\"}": "0.15.0",
+    "{\"source\":\"npm:pi-schedule-prompt\",\"scope\":\"user\"}": "0.5.1"
   },
   "defaultThinkingLevel": "high"
 }
