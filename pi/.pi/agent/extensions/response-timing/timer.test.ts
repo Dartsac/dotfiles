@@ -1,28 +1,46 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { ENTRY_TYPE, VERBS, formatDuration, formatTiming, registerTimer, type TimingEntry } from "./timer.ts";
+import {
+  ENTRY_TYPE, SUBAGENT_COMPLETE, SUBAGENT_STARTED, VERBS, WAKE_GRACE_MS,
+  formatDuration, formatTiming, registerTimer, type TimingEntry,
+} from "./timer.ts";
 
-function harness(t: { mock: { method: Function } }, mode = "tui") {
+function harness(t: { mock: { method: Function; timers: { enable: Function; tick: Function } } }, mode = "tui") {
+  t.mock.timers.enable({ apis: ["setInterval", "setTimeout"] });
   let now = 0;
   t.mock.method(performance, "now", () => now);
-  const finishedAt = new Date(2026, 0, 1, 16, 42).getTime();
-  t.mock.method(Date, "now", () => finishedAt);
+  const start = new Date(2026, 0, 1, 16, 42).getTime();
+  t.mock.method(Date, "now", () => start + now);
+  let idle = true;
   const messages: (string | undefined)[] = [];
-  const ctx = { mode, ui: { setWorkingMessage: (message?: string) => messages.push(message) } };
+  const ctx = { mode, isIdle: () => idle, ui: { setWorkingMessage: (message?: string) => messages.push(message) } };
   const handlers = new Map<string, Function>();
+  const listeners = new Map<string, Set<Function>>();
   const entries: { type: string; data: TimingEntry }[] = [];
   registerTimer({
     on: (name: string, handler: Function) => handlers.set(name, handler),
     appendEntry: (type: string, data: TimingEntry) => entries.push({ type, data }),
+    events: {
+      on: (channel: string, handler: Function) => {
+        if (!listeners.has(channel)) listeners.set(channel, new Set());
+        listeners.get(channel)!.add(handler);
+        return () => listeners.get(channel)!.delete(handler);
+      },
+    },
   } as unknown as ExtensionAPI);
   return {
     entries,
     messages,
-    advance: (ms: number) => { now += ms; },
+    setIdle: (value: boolean) => { idle = value; },
+    advance: (ms: number) => { now += ms; t.mock.timers.tick(ms); },
     emit: (name: string, event = {}) => handlers.get(name)?.(event, ctx),
+    publish: (channel: string, data: unknown) => listeners.get(channel)?.forEach((handler) => handler(data)),
   };
 }
+
+/** The wall-clock time `ms` after the harness started. */
+const at = (ms: number) => new Date(2026, 0, 1, 16, 42).getTime() + ms;
 
 test("durations include seconds and roll over to minutes and hours", () => {
   for (const [ms, expected] of [
@@ -57,6 +75,7 @@ test("records once at final idle, preserving time across low-level restarts", (t
   assert.equal(h.entries[0].type, ENTRY_TYPE);
   assert.equal(h.entries[0].data.durationMs, 83000);
   assert.equal(h.entries[0].data.outcome, "done");
+  assert.equal(h.entries[0].data.finishedAt, at(83000));
   h.advance(100000);
   h.emit("agent_start");
   h.advance(2000);
@@ -159,3 +178,135 @@ for (const mode of ["print", "json", "rpc"]) {
     assert.equal(h.entries.length, 0);
   });
 }
+
+test("a run that settles while subagents run records once, timed through the run their completion wakes", (t) => {
+  const h = harness(t);
+  h.emit("before_agent_start", { messageType: "user" });
+  h.emit("agent_start");
+  h.publish(SUBAGENT_STARTED, { id: "a" });
+  h.publish(SUBAGENT_STARTED, { id: "b" });
+  h.advance(60000);
+  h.emit("agent_settled", { aborted: false });
+  assert.equal(h.entries.length, 0);
+  // The first completion wakes the parent while the other subagent still runs.
+  h.advance(600000);
+  h.publish(SUBAGENT_COMPLETE, { runId: "a" });
+  h.emit("before_agent_start", { messageType: "custom" });
+  assert.equal(h.messages.at(-1), `${h.messages[0]!.replace(/ 0s$/, "")} 11m 0s`);
+  h.emit("agent_start");
+  h.advance(30000);
+  h.emit("agent_settled", { aborted: false });
+  assert.equal(h.entries.length, 0);
+  h.advance(400000);
+  h.publish(SUBAGENT_COMPLETE, { id: "b" });
+  h.emit("before_agent_start", { messageType: "custom" });
+  h.emit("agent_start");
+  h.advance(20000);
+  h.emit("agent_settled", { aborted: false });
+  assert.equal(h.entries.length, 1);
+  assert.equal(h.entries[0].data.durationMs, 1110000);
+  assert.equal(h.entries[0].data.finishedAt, at(1110000));
+  assert.equal(h.entries[0].data.outcome, "done");
+  // Nothing is left waiting: the next prompt is timed on its own.
+  h.emit("before_agent_start", { messageType: "user" });
+  h.emit("agent_start");
+  h.advance(5000);
+  h.emit("agent_settled", { aborted: false });
+  assert.equal(h.entries[1].data.durationMs, 5000);
+});
+
+test("a subagent completion that does not wake the parent ends the waiting task", (t) => {
+  const h = harness(t);
+  h.emit("agent_start");
+  h.publish(SUBAGENT_STARTED, { id: "a" });
+  h.advance(10000);
+  h.emit("agent_settled", { aborted: false });
+  h.advance(50000);
+  h.publish(SUBAGENT_COMPLETE, { runId: "a" });
+  h.advance(WAKE_GRACE_MS - 1);
+  assert.equal(h.entries.length, 0);
+  h.advance(1);
+  assert.equal(h.entries.length, 1);
+  assert.equal(h.entries[0].data.durationMs, 60000 + WAKE_GRACE_MS);
+  assert.equal(h.entries[0].data.outcome, "done");
+});
+
+test("a completion whose wake is still starting after the grace leaves the task to that run", (t) => {
+  const h = harness(t);
+  h.emit("agent_start");
+  h.publish(SUBAGENT_STARTED, { id: "a" });
+  h.advance(10000);
+  h.emit("agent_settled", { aborted: false });
+  h.publish(SUBAGENT_COMPLETE, { runId: "a" });
+  // Pi is busy from the wake's send, while it compacts before before_agent_start.
+  h.setIdle(false);
+  h.advance(WAKE_GRACE_MS + 30000);
+  assert.equal(h.entries.length, 0);
+  h.setIdle(true);
+  h.emit("before_agent_start", { messageType: "custom" });
+  h.emit("agent_start");
+  h.advance(1000);
+  h.emit("agent_settled", { aborted: false });
+  assert.equal(h.entries.length, 1);
+  assert.equal(h.entries[0].data.durationMs, 10000 + WAKE_GRACE_MS + 31000);
+});
+
+test("a user prompt while subagents run records the waiting task as it settled, then times the prompt", (t) => {
+  const h = harness(t);
+  h.emit("before_agent_start", { messageType: "user" });
+  h.emit("agent_start");
+  h.publish(SUBAGENT_STARTED, { id: "a" });
+  h.advance(10000);
+  h.emit("message_end", { message: { role: "assistant", stopReason: "error" } });
+  h.emit("agent_settled", { aborted: false });
+  h.advance(50000);
+  h.emit("before_agent_start", { messageType: "user" });
+  assert.equal(h.entries.length, 1);
+  assert.equal(h.entries[0].data.durationMs, 10000);
+  assert.equal(h.entries[0].data.finishedAt, at(10000));
+  assert.equal(h.entries[0].data.outcome, "error");
+  assert.match(h.messages.at(-1)!, /… 0s$/);
+  h.emit("agent_start");
+  h.advance(3000);
+  h.emit("agent_settled", { aborted: false });
+  // The subagent still runs: this prompt's line waits for it too.
+  assert.equal(h.entries.length, 1);
+  h.publish(SUBAGENT_COMPLETE, { runId: "a" });
+  h.emit("before_agent_start", { messageType: "custom" });
+  h.emit("agent_start");
+  h.advance(2000);
+  h.emit("agent_settled", { aborted: false });
+  assert.equal(h.entries[1].data.durationMs, 5000);
+});
+
+test("an interrupted run records at once, even while subagents run", (t) => {
+  const h = harness(t);
+  h.emit("agent_start");
+  h.publish(SUBAGENT_STARTED, { id: "a" });
+  h.advance(10000);
+  h.emit("agent_settled", { aborted: true });
+  assert.equal(h.entries.length, 1);
+  assert.equal(h.entries[0].data.outcome, "interrupted");
+  // Its subagent's later wake starts a fresh timer.
+  h.publish(SUBAGENT_COMPLETE, { runId: "a" });
+  h.emit("before_agent_start", { messageType: "custom" });
+  h.emit("agent_start");
+  h.advance(4000);
+  h.emit("agent_settled", { aborted: false });
+  assert.equal(h.entries[1].data.durationMs, 4000);
+});
+
+test("shutdown drops a waiting task and stops listening for subagents", (t) => {
+  const h = harness(t);
+  h.emit("agent_start");
+  h.publish(SUBAGENT_STARTED, { id: "a" });
+  h.emit("agent_settled", { aborted: false });
+  h.emit("session_shutdown");
+  h.publish(SUBAGENT_STARTED, { id: "b" });
+  h.publish(SUBAGENT_COMPLETE, { runId: "a" });
+  h.advance(WAKE_GRACE_MS);
+  assert.equal(h.entries.length, 0);
+  h.emit("agent_start");
+  h.emit("agent_settled", { aborted: false });
+  assert.equal(h.entries.length, 1);
+});
