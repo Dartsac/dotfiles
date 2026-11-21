@@ -13,5 +13,9 @@ function pager_or_pane --argument-names direction --description 'Ctrl-j/k: move 
             test $direction = up; and set flag -U
             # The tmux function: pane-clarity routes the move (functions/tmux.fish).
             tmux select-pane -t $TMUX_PANE $flag
+        case herdr
+            # From this pane, as Neovim does, not from global focus. herdr's
+            # reply, JSON, would land on the command line.
+            herdr pane focus --direction $direction --pane $HERDR_PANE_ID >/dev/null
     end
 end
