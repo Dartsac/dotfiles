@@ -1,5 +1,5 @@
 {
-  "description": "tmux: plugins install on first start, free Dracula status line, Neovim-aware pane keys, session save and restore, Ctrl-f project sessions",
+  "description": "tmux: plugins install on first start, free Dracula status line, Neovim- and fish-aware pane keys, session save and restore, Ctrl-f project sessions",
   "role": "core",
   "platforms": ["macos", "linux"],
   "overridden_by": {".tmux.conf": ["macos", "linux"]},

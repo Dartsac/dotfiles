@@ -221,6 +221,14 @@ if command -q nvim
 end
 
 bind \cf sessionizer
+# Ctrl-j/k move down and up in the completion pager, else to the pane below or
+# above (functions/pager_or_pane.fish). tmux passes them to fish only while
+# fish is in the pane's foreground. Ctrl-j as CSI u (ESC [106;5u), as tmux
+# sends it and a terminal with the kitty keyboard protocol does: a plain
+# Ctrl-j is a newline, also what Enter typed ahead of the prompt becomes, and
+# it keeps running the command line.
+bind \e\[106\;5u 'pager_or_pane down'
+bind ctrl-k 'pager_or_pane up'
 
 # Go and bun, where installed. Appended (after /usr/bin, Homebrew): anything
 # `go install` or `bun install -g` drops there can't stand in for a system

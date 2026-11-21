@@ -47,9 +47,9 @@ checks that it works, on macOS and, for the core packages, on Ubuntu.
 
 | Package                 | What it configures                                                                              | Platforms    | Needs                 | Optional dependencies             |
 | ----------------------- | ----------------------------------------------------------------------------------------------- | ------------ | --------------------- | --------------------------------- |
-| `fish`                  | Tide prompt in Dracula colors, Homebrew on PATH, eza aliases, multiplexer shortcuts             | macOS, Linux | `fish`                | `tmux`, `eza`, `zoxide`, `direnv` |
+| `fish`                  | Tide prompt in Dracula colors, Homebrew on PATH, eza aliases, multiplexer shortcuts, Ctrl-j/k through completions | macOS, Linux | `fish`                | `tmux`, `eza`, `zoxide`, `direnv` |
 | `nvim`                  | Neovim: free Dracula theme, LSP, Telescope search, Markdown and Obsidian notes                  | macOS, Linux | `nvim`, `git`         | `rg`, `curl`, `tree-sitter`, `cc` |
-| `tmux`                  | Free Dracula status line, Neovim-aware pane keys, session save and restore, Ctrl-f projects     | macOS, Linux | `tmux`, `git`, `python3` | `fzf`                         |
+| `tmux`                  | Free Dracula status line, Neovim- and fish-aware pane keys, session save and restore, Ctrl-f projects | macOS, Linux | `tmux`, `git`, `python3` | `fzf`                         |
 | `lazygit`               | Ctrl-Space selects, the mouse stays with the terminal, white text                               | macOS, Linux | `lazygit`, `git`      | —                                 |
 | `direnv`                | `use project_bins`: a project's own bin and node_modules/.bin folders on PATH                   | macOS, Linux | `direnv`              | —                                 |
 | `eza`                   | eza's theme: file icons, such as a document icon for PlantUML files                             | macOS, Linux | `eza`                 | —                                 |

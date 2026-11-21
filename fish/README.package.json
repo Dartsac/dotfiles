@@ -1,5 +1,5 @@
 {
-  "description": "fish: Tide prompt in Dracula colors, Homebrew on PATH, eza aliases, multiplexer shortcuts",
+  "description": "fish: Tide prompt in Dracula colors, Homebrew on PATH, eza aliases, multiplexer shortcuts, Ctrl-j/k through completions",
   "role": "core",
   "platforms": ["macos", "linux"],
   "dependencies": [
