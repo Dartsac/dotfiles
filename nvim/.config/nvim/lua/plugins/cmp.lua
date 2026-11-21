@@ -58,6 +58,9 @@ return {
 		})
 
 		cmp.setup({
+			-- Enter accepts only an item moved to, so one the language server
+			-- marks as preselected is not selected when the menu opens.
+			preselect = cmp.PreselectMode.None,
 			snippet = {
 				expand = function(args)
 					luasnip.lsp_expand(args.body) -- For `luasnip` users.
@@ -65,7 +68,12 @@ return {
 			},
 			mapping = {
 				["<C-Space>"] = cmp.mapping.complete(),
-				["<CR>"] = cmp.mapping.confirm({ select = true }),
+				-- With no item moved to, Enter is a newline.
+				["<CR>"] = cmp.mapping.confirm({ select = false }),
+				-- Ctrl-j/k move through the menu as Tab/Shift-Tab do; with no menu
+				-- they keep moving between windows and panes (config/keymaps.lua).
+				["<C-j>"] = cmp.mapping.select_next_item(),
+				["<C-k>"] = cmp.mapping.select_prev_item(),
 				["<Tab>"] = cmp.mapping(function(fallback)
 					if cmp.visible() then
 						cmp.select_next_item()
@@ -115,7 +123,7 @@ return {
 			},
 			confirm_opts = {
 				behavior = cmp.ConfirmBehavior.Replace,
-				select = true,
+				select = false,
 			},
 			window = {
 				documentation = {
