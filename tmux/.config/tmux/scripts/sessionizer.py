@@ -32,6 +32,10 @@ COMMON_CODE_FOLDERS = ["repos", "projects", "code", "src"]
 OVERRIDE = ".config/tmux/projects.local.txt"
 # An override line that ends in a depth.
 WITH_DEPTH = re.compile(r"(.*\S)\s+(\d+)")
+# Tab and Shift-Tab move down and up, as Ctrl-j/k do: a picker that picks one
+# item has nothing for Tab to select. Passed on the command line: a popup that
+# a multiplexer key opens need not have fish's FZF_DEFAULT_OPTS.
+MOVE_WITH_TAB = "--bind=tab:down,btab:up"
 
 
 def subfolders(path):
@@ -101,7 +105,8 @@ def say(message):
 def choose(candidates, prompt="Project> ", preview=True):
     """The candidate chosen in fzf, or None when cancelled. `preview` shows
     each candidate's folder tree: candidates that are not folders turn it off."""
-    command = ["fzf", "--read0", "--print0", "--no-multi", "--no-expect", "--no-print-query", f"--prompt={prompt}"]
+    command = ["fzf", "--read0", "--print0", "--no-multi", "--no-expect", "--no-print-query", MOVE_WITH_TAB,
+               f"--prompt={prompt}"]
     if preview and shutil.which("tree"):
         # fzf quotes {} for the shell, spaces included.
         command += ["--preview", "tree -L 2 -I 'node_modules|vendor|.git' -- {}"]

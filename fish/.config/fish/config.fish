@@ -263,6 +263,14 @@ end
 set -gx PATH (string match -- '/*' $PATH)
 command -qv direnv && direnv hook fish | source
 
+# fzf started from this shell (zoxide's `zi`, a bare `fzf`): Tab and Shift-Tab
+# move down and up, as Ctrl-j/k do. A machine that sets fzf's default options
+# itself (FZF_DEFAULT_OPTS or FZF_DEFAULT_OPTS_FILE, here or in config-local.fish)
+# keeps them. This repo's own pickers pass the same binding themselves.
+if not set -q FZF_DEFAULT_OPTS; and not set -q FZF_DEFAULT_OPTS_FILE
+    set -gx FZF_DEFAULT_OPTS '--bind=tab:down,btab:up'
+end
+
 # zoxide: `z <name>` jumps to a frequently used folder, `zi` picks one with fzf.
 # (Replaces the jethrokuan/z plugin; its history was imported on 2026-11-05.)
 if status is-interactive; and command -qv zoxide

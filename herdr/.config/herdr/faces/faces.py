@@ -708,7 +708,9 @@ def pick(config):
     rows = ["%s\t%s %-6s %s   %s" % (key, "●" if key == current else " ", title, faces, about) for key, title, faces, about in table()]
     if shutil.which("fzf"):
         picked = subprocess.run(
-            ["fzf", "--delimiter=\t", "--with-nth=2..", "--reverse", "--no-info", "--no-sort", "--prompt=sidebar character > ",
+            # Tab and Shift-Tab move down and up, as Ctrl-j/k do (prefix i's popup need not have fish's FZF_DEFAULT_OPTS).
+            ["fzf", "--delimiter=\t", "--with-nth=2..", "--reverse", "--no-info", "--no-sort", "--bind=tab:down,btab:up",
+             "--prompt=sidebar character > ",
              "--header=%s   (● is the current one)" % legend()],
             input="\n".join(rows), stdout=subprocess.PIPE, text=True)   # fzf draws on the terminal itself
         if picked.returncode != 0 or not picked.stdout.strip():

@@ -33,7 +33,7 @@ from herdr_cli import herdr_binary
 # tmux's sessionizer, in this clone: this file is
 # <clone>/herdr/.config/herdr/scripts/project-picker.py.
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "tmux/.config/tmux/scripts"))
-from sessionizer import choose, projects  # noqa: E402
+from sessionizer import MOVE_WITH_TAB, choose, projects  # noqa: E402
 
 
 def choose_project(candidates):
@@ -123,7 +123,8 @@ def ask_job_name(area):
     """The new worktree space's job, as a branch name: "" leaves the name to
     Herdr, None when cancelled. A folder's area is typed in already
     (`herdr-`), as a job is named for its area and its task."""
-    found = subprocess.run(["fzf", "--print-query", "--no-info", "--prompt=job name (Enter alone: Herdr names it)> ",
+    # Tab and Shift-Tab move as in every picker: with no list, they change nothing typed.
+    found = subprocess.run(["fzf", "--print-query", "--no-info", MOVE_WITH_TAB, "--prompt=job name (Enter alone: Herdr names it)> ",
                             f"--query={area + '-' if area else ''}"], input="", stdout=subprocess.PIPE, text=True)
     if found.returncode not in (0, 1):            # 1: nothing to match, the query printed; 130: Esc
         return None
