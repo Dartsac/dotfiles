@@ -260,13 +260,37 @@ local function start(args, failure)
 	end)
 end
 
+-- Move to the window `direction` (h/j/k/l) leads to; false at Neovim's edge.
+-- A window floating over another (the Snacks explorer's list over its
+-- sidebar split) looks from the window under it: from a float, wincmd lands
+-- on that window, as if a move had happened. nvim_win_call looks without
+-- entering it.
+local function move_inside(direction)
+	local window = vim.api.nvim_get_current_win()
+	local float = vim.api.nvim_win_get_config(window)
+	local from = window
+	if float.relative == "win" and float.win and vim.api.nvim_win_is_valid(float.win) then
+		from = float.win
+	end
+	local target = vim.api.nvim_win_call(from, function()
+		return vim.fn.win_getid(vim.fn.winnr(direction))
+	end)
+	if target == 0 or target == from or target == window then
+		return false
+	end
+	return pcall(vim.api.nvim_set_current_win, target)
+end
+
 function M.navigate(direction)
 	local window = vim.api.nvim_get_current_win()
 	if in_herdr() then
-		-- herdr has no "previous pane", so <C-\> stays inside Neovim.
-		pcall(vim.cmd.wincmd, direction)
 		local herdr_direction = HERDR_DIRECTION[direction]
-		if not herdr_direction or vim.api.nvim_get_current_win() ~= window then
+		if not herdr_direction then
+			-- herdr has no "previous pane", so <C-\> stays inside Neovim.
+			pcall(vim.cmd.wincmd, direction)
+			return nil
+		end
+		if move_inside(direction) then
 			return nil
 		end
 		local pane = vim.env.HERDR_PANE_ID
@@ -285,10 +309,15 @@ function M.navigate(direction)
 	-- Like vim-tmux-navigator: "previous" returns to tmux's last pane if the
 	-- previous move left tmux, otherwise to Neovim's previous window.
 	local to_last_tmux_pane = direction == "p" and last_was_tmux
-	if not to_last_tmux_pane then
-		pcall(vim.cmd.wincmd, direction)
+	local at_edge
+	if direction == "p" then
+		if not to_last_tmux_pane then
+			pcall(vim.cmd.wincmd, direction)
+		end
+		at_edge = vim.api.nvim_get_current_win() == window
+	else
+		at_edge = not move_inside(direction)
 	end
-	local at_edge = vim.api.nvim_get_current_win() == window
 	if not pane or not (to_last_tmux_pane or at_edge) then
 		last_was_tmux = false
 		return nil
