@@ -12,6 +12,9 @@ import { bar, plain, selectedQuota, sessionSpend } from "./format.ts";
 // Statuses this footer renders itself; all others are passed through on their own lines.
 const USAGE_STATUS = "pi-usage";
 const REWIND_STATUS = "rewind";
+// At this width and below the footer is compact: no bars, short labels, no provider or folder.
+// A phone's SSH app in portrait is about 45 columns; a desk pane is rarely this narrow.
+const NARROW_WIDTH = 50;
 
 function displayCwd(cwd: string): string {
   const rel = relative(homedir(), cwd);
@@ -63,9 +66,11 @@ export default function (pi: ExtensionAPI) {
           const statuses = footerData.getExtensionStatuses();
           const usage = statuses.get(USAGE_STATUS) ?? "";
           const quota = selectedQuota(usage, provider);
+          const narrow = width <= NARROW_WIDTH;
           const gauge = (label: string, percent: number | undefined, context = false) => {
-            if (percent === undefined || !Number.isFinite(percent)) return theme.fg("dim", `${label}: N/A`);
+            if (percent === undefined || !Number.isFinite(percent)) return theme.fg("dim", narrow ? `${label} N/A` : `${label}: N/A`);
             const color = context ? (percent > 80 ? "error" : percent >= 70 ? "warning" : "success") : (percent >= 90 ? "error" : percent >= 80 ? "warning" : "success");
+            if (narrow) return `${label} ${theme.fg(color, `${Math.round(percent)}%`)}`;
             return `${label}: ${theme.fg(color, `${bar(percent)} ${Math.round(percent)}%`)}`;
           };
           const parts: string[] = [];
@@ -73,11 +78,11 @@ export default function (pi: ExtensionAPI) {
             if (quota.limited) parts.push(theme.fg("error", "limited"));
             for (const window of quota.windows) {
               parts.push(window.raw !== undefined
-                ? theme.fg("dim", `${window.label}: ${window.raw}`)
-                : gauge(window.label, window.percent) + (window.reset ? theme.fg("dim", ` reset ${window.reset}`) : ""));
+                ? theme.fg("dim", narrow ? `${window.label} ${window.raw}` : `${window.label}: ${window.raw}`)
+                : gauge(window.label, window.percent) + (window.reset ? theme.fg("dim", narrow ? ` ${window.reset}` : ` reset ${window.reset}`) : ""));
             }
           } else {
-            parts.push(theme.fg("dim", "quota: unavailable"));
+            if (!narrow) parts.push(theme.fg("dim", "quota: unavailable"));
             const cost = cachedSpend(provider);
             // Zero-priced or unpriced registry models do not supply a useful USD estimate.
             const pricing = model?.cost;
@@ -85,20 +90,23 @@ export default function (pi: ExtensionAPI) {
             const budget = budgets[provider];
             if (cost !== undefined && priced) {
               parts.push(budget
-                ? gauge("session budget (est.)", cost / budget * 100) + theme.fg("dim", ` $${cost.toFixed(3)}/$${budget}`)
-                : theme.fg("dim", `session cost (est.): $${cost.toFixed(3)}`));
+                ? gauge(narrow ? "budget" : "session budget (est.)", cost / budget * 100) + theme.fg("dim", ` $${cost.toFixed(3)}/$${budget}`)
+                : theme.fg("dim", narrow ? `cost $${cost.toFixed(3)}` : `session cost (est.): $${cost.toFixed(3)}`));
             } else {
-              parts.push(theme.fg("dim", "session cost: unavailable"));
+              parts.push(theme.fg("dim", narrow ? "cost N/A" : "session cost: unavailable"));
             }
           }
           parts.push(gauge("ctx", ctx.getContextUsage()?.percent ?? undefined, true));
           const thinking = model?.reasoning ? ` ${pi.getThinkingLevel()}` : "";
           const sessionName = ctx.sessionManager.getSessionName();
-          const session = sessionName ? theme.fg("accent", `[${plain(sessionName)}]`) + theme.fg("dim", " · ") : "";
-          const details = session + theme.fg("accent", `${model?.id ?? "no-model"}${thinking} (${model?.provider ?? "unknown"})`) + theme.fg("dim", ` · ${cwd}`);
+          const session = sessionName ? theme.fg("accent", `[${plain(sessionName)}]`) + theme.fg("dim", narrow ? " " : " · ") : "";
+          const details = narrow
+            ? session + theme.fg("accent", `${model?.id ?? "no-model"}${thinking}`)
+            : session + theme.fg("accent", `${model?.id ?? "no-model"}${thinking} (${model?.provider ?? "unknown"})`) + theme.fg("dim", ` · ${cwd}`);
           // pi-rewind's checkpoint count sits right-aligned on the details line, not its own row.
           const rewindStatus = statuses.get(REWIND_STATUS);
-          const rewind = rewindStatus ? theme.fg("muted", "↺ " + plain(rewindStatus).replace(/^\s*◆\s*/, "")) : "";
+          const rewindText = rewindStatus ? plain(rewindStatus).replace(/^\s*◆\s*/, "") : "";
+          const rewind = rewindStatus ? theme.fg("muted", "↺ " + (narrow ? rewindText.replace(/^(\d+) checkpoints?$/, "$1") : rewindText)) : "";
           const rw = rewind ? visibleWidth(rewind) : 0;
           let second: string;
           if (rewind && rw + 2 <= width) {
@@ -107,7 +115,7 @@ export default function (pi: ExtensionAPI) {
           } else {
             second = truncateToWidth(details, width, "…");
           }
-          const lines = [truncateToWidth(parts.join(theme.fg("dim", " | ")), width, "…"), second];
+          const lines = [truncateToWidth(parts.join(theme.fg("dim", narrow ? " · " : " | ")), width, "…"), second];
           // Keep other extensions' operational statuses visible (e.g. watchdog).
           for (const [key, value] of statuses) if (key !== USAGE_STATUS && key !== REWIND_STATUS) lines.push(truncateToWidth(plain(value), width, "…"));
           return lines;

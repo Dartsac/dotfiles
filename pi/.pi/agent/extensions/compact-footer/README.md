@@ -4,6 +4,17 @@ Personal Pi footer. Run `/reload` to load changes. `/compact-footer` toggles the
 
 Named sessions show `[session name]` before the model and directory. Unnamed sessions keep the existing layout; renames appear on the next render.
 
+## On a phone
+
+At 50 columns or fewer (a phone's SSH app in portrait is about 45; a desk pane is rarely this narrow) the footer is compact, so each piece fits instead of being cut off at the right edge:
+
+```
+5h 2% 24m · 7d 76% 2d 2h · ctx 12%
+[crystal-business] claude-opus-5-5 high   ↺ 1
+```
+
+No bars, no `reset` or `session … (est.)` wording, and no provider or folder. A provider without quota data shows `cost $0.432` (or `budget 40% $2.000/$5`) before `ctx`.
+
 ## Data sources
 
 - Uses the `pi-usage` extension's existing footer status. No new credentials or network requests.
@@ -26,4 +37,4 @@ The installed pi-usage extension has no public structured quota event, so this a
 
 pi-rewind's checkpoint count is shown right-aligned on the second line with a ↺ icon (replacing its `◆`) instead of taking its own row; it is hidden if the terminal is too narrow to fit it. Other extensions' operational statuses remain visible below the two main lines. Narrow terminals truncate lines safely. The normal Pi footer can be restored with `/compact-footer` or by removing this extension directory.
 
-Tests: `node --test ~/.pi/agent/extensions/compact-footer/format.test.ts` (Node with TypeScript stripping).
+Tests: `node ~/dotfiles/.tests/pi-extensions.mjs compact-footer` (`format.test.ts`, `budget.test.ts`, and `footer.test.ts` for the lines at desk and phone widths).

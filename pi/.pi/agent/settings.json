@@ -9,7 +9,7 @@
   },
   "packages": [
     "./local-packages/pi-subagents",
-    "npm:@juicesharp/rpiv-ask-user-question@2.15.0",
+    "./local-packages/rpiv-ask-user-question",
     "./local-packages/pi-web-access",
     {
       "source": "npm:@mtrojnar/pi-usage",
