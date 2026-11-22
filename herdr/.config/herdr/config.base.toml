@@ -168,28 +168,31 @@ type = "shell"
 command = 'sh "$HOME/.config/herdr/scripts/close-other-panes.sh"'
 description = "close every other pane in this tab"
 
+# Ctrl-h/j/k/l: scripts/navigate.sh, as the navigate plugin's actions
+# (navigate/herdr-plugin.toml). Herdr starts a plugin action's command itself;
+# a `shell` binding would be a login shell, reading ~/.profile on every press.
 [[keys.command]]
 key = "ctrl+h"
-type = "shell"
-command = 'exec sh "$HOME/.config/herdr/scripts/navigate.sh" left'
+type = "plugin_action"
+command = "dotfiles.navigate.left"
 description = "focus left, or pass to Neovim"
 
 [[keys.command]]
 key = "ctrl+j"
-type = "shell"
-command = 'exec sh "$HOME/.config/herdr/scripts/navigate.sh" down'
+type = "plugin_action"
+command = "dotfiles.navigate.down"
 description = "focus down, or pass to Neovim"
 
 [[keys.command]]
 key = "ctrl+k"
-type = "shell"
-command = 'exec sh "$HOME/.config/herdr/scripts/navigate.sh" up'
+type = "plugin_action"
+command = "dotfiles.navigate.up"
 description = "focus up, or pass to Neovim"
 
 [[keys.command]]
 key = "ctrl+l"
-type = "shell"
-command = 'exec sh "$HOME/.config/herdr/scripts/navigate.sh" right'
+type = "plugin_action"
+command = "dotfiles.navigate.right"
 description = "focus right, or pass to Neovim"
 
 [ui]
