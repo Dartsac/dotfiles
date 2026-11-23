@@ -99,9 +99,10 @@ export default function (pi: ExtensionAPI) {
           parts.push(gauge("ctx", ctx.getContextUsage()?.percent ?? undefined, true));
           const thinking = model?.reasoning ? ` ${pi.getThinkingLevel()}` : "";
           const sessionName = ctx.sessionManager.getSessionName();
-          const session = sessionName ? theme.fg("accent", `[${plain(sessionName)}]`) + theme.fg("dim", narrow ? " " : " · ") : "";
+          const session = sessionName ? theme.fg("accent", `[${plain(sessionName)}]`) + theme.fg("dim", " · ") : "";
+          // A phone shows the session's name on Herdr's tab ("pi:name"), so the line keeps the model.
           const details = narrow
-            ? session + theme.fg("accent", `${model?.id ?? "no-model"}${thinking}`)
+            ? theme.fg("accent", `${model?.id ?? "no-model"}${thinking}`)
             : session + theme.fg("accent", `${model?.id ?? "no-model"}${thinking} (${model?.provider ?? "unknown"})`) + theme.fg("dim", ` · ${cwd}`);
           // pi-rewind's checkpoint count sits right-aligned on the details line, not its own row.
           const rewindStatus = statuses.get(REWIND_STATUS);

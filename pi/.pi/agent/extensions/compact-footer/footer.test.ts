@@ -43,10 +43,10 @@ function footer(statuses: Record<string, string> = {}, provider = "anthropic"): 
   return factory!({ requestRender() {} }, theme, footerData);
 }
 
-test("a phone-width footer fits every piece on two lines", () => {
+test("a phone-width footer fits every piece on two lines, leaving the session name to Herdr's tab", () => {
   assert.deepEqual(footer().render(45), [
     "5h 2% 24m · 7d 76% 2d 2h · ctx 12%",
-    "[crystal-business] claude-opus-5-5 high   ↺ 1",
+    "claude-opus-5-5 high                      ↺ 1",
   ]);
 });
 
