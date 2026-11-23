@@ -11,7 +11,7 @@ At 50 columns or fewer (a phone's SSH app in portrait is about 45; a desk pane i
 ```
 5h 2% 24m · 7d 76% 2d 2h · ctx 12%
 claude-opus-5-5 high                      ↺ 1
-⎇ herdr-phone-screen-size  +2 ~3 -1 ↑1
+herdr-phone-screen-size  +2 ~3 -1 ↑1
 ```
 
 No bars, no `reset` or `session … (est.)` wording, and no provider or folder. No session name either: Herdr's tab shows it (`pi:crystal-business`).

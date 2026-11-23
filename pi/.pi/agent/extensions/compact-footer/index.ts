@@ -144,7 +144,7 @@ export default function (pi: ExtensionAPI) {
           const lines = [truncateToWidth(parts.join(theme.fg("dim", narrow ? " · " : " | ")), width, "…"), second];
           // Herdr's tab on a phone shows neither the branch nor the worktree (named for the branch).
           if (branch !== null) {
-            lines.push(truncateToWidth(theme.fg("accent", `⎇ ${branch}`) + (changes ? theme.fg("warning", `  ${changes}`) : ""), width, "…"));
+            lines.push(truncateToWidth(theme.fg("accent", branch) + (changes ? theme.fg("warning", `  ${changes}`) : ""), width, "…"));
           }
           // Keep other extensions' operational statuses visible (e.g. watchdog).
           for (const [key, value] of statuses) if (key !== USAGE_STATUS && key !== REWIND_STATUS) lines.push(truncateToWidth(plain(value), width, "…"));

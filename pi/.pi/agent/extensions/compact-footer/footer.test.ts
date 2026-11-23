@@ -103,12 +103,12 @@ test("no phone-width line is wider than the screen", () => {
 
 test("a phone-width footer in git adds a line with the branch and what changed in it", async () => {
   const phone = footer({}, "anthropic", job);
-  assert.equal(phone.render(45)[2], "⎇ herdr-phone-screen-size");
+  assert.equal(phone.render(45)[2], "herdr-phone-screen-size");
   await settle();
   assert.deepEqual(phone.render(45), [
     "5h 2% 24m · 7d 76% 2d 2h · ctx 12%",
     "claude-opus-5-5 high                      ↺ 1",
-    "⎇ herdr-phone-screen-size  +2 ~3 -1 ↑1",
+    "herdr-phone-screen-size  +2 ~3 -1 ↑1",
   ]);
 });
 
@@ -116,7 +116,7 @@ test("a clean branch's line is its name alone", async () => {
   const phone = footer({}, "anthropic", { branch: "main", status: "# branch.head main\n# branch.ab +0 -0\n" });
   phone.render(45);
   await settle();
-  assert.equal(phone.render(45)[2], "⎇ main");
+  assert.equal(phone.render(45)[2], "main");
 });
 
 test("a branch behind its upstream, with a conflict, says so", async () => {
@@ -124,7 +124,7 @@ test("a branch behind its upstream, with a conflict, says so", async () => {
   const phone = footer({}, "anthropic", { branch: "main", status });
   phone.render(45);
   await settle();
-  assert.equal(phone.render(45)[2], "⎇ main  !1 ↓3");
+  assert.equal(phone.render(45)[2], "main  !1 ↓3");
 });
 
 test("a desk-width footer runs no git and adds no line", async () => {
@@ -145,5 +145,5 @@ test("while Pi is idle, a change made elsewhere shows on the next git check", as
   git.status += "? notes.md\n";
   t.mock.timers.tick(4990); // the timer's first tick, 5 s after the footer started
   await settle();
-  assert.equal(phone.render(45)[2], "⎇ main  +1");
+  assert.equal(phone.render(45)[2], "main  +1");
 });
