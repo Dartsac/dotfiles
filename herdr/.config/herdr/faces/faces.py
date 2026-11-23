@@ -10,8 +10,8 @@ and so does Bit, which is text.
 
 Ready is this plugin's own state. Herdr calls an agent idle as soon as it is
 neither working nor waiting to be seen; here it stays ready until it has gone
-ten minutes (`faces.py awake <minutes>`) without being given work, and only
-then falls asleep.
+ten minutes (`faces.py awake <minutes>`) without being given work since you
+saw it finished, and only then falls asleep.
 It works for every agent Herdr lists, whatever harness runs it, because it only
 reads Herdr's own state.
 
@@ -86,7 +86,8 @@ QUIET = ("Ready", "Working", "Finished")   # activities the face already shows
 USUAL_HARNESS = "pi"         # line 2 names an agent's harness only when it is another
 NEEDS_YOU = ("Waiting for you", "60s", "Failed", "not done")   # activities shown in bold
 BUSY = ("working", "blocked")             # being given work, or in the middle of it
-AWAKE_MINUTES = 10           # an idle agent stays ready this long after its last work
+UNSEEN = "done"              # finished, not yet looked at: its time to sleep has not started
+AWAKE_MINUTES = 10           # an idle agent stays ready this long after you saw its last work end
 GIT_SECONDS = 4              # between looks at each workspace's branch and each worktree's progress
 FRAME_SECONDS = 0.4          # one animation step
 IDLE_SECONDS = 1.0           # between looks when nothing is working
@@ -137,11 +138,12 @@ def workspace_character(workspace, agents, choice):
 
 
 class Awake:
-    """Which agents are still awake: at work, or first seen, less than a while ago.
+    """Which agents are still awake: at work, seen finished, or first seen, less than a while ago.
 
-    Keeps the time each agent was last seen busy, in a file, so that a
-    restarted updater does not wake everyone up. An agent seen for the first
-    time counts from then."""
+    Keeps the time each agent came to rest, in a file, so that a restarted
+    updater does not wake everyone up. An agent at rest is one Herdr calls
+    neither busy nor done: a done agent's end has not been seen, so its time
+    starts when it is. An agent seen for the first time counts from then."""
 
     def __init__(self, path, now=time.time):
         self.path, self.now = path, now
@@ -153,10 +155,10 @@ class Awake:
         self.rested = {k: v for k, v in data.items() if isinstance(v, (int, float))} if isinstance(data, dict) else {}
 
     def update(self, snapshot, seconds):
-        """The panes whose agents stopped work less than `seconds` ago."""
+        """The panes whose agents came to rest less than `seconds` ago."""
         now = self.now()
         rested = {a["pane_id"]: self.rested.get(a["pane_id"], now)
-                  for a in snapshot.get("agents") or [] if a.get("agent_status") not in BUSY}
+                  for a in snapshot.get("agents") or [] if a.get("agent_status") not in BUSY + (UNSEEN,)}
         if rested != self.rested:               # only when an agent starts, stops, arrives or leaves
             self.rested = rested
             try:

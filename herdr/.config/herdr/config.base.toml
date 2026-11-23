@@ -248,8 +248,8 @@ status_indicators = "symbols"
 #   The character alone shows the state, in the state's color:
 #     asleep gray   ready yellow   working cyan   needs you red   done green
 #     unknown violet
-#   Ready is the plugin's own state: idle in Herdr's terms, but at work within
-#   the last ten minutes (`faces.py awake <minutes>`). After that it sleeps.
+#   Ready is the plugin's own state: idle in Herdr's terms, but seen finished
+#   within the last ten minutes (`faces.py awake <minutes>`). Then it sleeps.
 #   All the text of a space and of its agents has that workspace's color, so
 #   an agent is matched to its space at a glance.
 # Fifteen Dracula PRO colors and mixes identify workspaces, none of them a
