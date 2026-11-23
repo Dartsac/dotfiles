@@ -19,7 +19,7 @@ reads Herdr's own state.
     faces.py pick           choose the character in a picker (bound to prefix i)
     faces.py set <choice>   choose it from the command line: byte, wisp, bit or mixed
     faces.py awake <min>    how long an agent stays ready after you see it finished (0: never)
-    faces.py view <view>    the Agents panel: inbox (what is not idle, needs-you first), all, or toggle
+    faces.py view <view>    the Agents panel: inbox (what is not asleep, needs-you first), all, or toggle
     faces.py show           print the current choice and every character's faces
     faces.py rules          print the tokens and their color rules, as config.base.toml must have them
 
@@ -39,6 +39,7 @@ sets these tokens, which the sidebar rows show:
     tree1-6  then    a Pi parent's subagents, one per line, as a tree:
                      `├── <face> reviewer`, from its child1-6 tokens, and
                      their own subagents one level deeper: `│   └── <face> scout`
+    asleep   none    "yes" on the pane of an agent asleep, for the inbox's filter
 
 Lines 2 and 3 are this plugin's work only so that they can start under the
 name: Herdr indents them by a fixed two cells, so each begins with blank cells
@@ -168,6 +169,26 @@ class Awake:
             except OSError:
                 pass
         return frozenset(pane for pane, since in rested.items() if now - since < seconds)
+
+
+ASLEEP = "asleep"   # the pane token the inbox reads: "yes" while its agent is asleep
+
+
+def asleep_marks(snapshot, awake):
+    """{("pane", id): {ASLEEP: "yes" or None}}: marks each pane whose agent is
+    asleep, and clears the mark of one that is not, or has no agent any more.
+
+    The value is plain: the space's color marker (identity.apply) would keep
+    the inbox's filter from matching it."""
+    out = {}
+    for agent in snapshot.get("agents") or []:
+        asleep = status_of(agent, awake) == "idle"
+        if asleep or ASLEEP in (agent.get("tokens") or {}):
+            out[("pane", agent["pane_id"])] = {ASLEEP: "yes" if asleep else None}
+    for pane in snapshot.get("panes") or []:
+        if ASLEEP in (pane.get("tokens") or {}) and ("pane", pane["pane_id"]) not in out:
+            out[("pane", pane["pane_id"])] = {ASLEEP: None}
+    return out
 
 
 WORKTREE_BRANCH_PREFIX = "worktree/"   # before the branch name of a worktree Herdr names itself
@@ -538,16 +559,19 @@ def write_minutes(config_dir, text):
     write_setting(config_dir, "awake-minutes", "%g\n" % minutes)
 
 
-# The Agents panel: an inbox (every agent that is not idle, needs-you first)
+# The Agents panel: an inbox (every agent that is not asleep, needs-you first)
 # or Herdr's own list of all of them, grouped by space ([ui] agent_panel_sort).
 # Herdr's "idle" is an agent at rest whose end you have seen; one you have not
-# seen is "done". Herdr keeps a view until its server exits, so `run` sets it
-# again on a new server.
+# seen is "done". Herdr knows nothing of ready, so the inbox leaves out an idle
+# agent only once its pane carries the ASLEEP mark (asleep_marks). Herdr keeps
+# a view until its server exits, so `run` sets it again on a new server.
 VIEWS = ("inbox", "all")
 VIEW_SOURCE = "plugin:" + PLUGIN_ID
 INBOX = {
     "source": VIEW_SOURCE, "label": "inbox",
-    "filter": {"op": "not", "filter": {"op": "eq", "field": "status", "value": "idle"}},
+    "filter": {"op": "not", "filter": {"op": "all", "filters": [
+        {"op": "eq", "field": "status", "value": "idle"},
+        {"op": "eq", "field": {"token": "asleep"}, "value": "yes"}]}},
     "sort": [{"field": "attention", "order": "desc"}, {"field": "workspace_order", "order": "asc"},
              {"field": "pane_order", "order": "asc"}],
 }
@@ -664,6 +688,8 @@ def keep_current(socket_path, config, state_dir, sleep, clock, git, now=time.tim
         for key, lines in list(described(snapshot, choice, git.line, up, git.progress).items()) + list(branches.items()):
             want.setdefault(key, {}).update(lines)
         want = identity.apply(snapshot, want, colors.assign(workspaces))
+        for key, mark in asleep_marks(snapshot, up).items():
+            want.setdefault(key, {}).update(mark)
         due = {kind for kind, since in renewed.items() if clock() - since >= REFRESH_SECONDS[kind]}   # renew before the deadline
         for kind in due:
             renewed[kind] = clock()

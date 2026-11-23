@@ -33,7 +33,7 @@ title = "Start the sidebar characters"
 contexts = ["global"]
 command = ["python3", "faces.py", "run"]
 
-# The Agents panel: the inbox (what is not idle, needs-you first) or every
+# The Agents panel: the inbox (what is not asleep, needs-you first) or every
 # agent. The running copy picks the choice up on its next look.
 [[actions]]
 id = "view"

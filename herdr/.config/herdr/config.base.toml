@@ -96,7 +96,7 @@ remove_worktree = "prefix+shift+w"
 goto = "prefix+f"
 # Step through the Agents sidebar in its order. prefix Shift-i switches it
 # between all agents, grouped by space as [ui] sorts them, and the inbox (the
-# faces plugin's default): the agents that are not idle, needs-you first.
+# faces plugin's default): the agents that are not asleep, needs-you first.
 next_agent = "prefix+a"
 previous_agent = "prefix+shift+a"
 open_notification_target = "prefix+shift+o"
