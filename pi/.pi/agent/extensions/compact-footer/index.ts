@@ -7,7 +7,7 @@ import { relative, isAbsolute, sep, join } from "node:path";
 import { readFileSync, writeFileSync } from "node:fs";
 import { getAgentDir, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import { bar, plain, selectedQuota, sessionSpend } from "./format.ts";
+import { bar, gitChanges, plain, selectedQuota, sessionSpend } from "./format.ts";
 
 // Statuses this footer renders itself; all others are passed through on their own lines.
 const USAGE_STATUS = "pi-usage";
@@ -15,6 +15,8 @@ const REWIND_STATUS = "rewind";
 // At this width and below the footer is compact: no bars, short labels, no provider or folder.
 // A phone's SSH app in portrait is about 45 columns; a desk pane is rarely this narrow.
 const NARROW_WIDTH = 50;
+// How old the phone footer's git status may be before it runs `git status` again.
+const GIT_STATUS_MS = 5000;
 
 function displayCwd(cwd: string): string {
   const rel = relative(homedir(), cwd);
@@ -57,8 +59,28 @@ export default function (pi: ExtensionAPI) {
     };
     ctx.ui.setFooter((tui, theme, footerData) => {
       const unsubscribe = footerData.onBranchChange(() => tui.requestRender());
+      // The phone footer's git line: what changed on the branch, from the last `git status`.
+      // It runs only while the footer is narrow: on each tick of a timer, so changes made
+      // elsewhere show while Pi is idle, and on a render once the last run is older than a tick.
+      let changes = "";
+      let checkedAt: number | undefined;
+      let checking = false;
+      let narrowShown = false;
+      const checkGit = (always = false) => {
+        if (checking || (!always && checkedAt !== undefined && Date.now() - checkedAt < GIT_STATUS_MS)) return;
+        checking = true;
+        pi.exec("git", ["status", "--porcelain=v2", "--branch"], { cwd: ctx.cwd, timeout: GIT_STATUS_MS })
+          .then(result => result.code === 0 ? gitChanges(result.stdout) : "", () => "")
+          .then(next => {
+            checking = false;
+            checkedAt = Date.now();
+            if (next !== changes) { changes = next; tui.requestRender(); }
+          });
+      };
+      const timer = setInterval(() => { if (narrowShown) checkGit(true); }, GIT_STATUS_MS);
+      timer.unref?.();
       return {
-        dispose: unsubscribe,
+        dispose() { unsubscribe(); clearInterval(timer); },
         invalidate() {},
         render(width: number): string[] {
           const model = ctx.model;
@@ -67,6 +89,9 @@ export default function (pi: ExtensionAPI) {
           const usage = statuses.get(USAGE_STATUS) ?? "";
           const quota = selectedQuota(usage, provider);
           const narrow = width <= NARROW_WIDTH;
+          const branch = narrow ? footerData.getGitBranch() : null;
+          narrowShown = branch !== null;
+          if (branch !== null) checkGit();
           const gauge = (label: string, percent: number | undefined, context = false) => {
             if (percent === undefined || !Number.isFinite(percent)) return theme.fg("dim", narrow ? `${label} N/A` : `${label}: N/A`);
             const color = context ? (percent > 80 ? "error" : percent >= 70 ? "warning" : "success") : (percent >= 90 ? "error" : percent >= 80 ? "warning" : "success");
@@ -117,6 +142,10 @@ export default function (pi: ExtensionAPI) {
             second = truncateToWidth(details, width, "…");
           }
           const lines = [truncateToWidth(parts.join(theme.fg("dim", narrow ? " · " : " | ")), width, "…"), second];
+          // Herdr's tab on a phone shows neither the branch nor the worktree (named for the branch).
+          if (branch !== null) {
+            lines.push(truncateToWidth(theme.fg("accent", `⎇ ${branch}`) + (changes ? theme.fg("warning", `  ${changes}`) : ""), width, "…"));
+          }
           // Keep other extensions' operational statuses visible (e.g. watchdog).
           for (const [key, value] of statuses) if (key !== USAGE_STATUS && key !== REWIND_STATUS) lines.push(truncateToWidth(plain(value), width, "…"));
           return lines;

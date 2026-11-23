@@ -11,9 +11,12 @@ At 50 columns or fewer (a phone's SSH app in portrait is about 45; a desk pane i
 ```
 5h 2% 24m · 7d 76% 2d 2h · ctx 12%
 claude-opus-5-5 high                      ↺ 1
+⎇ herdr-phone-screen-size  +2 ~3 -1 ↑1
 ```
 
-No bars, no `reset` or `session … (est.)` wording, and no provider or folder. No session name either: Herdr's tab shows it (`pi:crystal-business`). A provider without quota data shows `cost $0.432` (or `budget 40% $2.000/$5`) before `ctx`.
+No bars, no `reset` or `session … (est.)` wording, and no provider or folder. No session name either: Herdr's tab shows it (`pi:crystal-business`).
+
+In a git folder a third line has the branch, which Herdr's phone layout doesn't show (a job's worktree is named for it), and what changed on it: `+` new files (untracked or added), `~` changed, `-` deleted, `!` conflicts, `↑`/`↓` commits ahead of and behind its upstream. A clean branch shows its name alone. The counts come from `git status`, run only while the footer is this narrow: every 5 seconds, so changes made outside Pi show while it is idle. A provider without quota data shows `cost $0.432` (or `budget 40% $2.000/$5`) before `ctx`.
 
 ## Data sources
 

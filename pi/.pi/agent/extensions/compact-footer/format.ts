@@ -65,3 +65,27 @@ export function selectedQuota(status: string, provider: string): { limited: bool
   });
   return { limited: part.startsWith(limitedPrefix), windows };
 }
+
+/**
+ * What changed on a branch, from `git status --porcelain=v2 --branch`: `+` new files
+ * (untracked or added), `~` changed, `-` deleted, `!` conflicts, `↑`/`↓` commits ahead
+ * of and behind its upstream. Only counts above zero; "" for a clean branch.
+ */
+export function gitChanges(status: string): string {
+  let added = 0, changed = 0, deleted = 0, conflicts = 0, ahead = 0, behind = 0;
+  for (const line of status.split("\n")) {
+    const ab = /^# branch\.ab \+(\d+) -(\d+)/.exec(line);
+    if (ab) { ahead = Number(ab[1]); behind = Number(ab[2]); continue; }
+    if (line.startsWith("? ")) { added++; continue; }
+    if (line.startsWith("u ")) { conflicts++; continue; }
+    if (!line.startsWith("1 ") && !line.startsWith("2 ")) continue;
+    const xy = line.slice(2, 4);
+    if (xy.includes("A")) added++;
+    else if (xy.includes("D")) deleted++;
+    else changed++;
+  }
+  return [[added, "+"], [changed, "~"], [deleted, "-"], [conflicts, "!"], [ahead, "↑"], [behind, "↓"]]
+    .filter(([count]) => (count as number) > 0)
+    .map(([count, sign]) => `${sign}${count}`)
+    .join(" ");
+}
