@@ -10,7 +10,7 @@ and so does Bit, which is text.
 
 Ready is this plugin's own state. Herdr calls an agent idle as soon as it is
 neither working nor waiting to be seen; here it stays ready until it has gone
-ten minutes (`faces.py awake <minutes>`) without being given work since you
+fifteen minutes (`faces.py awake <minutes>`) without being given work since you
 saw it finished, and only then falls asleep.
 It works for every agent Herdr lists, whatever harness runs it, because it only
 reads Herdr's own state.
@@ -18,7 +18,7 @@ reads Herdr's own state.
     faces.py run            keep the faces up to date (Herdr starts this; see herdr-plugin.toml)
     faces.py pick           choose the character in a picker (bound to prefix i)
     faces.py set <choice>   choose it from the command line: byte, wisp, bit or mixed
-    faces.py awake <min>    how long an agent stays ready after its last work (0: never)
+    faces.py awake <min>    how long an agent stays ready after you see it finished (0: never)
     faces.py view <view>    the Agents panel: inbox (what is not idle, needs-you first), all, or toggle
     faces.py show           print the current choice and every character's faces
     faces.py rules          print the tokens and their color rules, as config.base.toml must have them
@@ -87,7 +87,7 @@ USUAL_HARNESS = "pi"         # line 2 names an agent's harness only when it is a
 NEEDS_YOU = ("Waiting for you", "60s", "Failed", "not done")   # activities shown in bold
 BUSY = ("working", "blocked")             # being given work, or in the middle of it
 UNSEEN = "done"              # finished, not yet looked at: its time to sleep has not started
-AWAKE_MINUTES = 10           # an idle agent stays ready this long after you saw its last work end
+AWAKE_MINUTES = 15           # an idle agent stays ready this long after you saw its last work end
 GIT_SECONDS = 4              # between looks at each workspace's branch and each worktree's progress
 FRAME_SECONDS = 0.4          # one animation step
 IDLE_SECONDS = 1.0           # between looks when nothing is working
@@ -519,7 +519,7 @@ def write_choice(config_dir, choice):
 
 
 def read_minutes(config_dir):
-    """How long an idle agent stays ready after its last work. 0: it sleeps at once."""
+    """How long an idle agent stays ready after you see it finished. 0: it sleeps at once."""
     try:
         with open(os.path.join(config_dir, "awake-minutes")) as f:
             minutes = float(f.read().strip())
@@ -752,7 +752,7 @@ def main(argv):
         current = read_choice(config_dir())
         for key, title, faces, about in table():
             print("%s %-6s %s   %s" % ("●" if key == current else " ", title, faces, about))
-        print("ready for %g minutes after an agent's last work, then asleep" % read_minutes(config_dir()))
+        print("ready for %g minutes after you see an agent finished, then asleep" % read_minutes(config_dir()))
         print("agents panel: %s" % read_view(config_dir()))
         return 0
     if command == "rules":
