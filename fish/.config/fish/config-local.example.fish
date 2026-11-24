@@ -1,9 +1,12 @@
 # An example of config-local.fish, this machine's own fish settings. Copy it
 # to config-local.fish (git ignores that file) and uncomment what you need.
-# config.fish sources it last, so it can also change anything config.fish
-# sets. With the Dracula PRO package, theme-sync writes Tide's colors here, in
-# a block of its own after the opening comment (from
-# tide-dracula-pro.fish.template).
+# config.fish sources it after its own settings, so it can change any of
+# them. Three things come after it, to see what it set: a PATH entry that is
+# not absolute is dropped; direnv and zoxide start where PATH now has them,
+# and a function named z, zi or zo made here is replaced by theirs; fzf gets
+# its default options where none are set by then. With the Dracula PRO
+# package, theme-sync writes Tide's colors here, in a block of its own after
+# the opening comment (from tide-dracula-pro.fish.template).
 
 # The name the greeting says hello to (otherwise your login name, $USER).
 # set -g greeting_name friend

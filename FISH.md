@@ -17,7 +17,8 @@ variables in `fish_variables`; while there are none, `config.fish` applies
 `tide-theme.fish` (Tide's Lean style in the free Dracula colors), and
 `tide configure` replaces them. This machine's own values (the greeting's
 name, the Default multiplexer, a pinned Python, Perl's `local::lib`) go in
-`config-local.fish`, which `config.fish` sources last.
+`config-local.fish`, which `config.fish` sources after its own settings; the
+example beside it says what still comes after.
 
 ## A machine that used this config before it had a local override
 
