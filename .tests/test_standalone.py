@@ -9,7 +9,9 @@ Its run(): a command that runs out of time fails and names what is still
 running, so a hang says what it is waiting for.
 
 Its fish check: fish's first start leaves nothing running in the machine,
-which the check removes once it is done."""
+which the check removes once it is done.
+
+The repository's root: loading the check and the tests leaves nothing there."""
 import contextlib
 import importlib.util
 import os
@@ -18,6 +20,7 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -195,6 +198,33 @@ class FishFirstStartTest(unittest.TestCase):
         generated = machine.home / ".cache/fish/generated_completions"
         made = len(list(generated.iterdir())) if generated.exists() else 0
         self.assertEqual(made, 0, "fish read the man pages into completions on its first start")
+
+
+@unittest.skipUnless(shutil.which("git"), "needs git")
+class RootTest(unittest.TestCase):
+    """The check and the tests load ./install and theme-sync as modules, and
+    Python keeps a module's bytecode in a __pycache__ folder beside it: at the
+    repository's root, where every folder that is not hidden is a package, so
+    `stow */` links packages only (README.md, Package layout)."""
+
+    def test_loading_the_tests_adds_nothing_to_the_root(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        clone = Path(temp.name).resolve() / "dotfiles"
+        standalone.copy_tree(clone)
+        before = sorted(path.name for path in clone.iterdir())
+        modules = sorted(path.stem for path in (clone / ".tests").glob("*.py"))
+        self.assertIn("standalone", modules)
+        # A Python that keeps bytecode, as `python3 .tests/standalone.py` is:
+        # without -B, and without the variable that stands for it.
+        env = {name: value for name, value in os.environ.items() if name != "PYTHONDONTWRITEBYTECODE"}
+        load = "import importlib, sys\nfor name in sys.argv[1:]:\n    importlib.import_module(name)"
+
+        loaded = subprocess.run([sys.executable, "-c", load, *modules], cwd=clone / ".tests", env=env,
+                                capture_output=True, text=True)
+
+        self.assertEqual(loaded.returncode, 0, loaded.stderr)
+        self.assertEqual(sorted(path.name for path in clone.iterdir()), before)
 
 
 if __name__ == "__main__":

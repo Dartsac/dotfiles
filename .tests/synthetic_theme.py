@@ -8,6 +8,11 @@ other name uses, neither grey nor one of the free Dracula theme's.
 from importlib.machinery import SourceFileLoader
 import importlib.util
 from pathlib import Path
+import sys
+
+# Loading theme-sync must not leave its bytecode in __pycache__ at the
+# repository's root: a folder there that is not hidden is a package to `stow */`.
+sys.dont_write_bytecode = True
 
 
 def load_theme_sync():

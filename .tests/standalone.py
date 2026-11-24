@@ -60,6 +60,9 @@ import synthetic_theme
 REPO = Path(__file__).resolve().parents[1]
 MANIFEST = "README.package.json"
 PLATFORM = {"Darwin": "macos", "Linux": "linux"}[platform.system()]
+# Loading ./install must not leave its bytecode in __pycache__ at the
+# repository's root: a folder there that is not hidden is a package to `stow */`.
+sys.dont_write_bytecode = True
 
 
 def load_install():
