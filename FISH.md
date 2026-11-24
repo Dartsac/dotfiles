@@ -58,8 +58,10 @@ whose fisher installed them, and commit the result.
    overwrite different files. Preserve permissions and verify the copies.
 4. Keep machine-local files ignored by Git. The repository ignores
    `config-local.fish` (the local override; `config-local.example.fish`
-   shows its shape), `fish_variables`, `fish_greeting_last_run`, the local
-   Fabric and Copilot completions, and the generated private Tide theme.
+   shows its shape), `fish_variables` and the copies fish leaves beside it
+   when it is ended while it saves them (`fish_variables` plus some
+   letters), `fish_greeting_last_run`, the local Fabric and Copilot
+   completions, and the generated private Tide theme.
    New local files require their own ignore rules. Git ignore rules do not
    prevent Stow from linking files present on a machine.
 5. Move the old directory outside `~/.config`, then run:
