@@ -207,24 +207,32 @@ class RootTest(unittest.TestCase):
     repository's root, where every folder that is not hidden is a package, so
     `stow */` links packages only (README.md, Package layout)."""
 
-    def test_loading_the_tests_adds_nothing_to_the_root(self):
+    def test_loading_each_of_the_tests_files_adds_nothing_to_the_root(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         clone = Path(temp.name).resolve() / "dotfiles"
         standalone.copy_tree(clone)
-        before = sorted(path.name for path in clone.iterdir())
+        before = {path.name for path in clone.iterdir()}
         modules = sorted(path.stem for path in (clone / ".tests").glob("*.py"))
         self.assertIn("standalone", modules)
         # A Python that keeps bytecode, as `python3 .tests/standalone.py` is:
         # without -B, and without the variable that stands for it.
         env = {name: value for name, value in os.environ.items() if name != "PYTHONDONTWRITEBYTECODE"}
-        load = "import importlib, sys\nfor name in sys.argv[1:]:\n    importlib.import_module(name)"
+        # Each file in a Python of its own, as when it alone is run: one that
+        # loads a root script must not count on what another has set. Then
+        # each again, from the bytecode the first run kept in .tests/.
+        for run in ("a first run", "a second run"):
+            for module in modules:
+                with self.subTest(run, module=module):
+                    loaded = subprocess.run([sys.executable, "-c", f"import {module}"], cwd=clone / ".tests", env=env,
+                                            capture_output=True, text=True)
 
-        loaded = subprocess.run([sys.executable, "-c", load, *modules], cwd=clone / ".tests", env=env,
-                                capture_output=True, text=True)
-
-        self.assertEqual(loaded.returncode, 0, loaded.stderr)
-        self.assertEqual(sorted(path.name for path in clone.iterdir()), before)
+                    self.assertEqual(loaded.returncode, 0, loaded.stderr)
+                    added = sorted(path for path in clone.iterdir() if path.name not in before)
+                    # Gone again before the next file is judged for what it adds itself.
+                    for path in added:
+                        shutil.rmtree(path)
+                    self.assertEqual([path.name for path in added], [])
 
 
 if __name__ == "__main__":
