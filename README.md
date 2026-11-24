@@ -318,6 +318,10 @@ node .tests/pi-extensions.mjs          # every test; add a name to narrow, e.g. 
 node .tests/pi-extensions.mjs --types  # type-check instead (needs tsc)
 ```
 
+`.tests/all.sh pi` runs both. A new Pi release can change a type that an
+extension or its test uses, and the tests, which run without a type check,
+still pass then.
+
 The pre-commit hook runs the tests of each extension directory with staged
 changes. An extension with tests needs its own directory (`name/index.ts`),
 because Pi loads every top-level `extensions/*.ts` file as an extension.

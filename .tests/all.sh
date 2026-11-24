@@ -28,6 +28,7 @@ tests|.|python3|python3 -B -m unittest discover -s .tests -p 'test_*.py'
 tests-bare|.|/usr/bin/python3|$bare -B -m unittest discover -s .tests -p 'test_*.py'
 standalone|.|python3|python3 -B .tests/standalone.py
 pi|.|node|node .tests/pi-extensions.mjs
+pi-types|.|node tsc|node .tests/pi-extensions.mjs --types
 owner|.|.owner/ python3|python3 -B -m unittest discover -s .owner -p 'test_*.py'
 owner-bare|.|.owner/ /usr/bin/python3|$bare -B -m unittest discover -s .owner -p 'test_*.py'
 fish|fish/.config/fish|tests/ python3 fish|python3 -B -m unittest discover -s tests -p '*_test.py'
