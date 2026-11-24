@@ -1,6 +1,7 @@
 #!/bin/sh
 # Every suite this checkout holds, one after the other: the tracked tests, the
-# standalone check, and those only the owner's machines have, which are each
+# standalone check, the Pi extensions' tests and type check where Pi is
+# installed, and those only the owner's machines have, which are each
 # package's own tests and the tests of the owner's own scripts (.owner/).
 #
 #   .tests/all.sh              every suite
@@ -9,7 +10,7 @@
 #
 # One line per suite: ok, FAIL (the end of its output follows, with the file
 # that holds all of it, and the run ends in exit status 1), or skip with what
-# is missing: a tool, or the tests themselves.
+# is missing: a tool, the tests themselves, or Pi.
 # The suites named `bare` run on a PATH of /usr/bin:/bin with the system's own
 # Python, as a commit from a GUI git client runs them (the pre-commit hook):
 # there a test must skip, not fail, when a tool it needs is missing.
@@ -20,15 +21,16 @@ bare="env -i HOME=$HOME PATH=/usr/bin:/bin /usr/bin/python3"
 # How much of a failed suite's output to show (CI asks for all of it).
 FAIL_LINES=${FAIL_LINES:-40}
 
-# name | folder, from the repository | what it needs: commands, and paths in
-# the folder (these end in /) | command
+# name | folder, from the repository | what it needs: commands, paths in the
+# folder (these end in /), and paths in the home directory (these start with
+# ~/) | command
 suites="
 lint|.|ruff|ruff check
 tests|.|python3|python3 -B -m unittest discover -s .tests -p 'test_*.py'
 tests-bare|.|/usr/bin/python3|$bare -B -m unittest discover -s .tests -p 'test_*.py'
 standalone|.|python3|python3 -B .tests/standalone.py
-pi|.|node|node .tests/pi-extensions.mjs
-pi-types|.|node tsc|node .tests/pi-extensions.mjs --types
+pi|.|node ~/.pi/agent/install/current-version|node .tests/pi-extensions.mjs
+pi-types|.|node tsc ~/.pi/agent/install/current-version|node .tests/pi-extensions.mjs --types
 owner|.|.owner/ python3|python3 -B -m unittest discover -s .owner -p 'test_*.py'
 owner-bare|.|.owner/ /usr/bin/python3|$bare -B -m unittest discover -s .owner -p 'test_*.py'
 fish|fish/.config/fish|tests/ python3 fish|python3 -B -m unittest discover -s tests -p '*_test.py'
@@ -63,6 +65,7 @@ while IFS='|' read -r name folder needs command; do
     missing=
     for need in $needs; do
         case $need in
+            "~/"*) [ -e "$HOME/${need#??}" ] ;;
             */) [ -e "$repo/$folder/$need" ] ;;
             *) command -v "$need" >/dev/null 2>&1 ;;
         esac || missing="$missing $need"

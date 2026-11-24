@@ -318,9 +318,10 @@ node .tests/pi-extensions.mjs          # every test; add a name to narrow, e.g. 
 node .tests/pi-extensions.mjs --types  # type-check instead (needs tsc)
 ```
 
-`.tests/all.sh pi` runs both. A new Pi release can change a type that an
-extension or its test uses, and the tests, which run without a type check,
-still pass then.
+`.tests/all.sh pi` runs both where Pi is installed, the type check where
+`tsc` is too, and names what it skips. A new Pi release can change a type
+that an extension or its test uses, and the tests, which run without a type
+check, still pass then.
 
 The pre-commit hook runs the tests of each extension directory with staged
 changes. An extension with tests needs its own directory (`name/index.ts`),
@@ -383,9 +384,10 @@ python3 .tests/standalone.py eza    # one package
 ```
 
 `.tests/all.sh` runs the lint, the tests below (also on a bare PATH with the
-system's Python, as a commit from a GUI git client runs them), this check, and
-what only the owner's machines have: each package's own tests, and those of
-the owner's own scripts. It names every suite it skips; `.tests/all.sh nvim` runs the suites with that word in their name.
+system's Python, as a commit from a GUI git client runs them), this check, the
+Pi extensions' tests and type check where Pi is installed, and what only the
+owner's machines have: each package's own tests, and those of the owner's own
+scripts. It names every suite it skips; `.tests/all.sh nvim` runs the suites with that word in their name.
 
 GitHub Actions runs it on macOS and Ubuntu on every push
 (`.github/workflows/standalone.yml`), with `./install`'s own tests and this
