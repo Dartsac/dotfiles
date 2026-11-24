@@ -3,7 +3,7 @@
   "theme": "dracula-pro",
   "defaultProvider": "anthropic",
   "defaultModel": "claude-opus-5-5",
-  "hideThinkingBlock": false,
+  "hideThinkingBlock": true,
   "warnings": {
     "anthropicExtraUsage": false
   },
