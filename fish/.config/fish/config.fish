@@ -255,11 +255,11 @@ end
 # Tide's prompt settings are universal variables. A machine that has none yet
 # gets tide-theme.fish: Tide's Lean style in the free Dracula colors.
 set -q tide_left_prompt_items
-or source (dirname (status --current-filename))/tide-theme.fish
+or source (status dirname)/tide-theme.fish
 
 # This machine's own settings (config-local.example.fish shows some), kept
 # out of git.
-set LOCAL_CONFIG (dirname (status --current-filename))/config-local.fish
+set LOCAL_CONFIG (status dirname)/config-local.fish
 if test -f $LOCAL_CONFIG
     source $LOCAL_CONFIG
 end
@@ -269,6 +269,10 @@ end
 # real command. Also drops ones inherited from an older shell or tmux server.
 # A project's own tools: `use project_bins` in its .envrc (direnv/direnvrc).
 set -gx PATH (string match -- '/*' $PATH)
+
+# direnv's hook, asked of the direnv that PATH has by now, and by that name: a
+# hook that names a folder of one version stops working in every open shell
+# when that version goes (conf.d/direnv.fish).
 command -qv direnv && direnv hook fish | source
 
 # fzf started from this shell (zoxide's `zi`, a bare `fzf`): Tab and Shift-Tab
