@@ -13,15 +13,40 @@ return {
 	},
 	init = function()
 		local group = vim.api.nvim_create_augroup("_markdown_otter", { clear = true })
-		-- In the buffer, once: otter works on the current buffer.
-		local function activate(buf)
-			if vim.bo[buf].filetype ~= "markdown" or require("otter.keeper").rafts[buf] then
+		-- Activate the buffer once it is on screen: started as the file was read,
+		-- otter took 70 of the 165 ms the README took to show. A buffer left
+		-- before then waits until it is shown again. otter works on the current
+		-- buffer, and makes its raft for it, code or none, so a raft is a buffer
+		-- it has taken up.
+		local function on_screen(buf)
+			vim.b[buf].otter_pending = nil
+			if not vim.api.nvim_buf_is_valid(buf) or vim.bo[buf].filetype ~= "markdown" then
+				return
+			end
+			if vim.api.nvim_get_current_buf() ~= buf then
+				-- Left meanwhile: once it is entered again, and only one waits.
+				vim.b[buf].otter_pending = true
+				vim.api.nvim_create_autocmd("BufEnter", {
+					group = group,
+					buffer = buf,
+					once = true,
+					callback = function()
+						vim.schedule(function()
+							on_screen(buf)
+						end)
+					end,
+				})
 				return
 			end
 			-- Requiring the module lazy-loads and configures the plugin first.
-			vim.api.nvim_buf_call(buf, function()
-				require("otter").activate()
-			end)
+			if require("otter.keeper").rafts[buf] then
+				return
+			end
+			-- The screen first: what the event loop has drawn by now is not certain.
+			if #vim.api.nvim_list_uis() > 0 then
+				vim.cmd.redraw()
+			end
+			require("otter").activate()
 		end
 		vim.api.nvim_create_autocmd("FileType", {
 			group = group,
@@ -35,23 +60,13 @@ return {
 				if vim.bo[args.buf].buftype ~= "" or vim.api.nvim_buf_get_name(args.buf) == "" then
 					return
 				end
-				-- Once the file is on screen: started as the file was read,
-				-- otter took 70 of the 165 ms the README took to show. A
-				-- buffer left meanwhile waits until it is shown again.
+				if vim.b[args.buf].otter_pending then
+					return
+				end
+				vim.b[args.buf].otter_pending = true
 				local buf = args.buf
 				vim.schedule(function()
-					if vim.api.nvim_get_current_buf() == buf then
-						activate(buf)
-					elseif vim.api.nvim_buf_is_valid(buf) then
-						vim.api.nvim_create_autocmd("BufEnter", {
-							group = group,
-							buffer = buf,
-							once = true,
-							callback = function()
-								activate(buf)
-							end,
-						})
-					end
+					on_screen(buf)
 				end)
 			end,
 		})
