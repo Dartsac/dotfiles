@@ -12,8 +12,19 @@ return {
 		},
 	},
 	init = function()
+		local group = vim.api.nvim_create_augroup("_markdown_otter", { clear = true })
+		-- In the buffer, once: otter works on the current buffer.
+		local function activate(buf)
+			if vim.bo[buf].filetype ~= "markdown" or require("otter.keeper").rafts[buf] then
+				return
+			end
+			-- Requiring the module lazy-loads and configures the plugin first.
+			vim.api.nvim_buf_call(buf, function()
+				require("otter").activate()
+			end)
+		end
 		vim.api.nvim_create_autocmd("FileType", {
-			group = vim.api.nvim_create_augroup("_markdown_otter", { clear = true }),
+			group = group,
 			pattern = "markdown",
 			desc = "Enable language servers in Markdown code fences",
 			callback = function(args)
@@ -24,8 +35,24 @@ return {
 				if vim.bo[args.buf].buftype ~= "" or vim.api.nvim_buf_get_name(args.buf) == "" then
 					return
 				end
-				-- Requiring the module lazy-loads and configures the plugin first.
-				require("otter").activate()
+				-- Once the file is on screen: started as the file was read,
+				-- otter took 70 of the 165 ms the README took to show. A
+				-- buffer left meanwhile waits until it is shown again.
+				local buf = args.buf
+				vim.schedule(function()
+					if vim.api.nvim_get_current_buf() == buf then
+						activate(buf)
+					elseif vim.api.nvim_buf_is_valid(buf) then
+						vim.api.nvim_create_autocmd("BufEnter", {
+							group = group,
+							buffer = buf,
+							once = true,
+							callback = function()
+								activate(buf)
+							end,
+						})
+					end
+				end)
 			end,
 		})
 	end,
