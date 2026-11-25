@@ -13,7 +13,9 @@
 # is missing: a tool, the tests themselves, or Pi.
 # The suites named `bare` run on a PATH of /usr/bin:/bin with the system's own
 # Python, as a commit from a GUI git client runs them (the pre-commit hook):
-# there a test must skip, not fail, when a tool it needs is missing.
+# there a test must skip, not fail, when a tool it needs is missing. Each holds
+# the tests of code that runs that way: owner-bare those of publish alone,
+# which the pre-push hook runs, not land's or try's, which run from a shell.
 # .tests/linux.sh runs the tracked suites on Ubuntu, in Docker.
 set -u
 repo=$(cd "$(dirname "$0")/.." && pwd)
@@ -32,7 +34,7 @@ standalone|.|python3|python3 -B .tests/standalone.py
 pi|.|node ~/.pi/agent/install/current-version|node .tests/pi-extensions.mjs
 pi-types|.|node tsc ~/.pi/agent/install/current-version|node .tests/pi-extensions.mjs --types
 owner|.|.owner/ python3|python3 -B -m unittest discover -s .owner -p 'test_*.py'
-owner-bare|.|.owner/ /usr/bin/python3|$bare -B -m unittest discover -s .owner -p 'test_*.py'
+owner-bare|.|.owner/ /usr/bin/python3|$bare -B -m unittest discover -s .owner -p 'test_publish.py'
 fish|fish/.config/fish|tests/ python3 fish|python3 -B -m unittest discover -s tests -p '*_test.py'
 tmux|tmux/.config/tmux|tests/ python3 tmux|python3 -B -m unittest discover -s tests -p '*_test.py'
 herdr|herdr/.config/herdr|tests/ python3|python3 -B -m unittest discover -s tests -p '*_test.py'
